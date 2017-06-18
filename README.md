@@ -154,6 +154,7 @@ forever, precautions apply. See section 2.3.5.
 
 ``INIT``: a tuple of data to be sent to ESP8266 after a reset.  
 Init elements. Entries 0-6 are strings, 7-12 are integers:
+
  0. 'init'
  1. SSID for WiFi.
  2. WiFi password.
