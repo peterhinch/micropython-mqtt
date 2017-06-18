@@ -83,18 +83,18 @@ The following files originate from the [micropython-async](https://github.com/pe
 ``asyn.py`` Synchronisation primitives.  
 ``syncom.py`` Communication library.
 
-From this library:
-``pbmqtt.py`` Python MQTT interface.
+From this library:  
+``pbmqtt.py`` Python MQTT interface.  
 ``status_values.py`` Numeric constants shared between user code, the ESP8266
-firmware and ``pbmqtt.py``; including status values sent to host from ESP8266.
+firmware and ``pbmqtt.py``; including status values sent to host from ESP8266.  
 ``net_local.py`` Local network credentials and MQTT parameters. Edit this.
 
 ### 2.1.2 Test programs
 
 ``pb_simple.py`` Minimal publish/subscribe test. A remote unit can turn the
 Pyboard green LED on and off and can display regular publications from the
-host.
-``pb_status.py`` Demonstrates interception of status messages.
+host.  
+``pb_status.py`` Demonstrates interception of status messages.  
 ``pbmqtt_test.py`` Tests coroutines which must shut down on ESP8266 reboot.
 Also demonstrates the ramcheck facility.
 
@@ -118,7 +118,7 @@ The test program publishes an incrementing count every 10 seconds under the
 "result" topic. It subscribes to a topic "green" and responds to messages "on"
 or "off" to control the state of the Pyboard green LED. To test this run
 
-mosquitto_pub -h 192.168.0.9 -t green -m on
+mosquitto_pub -h 192.168.0.9 -t green -m on  
 mosquitto_pub -h 192.168.0.9 -t green -m off
 
 ## 2.3 The MQTTlink class
@@ -152,8 +152,8 @@ use is to define subscriptions. The callback can launch coroutines but these
 should run to completion promptly (less than a few seconds). If such coros run
 forever, precautions apply. See section 2.3.5.
 
-INIT: data to be sent to ESP8266 after a reset.  
-Init elements. Entries 0-6 are strings, 7-12 are integers:
+``INIT``: a tuple of data to be sent to ESP8266 after a reset.  
+Init elements. Entries 0-6 are strings, 7-12 are integers:  
  0. 'init'
  1. SSID for WiFi.
  2. WiFi password.
@@ -196,19 +196,18 @@ Init elements. Entries 0-6 are strings, 7-12 are integers:
 
 ### 2.3.3 Class Method
 
- 1. ``will`` Args topic (str), msg (str), retain, qos. Set the last will. Must
- be called before instantiating the ``MQTTlink``. Defaults: retain ``False``,
- qos 0.
+``will`` Args topic (str), msg (str), retain, qos. Set the last will. Must be
+called before instantiating the ``MQTTlink``. Defaults: retain ``False``, qos
+0.
 
 ### 2.3.4 Intercepting status values
 
 The ESP8266 can send numeric status values to the host. These are defined and
 documented in ``status_values.py``. The default handler specifies how a network
-connection
-is performed after a reset. Initially, if the ESP8266 fails to connect to the
-default LAN stored in its flash memory, it attempts to connect to the network
-specified in INIT. On ESP8266 reboots it avoids flash wear by avoiding the
-specified LAN. By default it waits 30 seconds and reboots again.
+connection is established after a reset. Initially, if the ESP8266 fails to
+connect to the default LAN stored in its flash memory, it attempts to connect
+to the network specified in ``INIT``. On ESP8266 reboots it avoids flash wear
+by avoiding the specified LAN; it waits 30 seconds and reboots again.
 
 The behaviour in response to status messages may be modified by replacing the
 default handler with a user supplied coroutine as described in 2.3.2 above;
