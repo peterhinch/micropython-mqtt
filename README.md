@@ -52,19 +52,19 @@ moving out of range of the access point.
 
 # Contents
 
- 1 [Wiring](./README.md#1-wiring)
+ 1 [Wiring](./README.md#1-wiring) Connections between host and ESP8266.
  
- 2 [The Host](./README.md#2-the-host)
+ 2 [The Host](./README.md#2-the-host) Software on the host.
 
   2.1 [Files](./README.md#21-files)
 
    2.1.1 [Dependencies](./README.md#211-dependencies)
 
-   2.1.2 [2.1.2 Test programs](./README.md#212-test-programs)
+   2.1.2 [Test programs](./README.md#212-test-programs)
 
   2.2 [Quick start guide](./README.md#22-quick-start-guide)
 
-  2.3 [The MQTTlink class](./README.md#23-the-mqttlink-class)
+  2.3 [The MQTTlink class](./README.md#23-the-mqttlink-class) The host API.
 
    2.3.1 [Constructor](./README.md#231-constructor)
 
@@ -84,13 +84,13 @@ moving out of range of the access point.
 
  3 [The ESP8266](./README.md#3-the-esp8266)
  
-  3.1 [Installing the precompiled build](./README.md#31-installing-the-precompiled-build)
+  3.1 [Installing the precompiled build](./README.md#31-installing-the-precompiled-build) Quickstart.
 
-  3.2 [Files](./README.md#32-files)
+  3.2 [Files](./README.md#32-files) For users wishing to modify the ESP8266 code.
 
   3.3 [Pinout](./README.md#33-pinout)
  
- 4 [Mode of operation](./README.md#4-mode-of-operation)
+ 4 [Mode of operation](./README.md#4-mode-of-operation) How it works under the hood.
 
   4.2 [Protocol](./README.md#42-protocol)
 
@@ -98,7 +98,7 @@ moving out of range of the access point.
 
   4.2.2 [Running](./README.md#422-running)
 
- 5 [Postscript](./README.md#5-postscript)
+ 5 [Postscript](./README.md#5-postscript) The answer to the ultimate question.
 
 # 1. Wiring
 
