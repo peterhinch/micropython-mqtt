@@ -94,11 +94,11 @@ moving out of range of the access point.
 
   4.2 [Protocol](./README.md#42-protocol)
 
-  4.2.1 [Initialisation](421-initialisation)
+  4.2.1 [Initialisation](./README.md#421-initialisation)
 
-  4.2.2 [Running](422-running)
+  4.2.2 [Running](./README.md#422-running)
 
- 5 [Postscript](5-postscript)
+ 5 [Postscript](./README.md#5-postscript)
 
 # 1. Wiring
 
