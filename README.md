@@ -371,6 +371,12 @@ UART/USB interface is available for debugging.
 
 # 3.1 Installing the precompiled build
 
+You will need the esptool utility which runs on a PC. It may be found
+[here](https://github.com/espressif/esptool). Under Linux after installation
+you will need to assign executable status. On my system:  
+
+``sudo chmod a+x /usr/local/bin/esptool.py``
+
 Erase the flash with  
 ``esptool.py erase_flash``  
 Then, from the project directory, issue  
