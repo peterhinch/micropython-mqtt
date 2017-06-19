@@ -50,6 +50,56 @@ of MicroPython on the ESP8266 is now excellent, but wireless networking remains
 vulnerable to error conditions such as radio frequency interference or the host
 moving out of range of the access point.
 
+# Contents
+
+ 1 [Wiring](./README.md#1-wiring)
+ 
+ 2 [The Host](./README.md#2-the-host)
+
+  2.1 [Files](./README.md#21-files)
+
+   2.1.1 [Dependencies](./README.md#211-dependencies)
+
+   2.1.2 [2.1.2 Test programs](./README.md#212-test-programs)
+
+  2.2 [Quick start guide](./README.md#22-quick-start-guide)
+
+  2.3 [The MQTTlink class](./README.md#23-the-mqttlink-class)
+
+   2.3.1 [Constructor](./README.md#231-constructor)
+
+   2.3.2 [Methods](./README.md#232-methods)
+
+   2.3.3 [Class Method](./README.md#233-class-method)
+
+   2.3.4 [Intercepting status values](./README.md#234-intercepting-status-values)
+
+   2.3.5 [The user_start callback](./README.md#235-the-user_start-callback)
+
+  2.4 [Application design](./README.md#24-application-design)
+
+   2.4.1 [User coroutines](./README.md#241-user-coroutines)
+
+   2.4.2 [WiFi Link Behaviour](./README.md#242-wifi-link-behaviour)
+
+ 3 [The ESP8266](./README.md#3-the-esp8266)
+ 
+  3.1 [Installing the precompiled build](./README.md#31-installing-the-precompiled-build)
+
+  3.2 [Files](./README.md#32-files)
+
+  3.3 [Pinout](./README.md#33-pinout)
+ 
+ 4 [Mode of operation](./README.md#4-mode-of-operation)
+
+  4.2 [Protocol](./README.md#42-protocol)
+
+  4.2.1 [Initialisation](421-initialisation)
+
+  4.2.2 [Running](422-running)
+
+ 5 [Postscript](5-postscript)
+
 # 1. Wiring
 
 Connections to the ESP8266 are as follows.
@@ -69,6 +119,8 @@ test programs, but host pins may be changed at will in the application code.
 | reset   |  reset  |  rst |   Y4    | reset   |
 
 Host and target must share a sigle power supply with a common ground.
+
+###### [Contents](./README.md#contents)
 
 # 2. The Host
 
@@ -98,6 +150,8 @@ host.
 ``pbmqtt_test.py`` Tests coroutines which must shut down on ESP8266 reboot.
 Also demonstrates the ramcheck facility.
 
+###### [Contents](./README.md#contents)
+
 ## 2.2 Quick start guide
 
 Ensure you have a working MQTT broker on a known IP address, and that you have
@@ -120,6 +174,8 @@ or "off" to control the state of the Pyboard green LED. To test this run
 
 mosquitto_pub -h 192.168.0.9 -t green -m on  
 mosquitto_pub -h 192.168.0.9 -t green -m off
+
+###### [Contents](./README.md#contents)
 
 ## 2.3 The MQTTlink class
 
@@ -176,6 +232,8 @@ Init elements. Entries 0-6 are strings, 7-12 are integers:
  only.
  12. keepalive time (secs) (0 = disable). Sets the broker keepalive time.
 
+###### [Contents](./README.md#contents)
+
 ### 2.3.2 Methods
 
  1. ``publish`` Args topic (str), message (str), retain (bool), qos (0/1). Puts
@@ -193,13 +251,18 @@ Init elements. Entries 0-6 are strings, 7-12 are integers:
  6. ``running`` No args. Returns ``True`` if WiFi and broker are up and system
  is running normally.
  7. ``command`` Intended for test/debug. Takes an arbitrary number of
- positional args, formats them and sends them to the ESP8266.
+ positional args, formats them and sends them to the ESP8266. Currently the
+ only supported command is 'mem' with no args. This causes the ESP8266 to
+ return its memory usage, which the host driver will print. This was to check
+ for memory leaks. None have been observed. See ``pbmqtt_test.py``.
 
 ### 2.3.3 Class Method
 
 ``will`` Args topic (str), msg (str), retain, qos. Set the last will. Must be
 called before instantiating the ``MQTTlink``. Defaults: retain ``False``, qos
 0.
+
+###### [Contents](./README.md#contents)
 
 ### 2.3.4 Intercepting status values
 
@@ -225,23 +288,30 @@ specified network. If it returns 0 it will reboot the ESP8266.
 A typical reason for interception is to handle fatal errors, prompting for user
 intervention or reporting and issuing long delays before rebooting.
 
-### 2.3.5 The ``user_start`` callback
+###### [Contents](./README.md#contents)
+
+### 2.3.5 The user_start callback
 
 This callback runs each time the ESP8266 is reset. The callback should return
 promptly, and any coroutines launched by it should terminate quickly. If the
-callback launches coroutines which run forever beware of the following hazard.
+callback launches coroutines which run forever there is a hazard described
+below. Recommendations:
 
-After an error which causes the ESP8266 to be rebooted the callback runs again
-causing coroutines launched by the callback to be re-created. This will cause
-the scheduler's task queue to grow. To avoid unconstrained growth such a coro
-should be launched on the first run only.
+ 1. Have coros quit rapidly.
+ 2. Start "run forever" coros elsewhere than ``user_start``.
+ 3. Start them on the first run only.
 
-If this is impossible it should be designed to quit prior to an ESP8266 reboot
-(the MicroPython asyncio subset has no way to kill a running coro). For
-internal use the MQTTLink has an ``ExitGate`` instance ``exit_gate``. A
-continuously running coroutine should use the ``exit_gate`` context manager and
-poll ``exit_gate.ending()``. If it returns ``True`` the coro should terminate.
-If it needs to pause it should issue
+If you must start a run forever coro each time ``user_start`` runs consider
+this. After an error which causes the ESP8266 to be rebooted the callback runs
+again causing coroutines launched by the callback to be re-created. This will
+cause the scheduler's task queue to grow, potentially without limit.
+
+It should hence be designed to quit prior to an ESP8266 reboot (the MicroPython
+asyncio subset has no way to kill a running coro). For internal use the
+MQTTLink has an ``ExitGate`` instance ``exit_gate``. A continuously running
+coroutine should use the ``exit_gate`` context manager and poll
+``exit_gate.ending()``. If it returns ``True`` the coro should terminate. If it
+needs to pause it should issue
 
 ```python
 result = await mqtt_link.exit_gate.sleep(time)
@@ -252,7 +322,19 @@ and quit if result is ``False``.
 See ``pbmqtt_test.py`` and the
 [synchronisation primitives docs](https://github.com/peterhinch/micropython-async/blob/master/PRIMITIVES.md).
 
-### 2.3.6 Notes on behaviour
+###### [Contents](./README.md#contents)
+
+## 2.4 Application design
+
+### 2.4.1 User coroutines
+
+Where possible these should periodically yield to the scheduler with a nonzero
+delay. An ``asyncio.sleep(secs)`` or ``aysncio.sleep_ms(ms)`` will reduce
+competition with the bitbanging communications, minimising any impact on
+throughput. Issue a zero delay (or ``yield``) only when a fast response is
+required.
+
+### 2.4.2 WiFi Link Behaviour
 
 The implicit characteristics of radio links mean that WiFi is subject to
 outages of arbitrary duration: RF interference may occur, or the unit may move
@@ -278,12 +360,14 @@ time. If no response is achieved in this period the broker is presumed to have
 failed or timed out. The ``NO_NET`` status is reported (to enable user action)
 and the ESP8266 rebooted.
 
+###### [Contents](./README.md#contents)
+
 # 3. The ESP8266
 
 To use the precompiled build, follow the instructions in 3.1 below. The
 remainder of the ESP8266 documentation is for those wishing to modify the
 ESP8266 code. Since the Pyboard and the ESP8266 communicate via GPIO pins the
-UART/USB interface are available for debugging.
+UART/USB interface is available for debugging.
 
 # 3.1 Installing the precompiled build
 
@@ -327,6 +411,8 @@ The modified ``_boot.py`` in this repository removes the need for this step
 enabling the firmware image to be flashed to an erased flash chip. After boot
 if ``main.py`` does not exist it is created in the filesystem.
 
+###### [Contents](./README.md#contents)
+
 # 3.3 Pinout
 
 This is defined in mqtt.py (``Channel`` constructor). Pin 15 is used for mckout
@@ -335,6 +421,132 @@ clock line is zero while the host asserts Reset: at that time GPIO lines are
 high impedance. If the pin lacks a pull down one should be supplied. A value of
 10KΩ or thereabouts will suffice.
 
-# 3.4 Mode of operation
+# 4. Mode of operation
 
-TODO.
+This describes the basic mode of operation for anyone wishing to modify the
+host or target code.
+
+# 4.1 Communication
+
+The host and target communicate by a symmetrical bidirectional serial protocol.
+At the hardware level it is full-duplex, synchronous and independent of
+processor speed. At the software level it is asynchronous. In this application
+the unit of communication is a string. When a ``SynCom`` is instantiated it
+does nothing until its asynchronous ``start`` method is launched. This takes a
+coroutine as an argument. It waits for the other end of the link to start,
+synchronises the interface and launches the coro.
+
+This runs forever except - in the case of the host - on error. The host has a
+means of issuing a hardware reset to the target. This is triggered by the coro
+terminating. The ``SynCom`` instance resets the target, waits for synch, and
+re-launches the coro (``SynCom`` start method).
+
+The ESP8266 has no means of resetting the host, so there is no reason for its
+coro (``main_task``) to end.
+
+The interface also provides a means for the host to detect if the ESP8266 has
+crashed or locked up. To process incoming messages it issues
+
+```python
+res = await channel.await_obj()
+```
+
+This will pause as long as necessary but a result of ``None`` means that the
+channel has timed out which can be a result of ESP8266 failure. It can also
+result from a socket blocking for longer than the link timeout. Normally
+``res`` is a string.
+
+###### [Contents](./README.md#contents)
+
+# 4.2 Protocol
+
+## 4.2.1 Initialisation
+
+The host instantiates an ``MQTTlink`` object which creates a ``channel`` being
+a ``SynCom`` instance. This issues the ``start`` method with its own ``start``
+method as the coro argument. This will run every time the ESP8266 starts. When
+it returns it causes an ESP8266 reset.
+
+The host can send commands to the ESP8266 which replies with a status response.
+The ESP8266 can also send unsolicited status messages. When a command is sent
+the host waits for a response as described above, handling a ``None`` response.
+The string is parsed into a command - typically 'status' - and an action, a
+list of string arguments. In the case of 'status' messages the first of these
+is the status value.
+
+Status messages are first passed to the ``do_status`` method which performs
+some basic housekeeping and provides optional 'verbose' print messages. It
+returns the status value as an integer. It then waits on the asynchronous
+method ``s_han`` which by default is ``default_status_handler``. This can be
+overridden by the user.
+
+Each time the ``start`` method runs it behaves as follows. If the user has set
+up a will, it sends a ``will`` command to the ESP8266 and waits for a status
+response.
+
+Assuming success it then sends an ``init`` command with the ``INIT`` parameters
+which causes the ESP8266 to connect to the WiFi network and then to the broker.
+The initialisation phase ends when the ESP8266 sends a ``RUNNING`` status to
+the host, when ``_running`` is set (by ``do_status``). In the meantime the
+ESP8266 will send other status messages:
+
+ 1. ``DEFNET`` It is about to try the default network in its flash ROM.
+ 2. ``SPECNET`` It has failed to connect to this LAN and wants to connect to
+ the one specified in ``INIT``. Unless the status handler has been overridden
+ ``default_status_handler`` ensures this is done on the first boot only.
+ 3. ``BROKER_CHECK`` It is about to connect to the broker.
+ 4. ``BROKER_OK`` Broker connection established.
+
+Once running it launches the user supplied coroutine. It also launches coros to
+handle publications and to keep the broker alive with periodic MQTT pings:
+``_ping()`` and ``_publish`` asynchronous methods. The initialisation phase is
+now complete.
+
+###### [Contents](./README.md#contents)
+
+## 4.2.2 Running
+
+This continuously running loop exits only on error when the ESP8266 is to be
+rebooted. It waits on incoming messages from the ESP8266 (terminating on
+``None``).
+
+The ESP8266 can send various messages, some such as 'subs' asynchronously in
+response to a subscription and others such as a 'PUBOK' status in response to
+having processed a qos == 1 'publish' message from the host. Unsolicited
+messages are:
+
+ 1. 'subs' A subscription was received.
+ 2. 'time',value The ESP8266 has contacted a timeserver and has this value.
+ 3. 'pingresp' The ESP8266 has pinged the broker and received a response.
+ 4. 'status', WIFI_UP
+ 5. 'status', WIFI_DOWN
+ 6. 'status', UNKNOWN This should never occur. ESP8266 has received an unknown
+ command from the host.
+
+Expected messages are:
+ 1. 'mem',free,allocated Response to a 'mem' command.
+ 2. 'status',PUBOK Response to a qos == 1 publication.
+
+When a qos == 1 publication is issued the host's ``_publish`` asynchronous
+method informs the ESP8266 and starts a timer. This locks out further
+publications until a 'PUBOK' is received from the ESP8266. If the timer times
+out, ``_running`` is set ``False`` prompting a reboot in the main loop. A
+'PUBOK' stops the timer and re-enables publications which resume if any are
+queued.
+
+A publication with qos == 0 is sent to the ESP8266 but the timer is not started
+and no response is expected.
+
+###### [Contents](./README.md#contents)
+
+# 5. Postscript
+
+A few people have complemented me on my documentation. There are three reasons
+why I aim to write decent documentation:
+
+ 1. I use and appreciate the good documentation of others.
+ 2. I enjoy writing it and it provides a reason for reviewing my code.
+ 3. A function of age. If I don't write it down and revisit a project after a
+ few months I'm in a hole; baffled both by the code and by the overall design.
+ My first reaction is "Gordon Bennett who wrote **this**?". This hit me with a
+ vengeance after shelving this project last year :-)
