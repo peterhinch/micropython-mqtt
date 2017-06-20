@@ -432,6 +432,12 @@ high impedance. If the pin lacks a pull down one should be supplied. A value of
 This describes the basic mode of operation for anyone wishing to modify the
 host or target code.
 
+The ESP8266 connects to the broker with ``clean_session=True``. Consequently on
+startup, and after an error reboot, session details must be re-established.
+Where possible this is automatic, but user code must necessarily re-establish
+subscriptions. This is done by the ``user_start`` callback, enabling reboots to
+occur transparently.
+
 # 4.1 Communication
 
 The host and target communicate by a symmetrical bidirectional serial protocol.
