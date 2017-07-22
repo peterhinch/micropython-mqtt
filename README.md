@@ -1,4 +1,13 @@
-# Bringing MQTT to MicroPython targets
+# Introduction
+
+This archive has two components. A "resilient" non-blocking MQTT driver
+documented [here](./mqtt_as/README.md). This runs on targets such as the
+ESP8266 and ESP32 and is designed to work where WiFi connectivity is poor. It
+uses uasyncio.
+
+The second component is described below.
+
+# MQTT for MicroPython targets lacking WiFi connectivity
 
 MQTT is an easily used networking protocol designed for IOT (internet of
 things) applications. It is well suited for controlling hardware devices and
