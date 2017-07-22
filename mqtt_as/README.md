@@ -302,19 +302,15 @@ acknowledged.
 Where the client is subscribed to a topic with qos == 1 and a publication with
 qos == 1 occurs the broker will re-publish until an acknowledgement is
 received. If the broker deems that connectivity has failed it waits for the
-client to reconnect.
-
-Its behaviour when this occurs seems to depend on whether the original session
-was connected with `clean_session` `True`. In this instance publications during
-the outage are lost. Otherwise they are re-transmitted as soon as connectivity
-resumes.
+client to reconnect. If the client then reconnects with Clean Session `True`,
+qos == 1 messages published during the outage will be lost.
 
 # 5. References
 
-[mqtt introduction](http://mosquitto.org/man/mqtt-7.html)
-[mosquitto server](http://mosquitto.org/man/mosquitto-8.html)
-[mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)
-[mosquitto client](subscribe http://mosquitto.org/man/mosquitto_sub-1.html)
-[MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)
-[python client for PC's](https://www.eclipse.org/paho/clients/python/)
+[mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
+[mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
+[mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)  
+[mosquitto client](subscribe http://mosquitto.org/man/mosquitto_sub-1.html)  
+[MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
+[python client for PC's](https://www.eclipse.org/paho/clients/python/)  
 [Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
