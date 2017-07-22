@@ -310,7 +310,7 @@ qos == 1 messages published during the outage will be lost.
 [mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
 [mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
 [mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)  
-[mosquitto client](subscribe http://mosquitto.org/man/mosquitto_sub-1.html)  
+[mosquitto client subscribe](http://mosquitto.org/man/mosquitto_sub-1.html)  
 [MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
 [python client for PC's](https://www.eclipse.org/paho/clients/python/)  
 [Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
