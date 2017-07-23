@@ -188,7 +188,6 @@ class MQTT_base:
             msg[6] |= 0x4 | (self._lw_qos & 0x1) << 3 | (self._lw_qos & 0x2) << 3
             msg[6] |= self._lw_retain << 5
 
-#        self.dprint('Connecting with _has_connected = ', self._has_connected, hex(msg[6]))
         i = 1
         while sz > 0x7f:
             premsg[i] = (sz & 0x7f) | 0x80
@@ -421,41 +420,53 @@ class MQTTClient(MQTT_base):
         self._wifi_downed = False
         await self._wifi_handler(True)  # Default handler just delays
 
-    async def _wifi(self):
-        if not self.wifi_ok():
-            first = not self._wifi_connecting  # Concurrency trap
-            if first:
-                self._wifi_connecting = True
-                self.sta_if.disconnect()
-                await asyncio.sleep(1)
-                self.sta_if.connect()
-                while not self.sta_if.isconnected():
-                    await asyncio.sleep(2)
-                await self._reconnect()  # calls _wifi_up()
-                self._wifi_connecting = False
-            else:
-                while not self.sta_if.isconnected():
-                    await asyncio.sleep(2)
-
     async def _wifi_down(self):
         if not self._wifi_downed:
             self._wifi_downed = True
             self.sock.close()
             await self._wifi_handler(False)
 
-    async def _reconnect(self):
-        while 1:
-            try:
-                await self._wifi()
-                await self.connect()
-                # Calls self._wifi_up() and _connect_handler() on success
-                self.dprint('Reconnect OK!')
-                return
+    # Establish a WiFi and broker connection if not available. Must
+    # handle conditions at edge of WiFi range.
+    async def _wifi(self):
+        if self.wifi_ok():
+            return
+        if self._wifi_connecting:  # Another coro is establishing connection,
+            while self._wifi_connecting:  # await its success.
+                await asyncio.sleep(1)
+            return
+        # Need to establish a connection.
+        self._wifi_connecting = True  # Lock out other coros
+        s = self.sta_if
+        while True:
+            s.disconnect()
+            await asyncio.sleep(1)
+            s.connect()
+            await asyncio.sleep(1)
+            while s.status() == network.STAT_CONNECTING:
+                await asyncio.sleep(1)  # Break out on fail or success
+            # Ensure connection stays up for expected response time
+            t = ticks_ms()
+            while not self.timeout(t):
+                if not s.isconnected():
+                    break  # disconnect and try again
+                await asyncio.sleep(1)
+            else:  # Timer expired: assumed reasonably reliable. Try reconnect.
+                if await self._reconnect():
+                    break  # Success. wifi_ok() will now succeed.
+        self._wifi_connecting = False
 
-            except OSError as e:
-                self.dprint('Error in reconnect', e)  # Can get ECONNABORTED or -1. Ignore and retry.
-                self.sock.close()
+    async def _reconnect(self):
+        try:
+            await self.connect()
+            # Calls self._wifi_up() and _connect_handler() on success
+            self.dprint('Reconnect OK!')
+        except OSError as e:
+            self.dprint('Error in reconnect', e)  # Can get ECONNABORTED or -1. Ignore and retry.
+            self.sock.close()
             await asyncio.sleep(self._reconn_delay)
+            return False
+        return True
 
     async def subscribe(self, topic, qos=0):
         qos_check(qos)

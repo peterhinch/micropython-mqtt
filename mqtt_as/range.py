@@ -73,7 +73,5 @@ client = MQTTClient(mqtt_config, CLIENT_ID, SERVER, keepalive = 120)
 
 try:
     loop.run_until_complete(main(client))
-except:  # or KeyboardInterrupt:
-    raise  # Provide traceback
-finally:  # Prevent LmacRxBlk:1 errors. Note: suppresses Will (MQTT spec. 3.1.2.5)
-    client.disconnect()
+finally:  # Prevent LmacRxBlk:1 errors.
+    client.close()

@@ -151,7 +151,9 @@ broker).
 
 # 3. MQTTClient class
 
-The module provides a single class: `MQTTClient`.
+The module provides a single class: `MQTTClient`. It uses the ESP8266 ability
+to automatically find, authenticate and connect to a network it has previously
+ecountered.
 
 ## 3.1 Constructor
 
@@ -224,10 +226,15 @@ MQTT spec 3.1.2.4.
 
 ### 3.2.1 connect (async)
 
-No args. Connects to the specified broker. Reconnection after outages is
+No args. Connects to the specified broker. The application should call
+`connect` once on startup. If this fails (due to WiFi or the broker being
+unavailable) an `OSError` will be raised. Reconnection after an outage is
 handled automatically.
 
 ### 3.2.2 publish (async)
+
+If connectivity is OK the coro will complete immediately, else it will pause
+until the WiFi/broker are accessible. Section 4.2 describes qos == 1 operation.
 
 Args:
  1. `topic`
@@ -240,13 +247,19 @@ Args:
 Subscriptions should be created in the connect coroutine to ensure they are
 re-established after an outage.
 
+The coro will pause until a `SUBACK` has been received from the broker, if
+necessary reconnecting to a failed network.
+
 Args:
  1. `topic`
  2. `qos=0`
 
 ### 3.2.4 wifi_ok (sync)
 
-No args. Returns `True` if connectivity is OK.
+No args. Returns `True` if connectivity is OK. Detection of wiFi failure is not
+instantaneous: it occurs when a publication is performed or a keepalive ping is
+issued (section 4.1). For fast response use the network module's
+`isconnected()` function.
 
 ### 3.2.5 disconnect (sync)
 
@@ -271,18 +284,17 @@ an application raises an exception or is terminated with ctrl-C (see section
 
 If `keepalive` is defined in the constructor call, the broker will assume that
 connectivity has been lost if no messages have been received in that period.
-The module attempts to keep the connection open by issuing an MQTT ping four
-times during the keepalive interval.
+The module attempts to keep the connection open by issuing an MQTT ping upto
+four times during the keepalive interval. (It pings if the last response from
+the broker was over 1/4 of the keepalive period).
 
 If the broker times out it will issue the "last will" publication (if any).
 
 If the client determines that connectivity has been lost it will close the
 socket and periodically attempt to reconnect until it succeeds.
 
-In the event of failing connectivity publications with qos == 0 may be lost. If
-qos == 1 publications will be received subject to a delay which may be
-arbitrarily long (the duration of the outage). Duplicate publications may be
-received. The mode which avoids duplicates (qos == 2) is currently unsupported.
+In the event of failing connectivity client and server publications with
+qos == 0 may be lost. The behaviour of qos == 1 packets is described below.
 
 ## 4.2 Client publications with qos == 1
 
@@ -302,8 +314,10 @@ acknowledged.
 Where the client is subscribed to a topic with qos == 1 and a publication with
 qos == 1 occurs the broker will re-publish until an acknowledgement is
 received. If the broker deems that connectivity has failed it waits for the
-client to reconnect. If the client then reconnects with Clean Session `True`,
-qos == 1 messages published during the outage will be lost.
+client to reconnect. If the client was configured with `clean` set `True`,
+qos == 1 messages published during the outage will be lost. Otherwise they will
+be received in quick succession (which can overflow the buffer on an ESP8266
+resulting in `LmacRxBlk:1` messages).
 
 # 5. References
 

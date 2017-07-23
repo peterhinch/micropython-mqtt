@@ -68,7 +68,5 @@ loop = asyncio.get_event_loop()
 loop.create_task(heartbeat())
 try:
     loop.run_until_complete(main(client))
-except:
-    raise  # Provide traceback
 finally:
-    client.disconnect()  # Prevent LmacRxBlk:1 errors
+    client.close()  # Prevent LmacRxBlk:1 errors
