@@ -139,8 +139,6 @@ client = MQTTClient(mqtt_config, CLIENT_ID, SERVER)
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
-except KeyboardInterrupt:
-    raise  # Provide traceback for debugging
 finally:
     client.close()  # Prevent LmacRxBlk:1 errors
 ```
@@ -153,7 +151,8 @@ broker).
 
 The module provides a single class: `MQTTClient`. It uses the ESP8266 ability
 to automatically find, authenticate and connect to a network it has previously
-ecountered.
+encountered: the application should ensure that the device is set up to do
+this.
 
 ## 3.1 Constructor
 
@@ -228,8 +227,8 @@ MQTT spec 3.1.2.4.
 
 No args. Connects to the specified broker. The application should call
 `connect` once on startup. If this fails (due to WiFi or the broker being
-unavailable) an `OSError` will be raised. Reconnection after an outage is
-handled automatically.
+unavailable) an `OSError` will be raised. Subsequent reconnections after
+outages are handled automatically.
 
 ### 3.2.2 publish (async)
 
@@ -318,6 +317,20 @@ client to reconnect. If the client was configured with `clean` set `True`,
 qos == 1 messages published during the outage will be lost. Otherwise they will
 be received in quick succession (which can overflow the buffer on an ESP8266
 resulting in `LmacRxBlk:1` messages).
+
+## 4.4 Application design
+
+The library is not designed to handle concurrent publications or registration
+of subscriptions. A single task should be exist for each of these activities.
+If a publication queue is required this should be implemented by the
+application.
+
+The WiFi and Connect coroutines should run to completion reasonably quickly
+relative to the time required to connect and disconnect from the network. Aim
+for 2 seonds maximum.
+
+The subscription callback will block publications and the reception of further
+subscribed messages and should therefore be designed for a fast return.
 
 # 5. References
 
