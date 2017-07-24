@@ -74,9 +74,8 @@ to other MicroPython WiFi connected devices such as ESP32.
 The module is too large to compile on the ESP8266 and should be precompiled or
 frozen as bytecode.
 
-At the time of writing (22 July 2017) it won't work with SSL/TLS because
-nonblocking sockets are not yet supported [see](https://github.com/micropython/micropython/pull/3226).
-This should be fixed imminently.
+It is currently untested on the ESP32 and has not been tested with SSL/TLS.
+Feedback on these issues would be very welcome.
 
 # 2. Getting started
 
@@ -201,7 +200,7 @@ qos == 1 publication is not acknowledged in this period, republication will
 occur. May need extending for slow internet connections.
 
 The `will` argument defines a publication which the broker will issue if it
-detrmines that the connection has timed out. This is a tuple or list comprising
+determines that the connection has timed out. This is a tuple or list comprising
 [`topic` (string), `msg` (string), `retain` (bool), `qos` (0 or 1)]. If the arg
 is provided all elements are mandatory.
 
