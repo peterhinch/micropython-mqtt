@@ -2,9 +2,9 @@
 
 MQTT is a means of communicating between multiple clients. A single server,
 also known as a broker, manages the network. Clients may include ESP8266
-modules or other networked computers. A typical server is a Raspberry Pi or
-similar small Linux machine which may be left running 24/7. Public brokers
-[also exist](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers). 
+modules or other networked computers. Typical server hardware is a Raspberry Pi
+or other small Linux machine which may be left running 24/7. Public brokers
+[also exist](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers).
 
 An effective PC client and server is [mosquitto](https://mosquitto.org/).
 
@@ -194,7 +194,6 @@ MQTT characteristics. Defaults are in [].
  7. `clean` Clean session state on reconnection. [`True`]
  8. `max_repubs` Maximum no. of republications before reconnection is
  attempted. [4]
- 9. `reconn_delay` Delay between reconnect attempts (s). [5]
 
 The `response_time` arg works as follows. If a read or write operation times
 out, the connection is presumed dead and the reconnection process begins. If a
@@ -253,17 +252,16 @@ Args:
  1. `topic`
  2. `qos=0`
 
-### 3.2.4 wifi_ok (sync)
+### 3.2.4 isconnected (sync)
 
-No args. Returns `True` if connectivity is OK. Detection of wiFi failure is not
-instantaneous: it occurs when a publication is performed or a keepalive ping is
-issued (section 4.1). For fast response use the network module's
-`isconnected()` function.
+No args. Returns `True` if connectivity is OK otherwise it returns `False` and
+schedules reconnection attempts.
 
 ### 3.2.5 disconnect (sync)
 
 No args. Disconnects from broker, closes socket. Note that disconnection
-suppresses the Will (MQTT spec. 3.1.2.5).
+suppresses the Will (MQTT spec. 3.1.2.5). Should only be called on termination
+as there is no recovery mechanism.
 
 ### 3.2.6 close (sync)
 
@@ -325,9 +323,10 @@ of subscriptions. A single task should be exist for each of these activities.
 If a publication queue is required this should be implemented by the
 application.
 
-The WiFi and Connect coroutines should run to completion reasonably quickly
-relative to the time required to connect and disconnect from the network. Aim
-for 2 seonds maximum.
+The WiFi and Connect coroutines should run to completion quickly relative to
+the time required to connect and disconnect from the network. Aim for 2 seonds
+maximum. Alternatively the Connect coro can run indefinitely so long as it
+terminates if the `isconnected()` method returns `False`.
 
 The subscription callback will block publications and the reception of further
 subscribed messages and should therefore be designed for a fast return.
