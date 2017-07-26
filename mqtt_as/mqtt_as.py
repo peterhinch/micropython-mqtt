@@ -159,7 +159,8 @@ class MQTT_base:
         try:
             self.sock.connect(self.addr)
         except OSError as e:
-            if e.args[0] != uerrno.EINPROGRESS:
+            # https://forum.micropython.org/viewtopic.php?f=16&t=3608&p=20942#p20942
+            if e.args[0] not in [uerrno.EINPROGRESS, uerrno.ETIMEDOUT]:
                 raise  # from uasyncio __init__.py open_connection()
         await asyncio.sleep_ms(_DEFAULT_MS)
         self.dprint('Connected to broker')
