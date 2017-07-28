@@ -1,21 +1,14 @@
 # 1. MicroPython Asynchronous MQTT
 
-MQTT is a means of communicating between multiple clients. A single server,
-also known as a broker, manages the network. Clients may include ESP8266
-modules or other networked computers. Typical server hardware is a Raspberry Pi
-or other small Linux machine which may be left running 24/7. Public brokers
-[also exist](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers).
-
-An effective PC client and server is [mosquitto](https://mosquitto.org/).
-
-Packets are passed between clients using a publish/subscribe model. Packets
+MQTT Packets are passed between clients using a publish/subscribe model. They
 consist of a topic and a message string. Clients subscribe to a topic and will
 receive all packets published by any client under that topic.
 
 The protocol supports three "quality of service" (qos) levels. Level 0 offers
 no guarantees. Level 1 ensures that a packet is communicated to the recipient
 but duplication can occur. Level 2 avoids duplication; it is unsuported by the
-official driver and by this module.
+official driver and by this module. Duplicates can readily be handled at the
+application level.
 
 ###### [Main README](./README.md)
 
