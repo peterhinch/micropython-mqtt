@@ -10,7 +10,7 @@ but duplication can occur. Level 2 avoids duplication; it is unsuported by the
 official driver and by this module. Duplicates can readily be handled at the
 application level.
 
-###### [Main README](./README.md)
+###### [Main README](../README.md)
 
 ## 1.1 Rationale
 
