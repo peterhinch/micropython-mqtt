@@ -40,6 +40,8 @@ This comprises an ESP8266 firmware image and a MicroPython driver. The target
 hardware is linked to an ESP8266 running the firmware image using a 5-wire
 interface. The driver runs on the target which can then access MQTT. The driver
 and hardware interface are designed to be platform agnostic: any hardware with
-five GPIO pins accessible via the `machine` library should suffice. 
+five GPIO pins accessible via the `machine` library should suffice.
+
+The driver is non-blocking and is designed for applications using uasyncio.
 
 It is documented [here](./NO_NET.md).
