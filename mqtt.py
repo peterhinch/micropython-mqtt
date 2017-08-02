@@ -8,7 +8,7 @@
 
 import gc
 import ubinascii
-from umqtt.robust import MQTTClient
+from mqtt_as import MQTTClient
 from machine import Pin, unique_id, freq
 import uasyncio as asyncio
 gc.collect()
@@ -32,35 +32,33 @@ async def heartbeat():
         await asyncio.sleep_ms(500)
         led(not led())
 
+
 class Client(MQTTClient):
     lw_parms = None
     @classmethod
     def will(cls, parms):
         cls.lw_parms = parms
 
-    def __init__(self, channel, client_id, server, callback, t_resync,
-                 port, user, password, keepalive, ssl, ssl_params):
+    def __init__(self, config, channel, client_id, server, t_resync, port, user,
+                 password, keepalive, ssl, ssl_params):
         self.channel = channel
         self.t_resync = t_resync
-        super().__init__(client_id, server, port, user, password, keepalive, ssl, ssl_params)
-        self.set_callback(callback)
+        self.subscriptions = {}
+        config['subs_cb'] = self.subs_cb
+        config['wifi_coro'] = self.wifi_han
+        config['connect_coro'] = self.conn_han
         if self.lw_parms is not None:
-            self.set_last_will(self.lw_parms[0], self.lw_parms[1],
-                               bool(self.lw_parms[2]), int(self.lw_parms[3]))
-        channel.send(argformat('status', BROKER_CHECK))
-        super().connect(clean_session=True)  # Throws OSError if broker down.
-        channel.send(argformat('status', BROKER_OK))
-        loop = asyncio.get_event_loop()
-        loop.create_task(self.message_task())  # Respond to messages from broker
-        if self.t_resync:
-            loop.create_task(self.rtc_task())
-        self.channel.send(argformat('status', RUNNING))
+            config['will'] = (self.lw_parms[0], self.lw_parms[1],
+                              bool(self.lw_parms[2]), int(self.lw_parms[3]))
+        super().__init__(config, client_id, server, port=port, user=user,
+                         password=password, keepalive=keepalive, ssl=ssl,
+                         ssl_params=ssl_params)
 
     # If t_resync > 0, at intervals get time from timeserver, send time to channel
     # If t_resync < 0 synchronise once only.
     # If t_rsync == 0 no synch (task never runs)
     async def rtc_task(self):
-        while True:
+        while self.isconnected():
             try:
                 t = ntptime.time()  # secs since Y2K
             except OSError:
@@ -76,49 +74,22 @@ class Client(MQTTClient):
             else:
                 await asyncio.sleep(30)
 
-    async def message_task(self):
-        while True:
-            try:
-                self.check_msg()  # Be responsive to subscriptions
-            except OSError:
-                pass
-            await asyncio.sleep_ms(50)
+    async def wifi_han(self, state):
+        if state:
+            self.channel.send(argformat('status', WIFI_UP))
+        else:
+            self.channel.send(argformat('status', WIFI_DOWN))
+        await asyncio.sleep(1)
 
-    # Subclassed for ping response.
-    def wait_msg(self):
-        res = self.sock.read(1)
-#        self.sock.settimeout(_SOCKET_TIMEOUT)
-        self.sock.setblocking(True)  # reverted
-        if res is None:
-            return None
-        if res == b"":
-            raise OSError(-1)
-        if res == b"\xd0":  # PINGRESP
-            sz = self.sock.read(1)[0]
-            self.channel.send('pingresp')
-            assert sz == 0
-            return None
-        op = res[0]
-        if op & 0xf0 != 0x30:
-            return op
-        sz = self._recv_len()
-        topic_len = self.sock.read(2)
-        topic_len = (topic_len[0] << 8) | topic_len[1]
-        topic = self.sock.read(topic_len)
-        sz -= topic_len + 2
-        if op & 6:
-            pid = self.sock.read(2)
-            pid = pid[0] << 8 | pid[1]
-            sz -= 2
-        msg = self.sock.read(sz)
-        self.cb(topic, msg)
-        if op & 6 == 2:
-            pkt = bytearray(b"\x40\x02\0\0")
-            struct.pack_into("!H", pkt, 2, pid)
-            self.sock.write(pkt)
-        elif op & 6 == 4:
-            assert 0
+    async def conn_han(self, _):
+        if self.t_resync:
+            loop = asyncio.get_event_loop()
+            loop.create_task(self.rtc_task())
+        for topic, qos in self.subscriptions.items():
+            await client.subscribe(topic, qos)
 
+    def subs_cb(self, topic, msg):
+        self.channel.send(argformat('subs', topic.decode('UTF8'), msg.decode('UTF8')))
 
 class Channel(SynCom):
     def __init__(self):
@@ -130,9 +101,6 @@ class Channel(SynCom):
         self.cstatus = False  # Connection status
         self.client = None
 
-    def callback(self, topic, msg):  # Triggered by client.message_task
-        self.send(argformat('subs', topic.decode('UTF8'), msg.decode('UTF8')))
-
 # Task runs continuously. Process incoming Pyboard messages.
 # Started by main_task() after client instantiated.
     async def from_pyboard(self):
@@ -142,36 +110,24 @@ class Channel(SynCom):
             s = istr.split(',')
             command = s[0]
             if command == 'publish':
-                client.publish(s[1], s[2], bool(s[3]), int(s[4]))
+                await client.publish(s[1], s[2], bool(s[3]), int(s[4]))
                 # If qos == 1 only returns once PUBACK received.
                 self.send(argformat('status', PUBOK))
             elif command == 'subscribe':
-                client.subscribe(s[1], int(s[2]))
+                await client.subscribe(s[1], int(s[2]))
+                client.subscriptions[s[1]] = int(s[2])  # re-subscribe after outage
             elif command == 'mem':
                 gc.collect()
                 gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
                 self.send(argformat('mem', gc.mem_free(), gc.mem_alloc()))
-            elif command == 'ping':
-                client.ping()
             else:
                 self.send(argformat('status', UNKNOWN, 'Unknown command:', ostr))
-
-# Get or set connected status. Note that sta_if.isconnected() has a latency in
-# detecting WiFi down on the order of a second. There doesn't seem to be a
-# reliable way to stop the code attemting to access a downed LAN.
-    def connected(self, val):
-        if self.cstatus != val:
-            self.cstatus = val
-            if val:
-                self.send(argformat('status', WIFI_UP))
-            else:
-                self.send(argformat('status', WIFI_DOWN))
-        return self.cstatus
 
 # Runs when channel has synchronised. No return: Pyboard resets ESP on fail.
 # Get parameters from Pyboard. Process them. Connect. Instantiate client. Start
 # from_pyboard() task. Wait forever, updating connected status.
     async def main_task(self, _):
+        config = {}  # Possible enhancement: init to be capable of clearing clean
         got_params = False
 
         # Await connection parameters (init record)
@@ -219,24 +175,26 @@ class Channel(SynCom):
         # WiFi is up: connect to the broker
         await asyncio.sleep(5)  # Let WiFi stabilise before connecting
         client_id = ubinascii.hexlify(unique_id())
+        self.client = Client(config, self, client_id, broker, t_resync, port,
+                                m_user, m_pw, keepalive, ssl, eval(ssl_params))
+        self.send(argformat('status', BROKER_CHECK))
         try:
-            self.client = Client(self, client_id, broker, self.callback,
-                                 t_resync, port, m_user, m_pw, keepalive, ssl,
-                                 eval(ssl_params))
+            await self.client.connect()  # Clean session. Throws OSError if broker down.
             # Sends BROKER_OK and RUNNING
         except OSError:
             # Cause Pyboard to reboot us when application requires it.
             self.send(argformat('status', BROKER_FAIL))
             while True:
-                await asyncio.sleep(60)  # Twiddle our thumbs...
+                await asyncio.sleep(60)  # Twiddle my thumbs. PB will reset me.
 
+        self.send(argformat('status', BROKER_OK))
+        self.send(argformat('status', RUNNING))
         # Set channel running
         loop = asyncio.get_event_loop()
         loop.create_task(self.from_pyboard())
         while True:
             gc.collect()
             gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
-            self.connected(sta_if.isconnected())  # Message Pyboard on WiFi up/down
             await asyncio.sleep(1)
 
 loop = asyncio.get_event_loop()

@@ -45,7 +45,7 @@ async def heartbeat():
 # BROKER_FAIL Pause for server fix? Return (and so reboot) after delay?
 # NO_NET WiFi has timed out.
 # Pauses must be implemented with the following to ensure task quits on fail
-#     if not await self.sleep_while_running(delay_in_secs):
+#     if not await self.exit_gate.sleep(delay_in_secs):
 #         return
 
 async def default_status_handler(mqtt_link, status):
@@ -79,7 +79,6 @@ class MQTTlink(object):
         self.local_time_offset = local_time_offset
         self.init_str = argformat(*init)
         self.keepalive = init[12]
-        self.ping_period = self.keepalive // 4
         self._rtc_syn = False  # RTC persists over ESP8266 reboots
         self._running = False
         self.verbose = verbose
@@ -190,14 +189,6 @@ class MQTTlink(object):
         self._rtc_syn = True
         self.vbprint('time', localtime())
 
-    async def _ping(self):
-        egate = self.exit_gate
-        async with egate:
-            while True:
-                if not await egate.sleep(self.ping_period):
-                    break  # self.start() has returned
-                self.channel.send('ping')
-
     async def _publish(self):
         egate = self.exit_gate
         async with egate:
@@ -206,18 +197,19 @@ class MQTTlink(object):
                 if len(self.pubs) and self._pub_free:
                     args = self.pubs.pop(0)
                     self.channel.send(argformat('publish', *args))
-                    # if qos == 1 set _pub_free False and start timer. If no response
+                    # In this version all pubs send PUBOK
+                    # Set _pub_free False and start timer. If no response
                     # received in the keepalive period _running is set False and we
                     # reboot the ESP8266
-                    self.pub_free(args[3] == 0)
+                    self.pub_free(False)
 
 # start() is run each time the channel acquires sync i.e. on startup and also
 # after an ESP8266 crash and reset.
 # Behaviour after fatal error with ESP8266:
 # It sets _running False to cause local tasks to terminate, then returns.
-# A return causes the local channel instance to wait for fail_delay to let
+# A return causes the local channel instance to wait on the exit_gate to cause
 # tasks in this program terminate, then issues a hardware reset to the ESP8266.
-# After acquiring sync, start() gets rescheduled.
+# (See SynCom.start() method). After acquiring sync, start() gets rescheduled.
     async def start(self, channel):
         self.vbprint('Starting...')
         self.subs = {} # Callbacks indexed by topic
@@ -226,7 +218,7 @@ class MQTTlink(object):
         if self.lw_topic is not None:
             channel.send(argformat('will', self.lw_topic, self.lw_msg, self.lw_retain, self.lw_qos))
             res = await channel.await_obj()
-            if res is None:
+            if res is None:  # SynCom timeout
                 await self.s_han(self, ESP_FAIL)
                 return self.quit('ESP8266 fail 1. Resetting.')
             command, action = self.get_cmd(res)
@@ -264,13 +256,11 @@ class MQTTlink(object):
             self.user_start[0](self, *self.user_start[1])  # User start function
 
         loop = asyncio.get_event_loop()
-        loop.create_task(self._ping())
         loop.create_task(self._publish())
-        lastping = time()           # Prevent premature fail
         iact = -1                   # Invalidate last status for change detection
         while True:                 # print incoming messages, handle subscriptions
             res = await channel.await_obj()
-            if res is None:
+            if res is None:         # SynCom timeout
                 await self.s_han(self, ESP_FAIL)
                 return self.quit('ESP8266 fail 3. Resetting.')  # ESP8266 fail
 
@@ -282,21 +272,14 @@ class MQTTlink(object):
                 iact = self.do_status(action, iact) # Update pub q and wifi status
                 await self.s_han(self, iact)
                 if iact in _DIRE_STATUS:  # Tolerate brief WiFi outages: let channel timeout
-                    return self.quit('Fatal status. Resetting.') # or ping response handle it.
+                    return self.quit('Fatal status. Resetting.')
             elif command == 'time':
                 self.do_time(action)
-                lastping = time()  # RTC clock may have changed. In any event, LAN is up.
             elif command == 'mem':  # Wouldn't ask for this if we didn't want a printout
                 print('ESP8266 RAM free: {} allocated: {}'.format(action[0], action[1]))
-            elif command == 'pingresp':
-                lastping = time()
             else:
                 await self.s_han(self, UNKNOWN)
                 return self.quit('Got unhandled command, resetting ESP8266:', command, action)  # ESP8266 has failed
-
-            if time() - lastping > self.keepalive:
-                await self.s_han(self, NO_NET)
-                return self.quit('Ping response timeout, resetting ESP8266')
 
             if not self._running:  # puback not received?
                 await self.s_han(self, NO_NET)
