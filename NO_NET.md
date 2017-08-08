@@ -31,11 +31,17 @@ errors or crashes.
 
 # Project status
 
-At the time of writing (June 2017) the code is best described as being of beta
-quality. Testing has been done with a local broker. It is untested with a
-broker on the WAN, also with SSL. If anyone is in a position to test these I
-would welcome reports. Please raise an issue - including to report positive
-outcomes :).
+V0.2 Aug 2017
+
+Has a minor API change: added `clean` element to `net_local.py`.
+Now uses the `resilient` MQTT library so ESP8266 reboots should occur only in
+the event that the ESP crashes (hopefully never).
+
+V0.1 June 2017
+At the time of writing the code is best described as being of beta quality.
+Testing has been done with a local broker and iot.eclipse.org. SSL is untested.
+If anyone is in a position to test this I would welcome a report. Please raise
+an issue - including to report a positive outcome :).
 
 Testing was performed using a Pyboard V1.0 as the host. The following boards
 have run as ESP8266 targets: Adafruit Feather Huzzah, Adafruit Huzzah and WeMos
@@ -96,7 +102,9 @@ moving out of range of the access point.
 
   4.2.2 [Running](./README.md#422-running)
 
- 5 [Postscript](./README.md#5-postscript) The answer to the ultimate question.
+ 5 [Performance](./README.md#5-performance)
+
+ 6 [Postscript](./README.md#6-postscript) The answer to the ultimate question.
 
 # 1. Wiring
 
@@ -225,10 +233,19 @@ Init elements. Entries 0-6 are strings, 7-12 are integers:
  10. 1/0 fast: if 1, clock ESP8266 at 160MHz
  11. RTC resync interval (secs). 0 == disable. If interval > 0 the ESP8266 will
  periodically retrieve the time from an NTP server and send the result to the
- host, which will adjust its RTC. The local  time offset specified to the
+ host, which will adjust its RTC. The local time offset specified to the
  constructor will be applied. If interval == -1 synchronisation will occur once
  only.
  12. keepalive time (secs) (0 = disable). Sets the broker keepalive time.
+ 13. 1/0 Clean Session.
+
+The Clean Session flag controls behaviour of qos == 1 messages from the broker
+after a WiFi outage. If set, such messages from the broker during the outage
+will be lost. If cleared the broker will send them once connectivity is
+restored. This presents a hazard in that the ESP8266 WiFi stack has a buffer
+which can overflow if messages arrive in quick succession. This could result in
+an ESP8266 crash with a consequent automatic reboot, in which case some of the
+backlog will be lost.
 
 ###### [Contents](./README.md#contents)
 
@@ -383,25 +400,27 @@ These args for the reference board may need amending for other hardware.
 
 # 3.2 Files
 
+This information is for those wishing to modify the ESP8266 firmware.
+
 In the precompiled build all modules are implemented as frozen bytecode. For
 development purposes you may wish to run mqtt.py (or others) as regular source
 files. The precompiled build's modules directory comprises the following:
 
- 1. The uasyncio library.
- 2. The umqtt.robust library.
- 3. ``mqtt.py`` Main module.
+ 1. The uasyncio library (including collections library).
+ 2. ``mqtt.py`` Main module.
+ 3. ``mqtt_as.py`` Asynchronous MQTT module.
  4. ``syncom.py`` Bitbanged communications driver.
  5. ``aswitch.py`` Module has a retriggerable delay class.
  6. ``asyn.py`` Synchronisation primitives.
  7. ``status_values.py`` Numeric status codes.
+ 8. ``_boot.py`` Modified to create main.py in filesystem.
 
 To conserve space unused drivers are removed from the project's ``modules``
-directory, leaving the following standard files:
+directory, leaving the following required standard files:
 
  1. ``ntptime.py``
  2. ``flashbdev.py``
  3. ``inisetup.py``
- 4. ``_boot.py`` Optionally replaced by modified version.
 
 The ``mqtt`` module needs to auto-start after a hard reset. This requires a
 ``main.py`` file. If the standard ``_boot.py`` is used you will need to create
@@ -549,7 +568,24 @@ and no response is expected.
 
 ###### [Contents](./README.md#contents)
 
-# 5. Postscript
+# 5. Performance
+
+The performance of MQTT is limited by that of the connection to the broker,
+which can be limited if the broker is on the internet. This implementation is
+also limited by the performance of the serial interface. Under operational
+conditions this was measured at 118 chars/sec (chars are 7-bit).
+
+In applications such as data logging this is not usually an issue. If latency
+matters, keep topic names and messages short and (if possible) use a broker on
+the LAN.
+
+Latency will degrade if using qos==1 on a poor WiFi link, because
+retransmissions will occur. If WiFi connectivity fails then it will persist
+for the duration.
+
+Under good conditions latency can be reduced to around 250ms.
+
+# 6. Postscript
 
 A few people have complemented me on my documentation. There are three reasons
 why I aim to write decent documentation:

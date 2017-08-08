@@ -28,7 +28,7 @@ def qos_check(qos):
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
-
+_SOCKET_POLL_DELAY = const(5)  # 100ms added greatly to publish latency
 # Default "do little" coro for optional user replacement
 async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
     await asyncio.sleep_ms(_DEFAULT_MS)
@@ -122,7 +122,7 @@ class MQTT_base:
                 data = b''.join((data, msg))
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
         return data
 
     async def _as_write(self, bytes_wr, length=0):
@@ -136,7 +136,7 @@ class MQTT_base:
             if n:
                 t = ticks_ms()
             bytes_wr = bytes_wr[n:]
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
 
     async def _send_str(self, s):
         await self._as_write(struct.pack("!H", len(s)))
@@ -374,7 +374,7 @@ class MQTTClient(MQTT_base):
             while self.isconnected():
                 async with self.lock:
                     await self.wait_msg()  # Immediate return if no message
-                await asyncio.sleep_ms(100)  # Let other activities get lock
+                await asyncio.sleep_ms(_DEFAULT_MS)  # Let other tasks get lock
 
         except OSError:
             pass

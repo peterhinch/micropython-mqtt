@@ -7,8 +7,8 @@
 # Author: Peter Hinch.
 # Copyright Peter Hinch 2017 Released under the MIT license.
 
-# Latency ~500ms tested using echo.py running on PC with broker running on Pi
-# (half time for round-trip)
+# SynCom throughput 118 char/s measured 8th Aug 2017 sending a publication
+# while application running. ESP8266 running at 160MHz. (Chars are 7 bits).
 
 import uasyncio as asyncio
 from utime import localtime, time
@@ -17,6 +17,7 @@ from syncom import SynCom
 from aswitch import Delay_ms
 from asyn import ExitGate
 from status_values import *  # Numeric status values shared with user code.
+
 
 # _WIFI_DOWN is bad during initialisation
 _BAD_STATUS = (BROKER_FAIL, WIFI_DOWN, UNKNOWN)
@@ -34,6 +35,13 @@ async def heartbeat():
     while True:
         await asyncio.sleep_ms(500)
         led.toggle()
+
+def sanitise(s):
+    if s.find(chr(127)) >= 0:
+        raise ValueError('Illegal character 127')
+    if s.find(',') >= 0:
+        s = s.replace(',', chr(127))
+    return s
 
 # Subclass to handle status changes. In the case of fatal status values the
 # ESP8266 will be rebooted on return. You may want to pause for remedial
@@ -100,16 +108,16 @@ class MQTTlink(object):
 
 # API
     def publish(self, topic, msg, retain=False, qos=0):
-        self.pubs.append((topic, msg, retain, qos))
+        self.pubs.append((sanitise(topic), sanitise(msg), 1 if retain else 0, qos))
 
     def pubq_len(self):
         return len(self.pubs)
 
     def subscribe(self, topic, callback, qos=0):
         self.subs[topic] = callback
-        self.channel.send(argformat('subscribe', topic, qos))
+        self.channel.send(argformat(SUBSCRIBE, topic, qos))
 
-    # Command handled directly by mqtt.py on ESP8266 e.g. 'mem'
+    # Command handled directly by mqtt.py on ESP8266 e.g. MEM
     def command(self, *argsend):
         self.channel.send(argformat(*argsend))
 
@@ -138,6 +146,8 @@ class MQTTlink(object):
 # A puback message calls pub_free(True) which stops the timer.
 # IOW if the PUBACK is not received within the keepalive period assume we're
 # broken and restart.
+# If WiFi fails we suspend this mechanism by stopping the timer: assume that
+# ESP8266 is still running and will reconnect when it can.
     def pub_free(self, val = None):
         if val is not None:
             self._pub_free = val
@@ -165,6 +175,8 @@ class MQTTlink(object):
             self.pub_free(True)  # Unlock so we can do another pub.
         elif iact == RUNNING:
             self._running = True
+        elif iact == WIFI_DOWN:  # No point in timing PUBACK response during an
+            self.pub_delay.stop()  # outage: avoid needless reboots
         if self.verbose:
             if iact != UNKNOWN:
                 if iact != last_status:  # Ignore repeats
@@ -193,10 +205,10 @@ class MQTTlink(object):
         egate = self.exit_gate
         async with egate:
             while not egate.ending():  # Until parent task has died
-                await asyncio.sleep_ms(100)
+                await asyncio.sleep_ms(20)
                 if len(self.pubs) and self._pub_free:
                     args = self.pubs.pop(0)
-                    self.channel.send(argformat('publish', *args))
+                    self.channel.send(argformat(PUBLISH, *args))
                     # In this version all pubs send PUBOK
                     # Set _pub_free False and start timer. If no response
                     # received in the keepalive period _running is set False and we
@@ -216,13 +228,13 @@ class MQTTlink(object):
         self._pub_free = True  # No publication in progress
         self._running = False
         if self.lw_topic is not None:
-            channel.send(argformat('will', self.lw_topic, self.lw_msg, self.lw_retain, self.lw_qos))
+            channel.send(argformat(WILL, self.lw_topic, self.lw_msg, self.lw_retain, self.lw_qos))
             res = await channel.await_obj()
             if res is None:  # SynCom timeout
                 await self.s_han(self, ESP_FAIL)
                 return self.quit('ESP8266 fail 1. Resetting.')
             command, action = self.get_cmd(res)
-            if command == 'status':
+            if command == STATUS:
                 iact = self.do_status(action, -1)
                 await self.s_han(self, iact)
                 if iact in _BAD_STATUS:
@@ -236,7 +248,7 @@ class MQTTlink(object):
                 await self.s_han(self, ESP_FAIL)
                 return self.quit('ESP8266 fail 2. Resetting.')
             command, action = self.get_cmd(res)
-            if command == 'status':
+            if command == STATUS:
                 iact = self.do_status(action, -1)
                 result = await self.s_han(self, iact)
                 if iact == SPECNET:
@@ -246,7 +258,7 @@ class MQTTlink(object):
                         return self.quit()
                 if iact in _BAD_STATUS:
                     return self.quit('Bad status. Resetting.')
-            elif command == 'time':
+            elif command == TIME:
                 self.do_time(action)
             else:
                 self.vbprint('Init got: ', command, action)
@@ -265,17 +277,17 @@ class MQTTlink(object):
                 return self.quit('ESP8266 fail 3. Resetting.')  # ESP8266 fail
 
             command, action = self.get_cmd(res)
-            if command == 'subs':   # It's a subscription
+            if command == SUBSCRIPTION:
                 if action[0] in self.subs: # topic found
                     self.subs[action[0]](*action)  # Run the callback
-            elif command == 'status':  # 1st arg of status is an integer
+            elif command == STATUS:  # 1st arg of status is an integer
                 iact = self.do_status(action, iact) # Update pub q and wifi status
                 await self.s_han(self, iact)
                 if iact in _DIRE_STATUS:  # Tolerate brief WiFi outages: let channel timeout
                     return self.quit('Fatal status. Resetting.')
-            elif command == 'time':
+            elif command == TIME:
                 self.do_time(action)
-            elif command == 'mem':  # Wouldn't ask for this if we didn't want a printout
+            elif command == MEM:  # Wouldn't ask for this if we didn't want a printout
                 print('ESP8266 RAM free: {} allocated: {}'.format(action[0], action[1]))
             else:
                 await self.s_han(self, UNKNOWN)

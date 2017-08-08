@@ -39,14 +39,16 @@ class Client(MQTTClient):
     def will(cls, parms):
         cls.lw_parms = parms
 
-    def __init__(self, config, channel, client_id, server, t_resync, port, user,
-                 password, keepalive, ssl, ssl_params):
+    def __init__(self, channel, client_id, server, t_resync, port, user,
+                 password, keepalive, ssl, ssl_params, clean):
         self.channel = channel
         self.t_resync = t_resync
         self.subscriptions = {}
+        config = {}
         config['subs_cb'] = self.subs_cb
         config['wifi_coro'] = self.wifi_han
         config['connect_coro'] = self.conn_han
+        config['clean'] = clean
         if self.lw_parms is not None:
             config['will'] = (self.lw_parms[0], self.lw_parms[1],
                               bool(self.lw_parms[2]), int(self.lw_parms[3]))
@@ -65,7 +67,7 @@ class Client(MQTTClient):
                 t = 0
                 await asyncio.sleep(30)
             if t > 16 * 365 * 24 * 3600:
-                self.channel.send(argformat('time', t))
+                self.channel.send(argformat(TIME, t))
                 if self.t_resync > 0:
                     await asyncio.sleep(self.t_resync)
                 else:
@@ -76,9 +78,9 @@ class Client(MQTTClient):
 
     async def wifi_han(self, state):
         if state:
-            self.channel.send(argformat('status', WIFI_UP))
+            self.channel.send(argformat(STATUS, WIFI_UP))
         else:
-            self.channel.send(argformat('status', WIFI_DOWN))
+            self.channel.send(argformat(STATUS, WIFI_DOWN))
         await asyncio.sleep(1)
 
     async def conn_han(self, _):
@@ -86,10 +88,10 @@ class Client(MQTTClient):
             loop = asyncio.get_event_loop()
             loop.create_task(self.rtc_task())
         for topic, qos in self.subscriptions.items():
-            await client.subscribe(topic, qos)
+            await self.subscribe(topic, qos)
 
     def subs_cb(self, topic, msg):
-        self.channel.send(argformat('subs', topic.decode('UTF8'), msg.decode('UTF8')))
+        self.channel.send(argformat(SUBSCRIPTION, topic.decode('UTF8'), msg.decode('UTF8')))
 
 class Channel(SynCom):
     def __init__(self):
@@ -106,28 +108,28 @@ class Channel(SynCom):
     async def from_pyboard(self):
         client = self.client
         while True:
-            istr = await self.await_obj(100)  # wait for string (poll interval 100ms)
+            istr = await self.await_obj(20)  # wait for string (poll interval 20ms)
             s = istr.split(',')
+            s = [q.replace(chr(127),',') for q in s]
             command = s[0]
-            if command == 'publish':
-                await client.publish(s[1], s[2], bool(s[3]), int(s[4]))
+            if command == PUBLISH:
+                await client.publish(s[1], s[2], bool(s[3]), int(s[4]))  # Latency 800ms (qos 0) 1.3s (qos 1)
                 # If qos == 1 only returns once PUBACK received.
-                self.send(argformat('status', PUBOK))
-            elif command == 'subscribe':
+                self.send(argformat(STATUS, PUBOK))
+            elif command == SUBSCRIBE:
                 await client.subscribe(s[1], int(s[2]))
                 client.subscriptions[s[1]] = int(s[2])  # re-subscribe after outage
-            elif command == 'mem':
+            elif command == MEM:
                 gc.collect()
                 gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
-                self.send(argformat('mem', gc.mem_free(), gc.mem_alloc()))
+                self.send(argformat(MEM, gc.mem_free(), gc.mem_alloc()))
             else:
-                self.send(argformat('status', UNKNOWN, 'Unknown command:', ostr))
+                self.send(argformat(STATUS, UNKNOWN, 'Unknown command:', istr))
 
 # Runs when channel has synchronised. No return: Pyboard resets ESP on fail.
 # Get parameters from Pyboard. Process them. Connect. Instantiate client. Start
 # from_pyboard() task. Wait forever, updating connected status.
     async def main_task(self, _):
-        config = {}  # Possible enhancement: init to be capable of clearing clean
         got_params = False
 
         # Await connection parameters (init record)
@@ -138,14 +140,14 @@ class Channel(SynCom):
             if command == 'init':
                 got_params = True
                 ssid, pw, broker, m_user, m_pw, ssl_params = ilst[1:7]
-                use_default, port, ssl, fast, t_resync, keepalive = [int(x) for x in ilst[7:]]
+                use_default, port, ssl, fast, t_resync, keepalive, clean = [int(x) for x in ilst[7:]]
                 m_user = m_user if m_user else None
                 m_pw = m_pw if m_pw else None
-            elif command == 'will':
+            elif command == WILL:
                 Client.will(ilst[1:5])
-                self.send(argformat('status', WILLOK))
+                self.send(argformat(STATUS, WILLOK))
             else:
-                self.send(argformat('status', UNKNOWN, 'Expected init, got: ', istr))
+                self.send(argformat(STATUS, UNKNOWN, 'Expected init, got: ', istr))
 
         # Got parameters
         if fast:
@@ -154,7 +156,7 @@ class Channel(SynCom):
         # try default LAN if required
         sta_if = WLAN(STA_IF)
         if use_default:
-            self.send(argformat('status', DEFNET))
+            self.send(argformat(STATUS, DEFNET))
             secs = _WIFI_DELAY
             while secs >= 0 and not sta_if.isconnected():
                 await asyncio.sleep(1)
@@ -162,7 +164,7 @@ class Channel(SynCom):
 
         # If can't use default, use specified LAN
         if not sta_if.isconnected():
-            self.send(argformat('status', SPECNET))
+            self.send(argformat(STATUS, SPECNET))
             # Pause for confirmation. User may opt to reboot instead.
             istr = await self.await_obj(100)
             ap = WLAN(AP_IF) # create access-point interface
@@ -175,20 +177,20 @@ class Channel(SynCom):
         # WiFi is up: connect to the broker
         await asyncio.sleep(5)  # Let WiFi stabilise before connecting
         client_id = ubinascii.hexlify(unique_id())
-        self.client = Client(config, self, client_id, broker, t_resync, port,
-                                m_user, m_pw, keepalive, ssl, eval(ssl_params))
-        self.send(argformat('status', BROKER_CHECK))
+        self.client = Client(self, client_id, broker, t_resync, port, m_user,
+                             m_pw, keepalive, ssl, eval(ssl_params), clean)
+        self.send(argformat(STATUS, BROKER_CHECK))
         try:
             await self.client.connect()  # Clean session. Throws OSError if broker down.
             # Sends BROKER_OK and RUNNING
         except OSError:
             # Cause Pyboard to reboot us when application requires it.
-            self.send(argformat('status', BROKER_FAIL))
+            self.send(argformat(STATUS, BROKER_FAIL))
             while True:
                 await asyncio.sleep(60)  # Twiddle my thumbs. PB will reset me.
 
-        self.send(argformat('status', BROKER_OK))
-        self.send(argformat('status', RUNNING))
+        self.send(argformat(STATUS, BROKER_OK))
+        self.send(argformat(STATUS, RUNNING))
         # Set channel running
         loop = asyncio.get_event_loop()
         loop.create_task(self.from_pyboard())

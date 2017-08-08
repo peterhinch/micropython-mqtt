@@ -1,7 +1,6 @@
 # pbmqtt_test.py TEST PROGRAM for Pyboard MQTT link
 # This tests the ramcheck facility and the mechanism for launching continuously
-# running coroutines from the user_start program. Note this is not normally
-# recommended.
+# running coroutines from the user_start program.
 
 # Author: Peter Hinch.
 # Copyright Peter Hinch 2017 Released under the MIT license.
@@ -15,9 +14,12 @@ import pyb
 import uasyncio as asyncio
 from pbmqtt import MQTTlink
 from net_local import INIT  # Local network details
+from status_values import MEM  # Ramcheck request (for debug only)
 
-green = pyb.LED(2)  # Green
 qos = 1 # for test all messages have the same qos
+
+green = pyb.LED(2)
+blue = pyb.LED(4)
 reset_count = 0
 
 # User tasks. Must terminate as soon as link stops running
@@ -25,7 +27,7 @@ async def ramcheck(mqtt_link):
     egate = mqtt_link.exit_gate
     async with egate:
         while True:
-            mqtt_link.command('mem')
+            mqtt_link.command(MEM)
             if not await egate.sleep(1800):
                 break
 
@@ -39,13 +41,10 @@ async def publish(mqtt_link, tim):
             if not await egate.sleep(tim):
                 break
 
-async def pulse_blue():
-    global reset_count
-    reset_count += 1
-    blue = pyb.LED(4)
-    blue.on()
+async def pulse(led):
+    led.on()
     await asyncio.sleep(3)
-    blue.off()
+    led.off()
 
 def cbgreen(command, text):
     if text == 'on':
@@ -62,11 +61,13 @@ def cbgreen(command, text):
 # the mqtt_link's ExitGate's sleep method, quitting if it returns False
 
 def start(mqtt_link):
+    global reset_count
     mqtt_link.subscribe('green', cbgreen, qos)    # LED control qos 1
     loop = asyncio.get_event_loop()
     loop.create_task(ramcheck(mqtt_link))  # Check RAM every 30 minutes
     loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds
-    loop.create_task(pulse_blue())  # Flash blue LED each time we restart ESP8266
+    loop.create_task(pulse(blue))  # Flash blue LED each time we restart ESP8266
+    reset_count += 1
 
 def test():
     stx = Pin(Pin.board.Y5, Pin.OUT_PP)         # Define pins

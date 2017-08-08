@@ -1,4 +1,6 @@
 # pb_status.py Demonstrate status interception for Pyboard MQTT link
+# This example replaces the default. See pbrange.py for the case where the
+# default is run before trapping other status values.
 
 # Author: Peter Hinch.
 # Copyright Peter Hinch 2017 Released under the MIT license.

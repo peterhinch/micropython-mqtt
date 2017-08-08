@@ -6,5 +6,19 @@
 
 # See NO_NET.md para 2.3.1
 
-INIT = ('init', 'my_SSID', 'my_password', 'broker_ip_address', '', '', repr({}),
-                 1, 0, 0, 1, 3600, 60)
+INIT = (
+    'init',     # Must read 'init'
+    'my_SSID',  # WiFi and broker details. CHANGE THESE.
+    'my_password',
+    'broker_ip_address',
+    '',         # MQTT username (or '')
+    '',         # MQTT password
+    repr({}),   # SSL params
+    1,          # Use default net (1/0) see docs.
+    0,          # Port (0 == use default)
+    0,          # Use SSL (1/0)
+    1,          # Clock ESP8266 at 80/160MHz (0/1)
+    3600,       # RTC resync time (s)
+    60,         # Keepalive time (s)
+    0           # Clean Session 1/0
+    )

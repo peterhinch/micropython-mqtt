@@ -33,3 +33,12 @@ ESP_FAIL = 11
 # Fatal. keepalive period has elapsed with ESP8266 unable to get a ping
 # response from broker. Or it elapsed with no PUBACK from a qos == 1 publish.
 NO_NET = 12
+
+# Commands on SynCom link
+PUBLISH = 'p'
+SUBSCRIBE = 's'
+STATUS = 't'
+TIME = 'i'
+MEM = 'm'
+WILL = 'w'
+SUBSCRIPTION = 'u'
