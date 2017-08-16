@@ -14,7 +14,6 @@ import uasyncio as asyncio
 from utime import localtime, time
 import pyb
 from syncom import SynCom
-from aswitch import Delay_ms
 from asyn import ExitGate
 from status_values import *  # Numeric status values shared with user code.
 
@@ -23,9 +22,9 @@ from status_values import *  # Numeric status values shared with user code.
 _BAD_STATUS = (BROKER_FAIL, WIFI_DOWN, UNKNOWN)
 _DIRE_STATUS = (BROKER_FAIL, UNKNOWN)  # Always fatal
 
-# Format an arbitrary list of positional args as a comma separated string
+# Format an arbitrary list of positional args as a status_values.SEP separated string
 def argformat(*a):
-    return ','.join(['{}' for x in range(len(a))]).format(*a)
+    return SEP.join(['{}' for x in range(len(a))]).format(*a)
 
 def printtime():
     print('{:02d}:{:02d}:{:02d} '.format(localtime()[3], localtime()[4], localtime()[5]), end='')
@@ -36,14 +35,16 @@ async def heartbeat():
         await asyncio.sleep_ms(500)
         led.toggle()
 
-def sanitise(s):
-    if s.find(chr(127)) >= 0:
-        raise ValueError('Illegal character 127')
-    if s.find(',') >= 0:
-        s = s.replace(',', chr(127))
-    return s
+# Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
+def validate(s, item):
+    g = (a for a in s if a == 0 or a >= 127)
+    try:
+        ch = next(g)
+        raise ValueError('Illegal character {} in {}'.format(ch, item))
+    except:
+        pass
 
-# Subclass to handle status changes. In the case of fatal status values the
+# Replace to handle status changes. In the case of fatal status values the
 # ESP8266 will be rebooted on return. You may want to pause for remedial
 # action before the reboot. Information statuses can be ignored with rapid
 # return. Cases which may require attention:
@@ -51,7 +52,6 @@ def sanitise(s):
 # tries specified LAN (if default LAN fails) on first run only to limit
 # flash wear.
 # BROKER_FAIL Pause for server fix? Return (and so reboot) after delay?
-# NO_NET WiFi has timed out.
 # Pauses must be implemented with the following to ensure task quits on fail
 #     if not await self.exit_gate.sleep(delay_in_secs):
 #         return
@@ -64,6 +64,71 @@ async def default_status_handler(mqtt_link, status):
             return 1  # By default try specified network on 1st run only
         asyncio.sleep(30)  # Pause before reboot.
         return 0
+
+# Optionally synch the Pyboard's RTC to an NTP timeserver. When instantiated
+# is idle bar reporting synch status. _start runs _do_rtc coro if required.
+class RTCsynchroniser():
+    def __init__(self, mqtt_link, interval, local_time_offset):
+        self._rtc_interval = interval
+        self._local_time_offset = local_time_offset
+        self._rtc_last_syn = 0  # Time when last synchronised (0 == never)
+        self._time_valid = False
+        self._lnk = mqtt_link
+
+    def _start(self):
+        i = self._rtc_interval  # 0 == no synch. -1 == once only. > 1 = secs
+        if i and (i > 0 or self._rtc_last_syn == 0):
+            loop = asyncio.get_event_loop()
+            loop.create_task(self._do_rtc())
+
+    async def _do_rtc(self):
+        lnk = self._lnk
+        lnk.vbprint('Start RTC synchroniser')
+        self._time_valid = not self._rtc_last_syn == 0  # Valid on restart
+        egate = lnk.exit_gate
+        async with egate:
+            while not egate.ending():  # Until parent task has died
+                while not self._time_valid:
+                    lnk.channel.send(TIME)
+                    # Give time for response
+                    if not await egate.sleep(5):
+                        break
+                    if not self._time_valid:
+                        # WiFi may be down. Delay before retry.
+                        if not await egate.sleep(60):
+                            break
+                else:  # Valid time received or restart
+                    if self._rtc_interval < 0:
+                        break  # One resync only: done
+                    tend = self._rtc_last_syn + self._rtc_interval
+                    twait = max(tend - time(), 5)  # Prolonged outage
+                    if not await egate.sleep(twait):
+                        break
+                    self._time_valid = False
+
+    def _do_time(self, action):  # TIME received from ESP8266
+        lnk = self._lnk
+        try:
+            t = int(action[0])
+        except ValueError:  # Gibberish.
+            lnk.quit('Invalid data from ESP8266')
+            return
+        self._time_valid = t > 0
+        if self._time_valid:
+            rtc = pyb.RTC()
+            tm = localtime(t)
+            hours = (tm[3] + self._local_time_offset) % 24
+            tm = tm[0:3] + (tm[6] + 1,) + (hours,) + tm[4:6] + (0,)
+            rtc.datetime(tm)
+            self._rtc_last_syn = time()
+            lnk.vbprint('time', localtime())
+        else:
+            lnk.vbprint('Bad time received.')
+
+    # Is Pyboard RTC synchronised?
+    def _rtc_syn(self):
+        return self._rtc_last_syn > 0
+
 
 class MQTTlink(object):
     lw_topic = None
@@ -84,13 +149,14 @@ class MQTTlink(object):
     def __init__(self, reset, sckin, sckout, srx, stx, init, user_start=None,
                  args=(), local_time_offset=0, verbose=True, timeout=10):
         self.user_start = (user_start, args)
-        self.local_time_offset = local_time_offset
         self.init_str = argformat(*init)
+        # Synchroniser idle until started.
+        self.rtc_synchroniser = RTCsynchroniser(self, init[11], local_time_offset)
         self.keepalive = init[12]
-        self._rtc_syn = False  # RTC persists over ESP8266 reboots
         self._running = False
         self.verbose = verbose
-        wdog = timeout * 1000  # Blocking timeout for ESP8266
+        # Blocking timeout for ESP8266. Must exceed block time of ntptime (1 sec).
+        wdog = timeout * 1000
         # SynCom string mode
         self.channel = SynCom(False, sckin, sckout, srx, stx, reset, wdog, True, verbose)
         loop = asyncio.get_event_loop()
@@ -100,15 +166,18 @@ class MQTTlink(object):
         self.subs = {} # Callbacks indexed by topic
         self.pubs = []
         self._pub_free = True  # No publication in progress
-        self.pub_delay = Delay_ms(self.quit)  # Wait for qos 1 response
         self.s_han = default_status_handler
+        self.wifi_han = lambda *_ : None
+        self._wifi_up = False
         # Only specify network on first run
         self.first_run = True
 
 
 # API
     def publish(self, topic, msg, retain=False, qos=0):
-        self.pubs.append((sanitise(topic), sanitise(msg), 1 if retain else 0, qos))
+        validate(topic, 'topic')  # Raise ValueError if invalid.
+        validate(msg, 'message')
+        self.pubs.append((topic, msg, 1 if retain else 0, qos))
 
     def pubq_len(self):
         return len(self.pubs)
@@ -123,13 +192,19 @@ class MQTTlink(object):
 
     # Is Pyboard RTC synchronised?
     def rtc_syn(self):
-        return self._rtc_syn
+        return self.rtc_synchroniser._rtc_syn()
 
     def status_handler(self, coro):
         self.s_han = coro
 
+    def wifi_handler(self, cb):
+        self.wifi_han = cb
+
     def running(self):
         return self._running
+
+    def wifi(self):
+        return self._wifi_up
 # API END
 
 # Convenience method allows return self.quit() on error
@@ -141,20 +216,10 @@ class MQTTlink(object):
 # On publication of a qos 1 message this is called with False. This prevents
 # further pubs until the response is received, ensuring we wait for the PUBACK
 # that corresponds to the last publication.
-# So publication starts the pub response timer, which on timeout sets _running
-# False
-# A puback message calls pub_free(True) which stops the timer.
-# IOW if the PUBACK is not received within the keepalive period assume we're
-# broken and restart.
-# If WiFi fails we suspend this mechanism by stopping the timer: assume that
-# ESP8266 is still running and will reconnect when it can.
+# This delay can be arbitrarily long if WiFi connectivity has been lost.
     def pub_free(self, val = None):
         if val is not None:
             self._pub_free = val
-            if val:
-                self.pub_delay.stop()
-            else:
-                self.pub_delay.trigger(self.keepalive * 1000)
         return self._pub_free
 
 
@@ -163,7 +228,7 @@ class MQTTlink(object):
             print(*args)
 
     def get_cmd(self, istr):
-        ilst = istr.split(',')
+        ilst = istr.split(SEP)
         return ilst[0], ilst[1:]
 
     def do_status(self, action, last_status):
@@ -175,8 +240,10 @@ class MQTTlink(object):
             self.pub_free(True)  # Unlock so we can do another pub.
         elif iact == RUNNING:
             self._running = True
-        elif iact == WIFI_DOWN:  # No point in timing PUBACK response during an
-            self.pub_delay.stop()  # outage: avoid needless reboots
+        # Detect WiFi status changes. Ignore initialisation and repeats
+        if last_status != -1 and iact != last_status and iact in (WIFI_UP, WIFI_DOWN):
+            self._wifi_up = iact == WIFI_UP
+            self.wifi_han(self._wifi_up)
         if self.verbose:
             if iact != UNKNOWN:
                 if iact != last_status:  # Ignore repeats
@@ -187,33 +254,32 @@ class MQTTlink(object):
                 print('Unknown status: {} {}'.format(action[1], action[2]))
         return iact
 
-    def do_time(self, action):
-        try:
-            t = int(action[0])
-        except ValueError:
-            self._running = False
-            return
-        rtc = pyb.RTC()
-        tm = localtime(t)
-        hours = (tm[3] + self.local_time_offset) % 24
-        tm = tm[0:3] + (tm[6] + 1,) + (hours,) + tm[4:6] + (0,)
-        rtc.datetime(tm)
-        self._rtc_syn = True
-        self.vbprint('time', localtime())
 
+# PUBLISH
     async def _publish(self):
         egate = self.exit_gate
         async with egate:
             while not egate.ending():  # Until parent task has died
-                await asyncio.sleep_ms(20)
-                if len(self.pubs) and self._pub_free:
+                if len(self.pubs): 
                     args = self.pubs.pop(0)
-                    self.channel.send(argformat(PUBLISH, *args))
-                    # In this version all pubs send PUBOK
-                    # Set _pub_free False and start timer. If no response
-                    # received in the keepalive period _running is set False and we
-                    # reboot the ESP8266
-                    self.pub_free(False)
+                    secs = 0
+                    # pub free can be a long time coming if WiFi is down
+                    while not self._pub_free:
+                        # If pubs are queued, wait 1 sec to respect ESP8266 buffers
+                        if not await egate.sleep(1):
+                            break
+                        if self._wifi_up:
+                            secs += 1
+                        if secs > 60:
+                            self.quit('No response from ESP8266')
+                            break
+                    else:
+                        self.channel.send(argformat(PUBLISH, *args))
+                        # All pubs send PUBOK.
+                        # No more pubs allowed until PUBOK received.
+                        self.pub_free(False)
+                else:
+                    await asyncio.sleep_ms(20)
 
 # start() is run each time the channel acquires sync i.e. on startup and also
 # after an ESP8266 crash and reset.
@@ -238,7 +304,7 @@ class MQTTlink(object):
                 iact = self.do_status(action, -1)
                 await self.s_han(self, iact)
                 if iact in _BAD_STATUS:
-                    return self.quit('Bad status. Resetting.')
+                    return self.quit('Bad status: {}. Resetting.'.format(iact))
             else:
                 self.vbprint('Expected will OK got: ', command, action)
         channel.send(self.init_str)
@@ -258,8 +324,6 @@ class MQTTlink(object):
                         return self.quit()
                 if iact in _BAD_STATUS:
                     return self.quit('Bad status. Resetting.')
-            elif command == TIME:
-                self.do_time(action)
             else:
                 self.vbprint('Init got: ', command, action)
 
@@ -269,31 +333,36 @@ class MQTTlink(object):
 
         loop = asyncio.get_event_loop()
         loop.create_task(self._publish())
+        self.rtc_synchroniser._start()  # Run coro if synchronisation is required.
+        self.wifi_han(True)
+
+# Initialisation is complete. Process messages from ESP8266.
         iact = -1                   # Invalidate last status for change detection
         while True:                 # print incoming messages, handle subscriptions
-            res = await channel.await_obj()
-            if res is None:         # SynCom timeout
-                await self.s_han(self, ESP_FAIL)
-                return self.quit('ESP8266 fail 3. Resetting.')  # ESP8266 fail
+            chan_state = channel.any()
+            if chan_state is None:  # SynCom Timeout
+                self._running = False
+            elif chan_state > 0:
+                res = await channel.await_obj()
+                command, action = self.get_cmd(res)
+                if command == SUBSCRIPTION:
+                    if action[0] in self.subs: # topic found
+                        self.subs[action[0]](*action)  # Run the callback
+                elif command == STATUS:  # 1st arg of status is an integer
+                    iact = self.do_status(action, iact) # Update pub q and wifi status
+                    await self.s_han(self, iact)
+                    if iact in _DIRE_STATUS:
+                        return self.quit('Fatal status. Resetting.')
+                elif command == TIME:
+                    self.rtc_synchroniser._do_time(action)
+                elif command == MEM:  # Wouldn't ask for this if we didn't want a printout
+                    print('ESP8266 RAM free: {} allocated: {}'.format(action[0], action[1]))
+                else:
+                    await self.s_han(self, UNKNOWN)
+                    return self.quit('Got unhandled command, resetting ESP8266:', command, action)  # ESP8266 has failed
 
-            command, action = self.get_cmd(res)
-            if command == SUBSCRIPTION:
-                if action[0] in self.subs: # topic found
-                    self.subs[action[0]](*action)  # Run the callback
-            elif command == STATUS:  # 1st arg of status is an integer
-                iact = self.do_status(action, iact) # Update pub q and wifi status
-                await self.s_han(self, iact)
-                if iact in _DIRE_STATUS:  # Tolerate brief WiFi outages: let channel timeout
-                    return self.quit('Fatal status. Resetting.')
-            elif command == TIME:
-                self.do_time(action)
-            elif command == MEM:  # Wouldn't ask for this if we didn't want a printout
-                print('ESP8266 RAM free: {} allocated: {}'.format(action[0], action[1]))
-            else:
-                await self.s_han(self, UNKNOWN)
-                return self.quit('Got unhandled command, resetting ESP8266:', command, action)  # ESP8266 has failed
+            await asyncio.sleep_ms(20)
 
-            if not self._running:  # puback not received?
+            if not self._running:  # self.quit() has been called.
                 await self.s_han(self, NO_NET)
                 return self.quit('Not running, resetting ESP8266')
-

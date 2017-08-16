@@ -1,6 +1,5 @@
 # pbmqtt_test.py TEST PROGRAM for Pyboard MQTT link
-# This tests the ramcheck facility and the mechanism for launching continuously
-# running coroutines from the user_start program.
+# This tests the ramcheck facility.
 
 # Author: Peter Hinch.
 # Copyright Peter Hinch 2017 Released under the MIT license.
@@ -13,7 +12,7 @@ from machine import Pin, Signal
 import pyb
 import uasyncio as asyncio
 from pbmqtt import MQTTlink
-from net_local import INIT  # Local network details
+from net_local import init_args  # Local network, broker and pin details
 from status_values import MEM  # Ramcheck request (for debug only)
 
 qos = 1 # for test all messages have the same qos
@@ -70,15 +69,8 @@ def start(mqtt_link):
     reset_count += 1
 
 def test():
-    stx = Pin(Pin.board.Y5, Pin.OUT_PP)         # Define pins
-    sckout = Pin(Pin.board.Y6, Pin.OUT_PP, value = 0)
-    srx = Pin(Pin.board.Y7, Pin.IN)
-    sckin = Pin(Pin.board.Y8, Pin.IN)
-    reset = Pin(Pin.board.Y4, Pin.OPEN_DRAIN)
-    sig_reset = Signal(reset, invert = True)
-
     MQTTlink.will('result', 'client died')
-    mqtt_link = MQTTlink(sig_reset, sckin, sckout, srx, stx, INIT, start, local_time_offset = 1)
+    mqtt_link = MQTTlink(user_start = start, **init_args)
     loop = asyncio.get_event_loop()
     loop.run_forever()
 

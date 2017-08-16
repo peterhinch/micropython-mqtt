@@ -60,6 +60,7 @@ class MQTT_base:
             port = 8883 if ssl else 1883
         self.client_id = client_id
         self.sock = None
+        # Do this once to prevent blocking during later internet outage:
         self.addr = socket.getaddrinfo(server, port)[0][-1]
         self.ssl = ssl
         self.ssl_params = ssl_params
@@ -109,13 +110,15 @@ class MQTT_base:
     def timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
 
-    async def _as_read(self, n):  # OSError caught by superclass
+    async def _as_read(self, n, sock=None):  # OSError caught by superclass
+        if sock is None:
+            sock = self.sock
         data = b''
         t = ticks_ms()
         while len(data) < n:
             if self.timeout(t) or not self.isconnected():
                 raise OSError(-1)
-            msg = self.sock.read(n - len(data))
+            msg = sock.read(n - len(data))
             if msg == b'':  # Connection closed by host (?)
                 raise OSError(-1)
             if msg is not None:  # data received
@@ -125,14 +128,16 @@ class MQTT_base:
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
         return data
 
-    async def _as_write(self, bytes_wr, length=0):
+    async def _as_write(self, bytes_wr, length=0, sock=None):
+        if sock is None:
+            sock = self.sock
         if length:
             bytes_wr = bytes_wr[:length]
         t = ticks_ms()
         while bytes_wr:
             if self.timeout(t) or not self.isconnected():
                 raise OSError(-1)
-            n = self.sock.write(bytes_wr)
+            n = sock.write(bytes_wr)
             if n:
                 t = ticks_ms()
             bytes_wr = bytes_wr[n:]
@@ -163,7 +168,7 @@ class MQTT_base:
             if e.args[0] not in [uerrno.EINPROGRESS, uerrno.ETIMEDOUT]:
                 raise  # from uasyncio __init__.py open_connection()
         await asyncio.sleep_ms(_DEFAULT_MS)
-        self.dprint('Connected to broker')
+        self.dprint('Connecting to broker.')
         if self.ssl:
             import ussl
             self.sock = ussl.wrap_socket(self.sock, **self.ssl_params)
@@ -199,13 +204,27 @@ class MQTT_base:
         if self.user is not None:
             await self._send_str(self.user)
             await self._send_str(self.pswd)
+        # read causes ECONNABORTED if broker is out; triggers a reconnect.
         resp = await self._as_read(4)
+        self.dprint('Connected to broker.')
         if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:
             raise OSError(-1)
 
     async def _ping(self):
         async with self.lock:
             await self._as_write(b"\xc0\0")
+
+    async def broker_up(self):  # Test broker connectivity
+        tlast = self.last_rx
+        if ticks_diff(ticks_ms(), tlast) < 1000:
+            return True
+        await self._ping()
+        t = ticks_ms()
+        while not self.timeout(t):
+            await asyncio.sleep_ms(100)
+            if ticks_diff(self.last_rx, tlast) > 0:  # Response received
+                return True
+        return False
 
     def disconnect(self):
         try:
@@ -457,6 +476,8 @@ class MQTTClient(MQTT_base):
                     except OSError as e:
                         self.dprint('Error in reconnect', e)  # Can get ECONNABORTED or -1.
                         self.sock.close()  # Disconnect and try again.
+                        self._in_connect = False
+                        self._isconnected = False
 
     async def subscribe(self, topic, qos=0):
         qos_check(qos)
@@ -473,7 +494,9 @@ class MQTTClient(MQTT_base):
         while 1:
             await self._connection()
             try:
+                self.dprint('Pub:', topic, msg, retain, qos)
                 return await super().publish(topic, msg, retain, qos)
             except OSError:
                 pass
+            self.dprint('dup failed. Reconnect and repub with new PID.')
             self._reconnect()  # Broker or WiFi fail.

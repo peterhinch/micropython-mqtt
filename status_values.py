@@ -42,3 +42,6 @@ TIME = 'i'
 MEM = 'm'
 WILL = 'w'
 SUBSCRIPTION = 'u'
+
+# Separator
+SEP = chr(127)

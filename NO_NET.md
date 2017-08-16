@@ -1,31 +1,34 @@
 # MQTT for MicroPython targets lacking WiFi connectivity
 
-The aim of this project is to bring the MQTT protocol via WiFi to generic host
-devices running MicroPython but lacking a WiFi interface. A cheap ESP8266 board
-running firmware from this repository supplies WiFi connectivity. Connection
-between the host and the ESP8266 is via five GPIO lines. The means of
+This project brings the MQTT protocol via WiFi to generic host devices running
+MicroPython but lacking a WiFi interface. A cheap ESP8266 board running
+firmware from this repository supplies WiFi connectivity.
+
+It is designed to be resilient coping with WiFi or broker outages and ESP8266
+failures in as near a transparent fashion as possible.
+
+Connection between the host and the ESP8266 is via five GPIO lines.The means of
 communication, and justification for it, is documented
 [here](https://github.com/peterhinch/micropython-async/tree/master/syncom_as).
 It is designed to be hardware independent requiring three output lines and two
-inputs. It uses no hardware-specific features like timers, interrupts or
-machine code, nor does it make assumptions about processor speed. It should be
-compatible with any hardware running MicroPython and having five free GPIO
-lines.
+inputs. It uses no hardware-specific features like timers, interrupts, special
+code emitters or machine code. Nor does it make assumptions about processor
+speed. It should be compatible with any hardware running MicroPython and having
+five free GPIO lines.
 
 The driver is event driven using uasyncio for asynchronous programming.
-Applications continue to run unaffected by delays experienced on the ESP8266.
+Applications can run unaffected by delays experienced on the ESP8266.
 
 This document assumes familiarity with the umqtt and uasyncio libraries.
 Unofficial guides may be found via these links:  
 [umqtt FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239&p=12694).  
 [uasyncio tutorial](https://github.com/peterhinch/micropython-async/blob/master/TUTORIAL.md).
 
-The ESP8266 operates in station mode. The host interface aims to support all
-the MQTT functionality provided in the umqtt library. It tries to keep the link
-to the broker open continuously, allowing applications which seldom or never
-publish. The ESP8266 firmware and the host interface are designed to be
-resilient under error conditions. The ESP8266 is rebooted in the event of fatal
-errors or crashes.
+The ESP8266 operates in station mode. The host interface supports the MQTT
+functionality provided in the umqtt library. It aims to keep the link to the
+broker open continuously, enabling applications which seldom or never publish
+to receive messages. The host implements a watchdog to reboot the ESP8266 in
+the event of fatal errors or crashes.
 
 ###### [Main README](./README.md)
 
@@ -33,26 +36,29 @@ errors or crashes.
 
 V0.2 Aug 2017
 
-Has a minor API change: added `clean` element to `net_local.py`.
-Now uses the `resilient` MQTT library so ESP8266 reboots should occur only in
-the event that the ESP crashes (hopefully never).
+Now uses the `resilient` MQTT library. ESP8266 reboots no longer occur
+routinely, happening only in the event of ESP8266 failure. The `resilient`
+library has some significant bugfixes.
 
-V0.1 June 2017
-At the time of writing the code is best described as being of beta quality.
-Testing has been done with a local broker and iot.eclipse.org. SSL is untested.
-If anyone is in a position to test this I would welcome a report. Please raise
-an issue - including to report a positive outcome :).
+**API Changes**
+
+User coros which access the API should be started in the user start coro and
+should have provision to quit if the ESP8266 fails: see `pb_simple.py`.
+
+The file `net_local.py` now has added `clean` and `debug` elements to the
+`INIT` tuple. Existing users will need to append these.
+
+**Test status**
 
 Testing was performed using a Pyboard V1.0 as the host. The following boards
 have run as ESP8266 targets: Adafruit Feather Huzzah, Adafruit Huzzah and WeMos
 D1 Mini.
 
-Originally written when the ESP8266 firmware was error-prone it has substantial
-provision for error recovery. Much of the code deals with events like blocked
-sockets, ESP8266 crashes and WiFi and broker outages. The underlying stability
-of MicroPython on the ESP8266 is now excellent, but wireless networking remains
-vulnerable to error conditions such as radio frequency interference or the host
-moving out of range of the access point.
+Testing was performed using a local broker and a public one.
+
+I have had no success with SSL/TLS. This may be down to inexperience on my part
+so if anyone can test this I would welcome a report. Please raise an issue -
+including to report a positive outcome :).
 
 # Contents
 
@@ -76,17 +82,17 @@ moving out of range of the access point.
 
    2.3.3 [Class Method](./README.md#233-class-method)
 
-   2.3.4 [Intercepting status values](./README.md#234-intercepting-status-values)
+   2.3.4 [The user_start callback](./README.md#234-the-user_start-callback)
 
-   2.3.5 [The user_start callback](./README.md#235-the-user_start-callback)
+   2.3.5 [Intercepting status values](./README.md#235-intercepting-status-values)
 
-  2.4 [Application design](./README.md#24-application-design)
+   2.4 [Application design](./README.md#24-application-design)
 
    2.4.1 [User coroutines](./README.md#241-user-coroutines)
 
    2.4.2 [WiFi Link Behaviour](./README.md#242-wifi-link-behaviour)
 
- 3 [The ESP8266](./README.md#3-the-esp8266)
+ 3 [The ESP8266](./README.md#3-the-esp8266) Installing and modifying the ESP8266 build.
  
   3.1 [Installing the precompiled build](./README.md#31-installing-the-precompiled-build) Quickstart.
 
@@ -102,9 +108,13 @@ moving out of range of the access point.
 
   4.2.2 [Running](./README.md#422-running)
 
- 5 [Performance](./README.md#5-performance)
+ 5 [Limitations](./README.md#5-limitations)
 
- 6 [Postscript](./README.md#6-postscript) The answer to the ultimate question.
+  5.1 [Speed](./README.md#51-speed)
+
+  5.2 [Reliability](./README.md#52-reliability)
+
+ 6 [References](./README.md#6-references)
 
 # 1. Wiring
 
@@ -113,7 +123,7 @@ Connections to the ESP8266 are as follows.
 In the table below Feather refers to the Adafruit Feather Huzzah reference board
 or to the Huzzah with serial rather than USB connectivity. Mini refers to the
 WeMos D1 Mini. Pyboard refers to any Pyboard version. Pins are for the Pyboard
-test programs, but host pins may be changed at will in the application code.
+test programs, but host pins may be changed at will in `net_local.py`.
 
 
 | Signal  | Feather | Mini | Pyboard | Signal  |
@@ -124,53 +134,67 @@ test programs, but host pins may be changed at will in the application code.
 | mckout  |    15   |  D8  |   Y8    | sckin   |
 | reset   |  reset  |  rst |   Y4    | reset   |
 
-Host and target must share a sigle power supply with a common ground.
+Host and target should share a sigle power supply with a common ground.
+
+Note on the reset connection. The default `net_local.py` instantiates the pin
+with `Pin.OPEN_DRAIN` because some boards have a capacitor to ground. On a low
+to high transition a push-pull pin could cause spikes on the power supply. The
+truly paranoid might replace the reset wire with a 100Ω resistor to limit
+current when the pin goes low.
 
 ###### [Contents](./README.md#contents)
 
 # 2. The Host
 
-The MQTT API is via the ``MQTTlink`` class described below.
+The MQTT API is via the `MQTTlink` class described below.
 
 ## 2.1 Files
 
 ### 2.1.1 Dependencies
 
-The following files originate from the [micropython-async](https://github.com/peterhinch/micropython-async.git) library.  
-``aswitch.py`` Provides a retriggerable delay class.  
-``asyn.py`` Synchronisation primitives.  
-``syncom.py`` Communication library.
-
-From this library:  
-``pbmqtt.py`` Python MQTT interface.  
-``status_values.py`` Numeric constants shared between user code, the ESP8266
-firmware and ``pbmqtt.py``; including status values sent to host from ESP8266.  
-``net_local.py`` Local network credentials and MQTT parameters. Edit this.
+The first two files originate from the
+[micropython-async](https://github.com/peterhinch/micropython-async.git)
+library. For convenience all files are provided here.  
+`asyn.py` Synchronisation primitives.  
+`syncom.py` Bitbanged communication library.
+`pbmqtt.py` Python MQTT interface.  
+`status_values.py` Numeric constants shared between user code, the ESP8266
+firmware and `pbmqtt.py`; including status values sent to host from ESP8266.  
+`net_local.py` WiFi credentials, MQTT parameters, host pin numbers. Edit this.
 
 ### 2.1.2 Test programs
 
-``pb_simple.py`` Minimal publish/subscribe test. A remote unit can turn the
+`pb_simple.py` Minimal publish/subscribe test. A remote client can turn the
 Pyboard green LED on and off and can display regular publications from the
 host.  
-``pb_status.py`` Demonstrates interception of status messages.  
-``pbmqtt_test.py`` Tests coroutines which must shut down on ESP8266 reboot.
-Also demonstrates the ramcheck facility.
+`pbmqtt_test.py` Demonstrates the ramcheck facility.  
+`pbrange.py` Tests WiFi range and demos operation near the limit of range using
+the Pyboard LED's for feedback. Also demonstrates the interception of status
+messages.
+
+Bash scripts to periodically publish to the above test programs. Adapt to your
+broker address.  
+`pubtest` For `pb_simple.py` and `pbmqtt_test.py`.
+`pubtest_range` For `pbrange.py`.
 
 ###### [Contents](./README.md#contents)
 
 ## 2.2 Quick start guide
 
 Ensure you have a working MQTT broker on a known IP address, and that you have
-PC client software. This document assumes mosquitto as broker, mosquitto_pub
-and mosquitto_sub as clients. For test purposes it's best to start with the
-broker on the local network. Clients may be run on any connected PC.
+PC client software. This document assumes `mosquitto_pub` and `mosquitto_sub`
+as clients. For test purposes it's best to start with the broker on the local
+network - `mosquitto` is recommended as broker.  The public brokers referenced
+[here](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers) may also be
+used. Clients may be run on any connected PC.
 
-Modify ``net_local.py`` to match your MQTT broker address, WiFi SSID and
+Modify `net_local.py` to match your MQTT broker address, WiFi SSID and
 password.
 
 Copy the above dependencies to the Pyboard. Install the supplied firmware to
-the ESP8266 (section 3.1). Copy ``pb_simple.py`` to the Pyboard and run it.
-Assuming the broker is on 192.168.0.9, on a PC run:
+the ESP8266 [section 3.1](./README.md#31-installing-the-precompiled-build).
+Copy `pb_simple.py` to the Pyboard and run it. Assuming the broker is on
+192.168.0.9, on a PC run:
 
 mosquitto_sub -h 192.168.0.9 -t result
 
@@ -185,45 +209,43 @@ mosquitto_pub -h 192.168.0.9 -t green -m off
 
 ## 2.3 The MQTTlink class
 
+This provides the host API. MQTT topics and messages are strings restricted to
+7-bit ASCII characters with `ord()` values in range 1..126 inclusive.
+
 ### 2.3.1 Constructor
 
-This takes the following positional args:
- 1. ``reset`` A ``Signal`` instance associated with the reset output pin. The
- test programs instantiate the pin with ``Pin.OPEN_DRAIN`` because some boards
- have a capacitor to ground. On a low to high transition a push-pull pin could
- cause spikes on the power supply. The truly paranoid might replace the reset
- wire with a 100Ω resistor to limit current.
- 2. ``sckin`` Initialised input pin.
- 3. ``sckout`` Initialised output pin with value 0.
- 4. ``srx`` Initialised input pin.
- 5. ``stx`` Initialised output pin with value 0.
- 6. ``init`` A tuple of initialisation values. See below.
- 7. ``user_start=None`` A callback to run when communication link is up.
- 8. ``args=()`` Optional args for above.
- 9. ``local_time_offset=0`` If the host's RTC is to be synchronised to an NTP
+This takes the following positional args. The demo programs supply most of
+these from the site-specific `net_local.py`.
+ 1. `reset` A `Signal` instance associated with the reset output pin.
+ 2. `sckin` Initialised input pin.
+ 3. `sckout` Initialised output pin with value 0.
+ 4. `srx` Initialised input pin.
+ 5. `stx` Initialised output pin.
+ 6. `init` A tuple of initialisation values. See below.
+ 7. `user_start=None` A callback to run when communication link is up.
+ 8. `args=()` Optional args for above.
+ 9. `local_time_offset=0` If the host's RTC is to be synchronised to an NTP
  server, this allows an offset to be added. Unit is hours.
- 10. ``verbose=True`` Print diagnostic messages.
- 11. ``timeout=10`` Duration of ESP8266 watchdog (secs). This limits how long a
- socket can block before the ESP8266 is rebooted. If the broker is on a slow
- internet connection this should be increased.
+ 10. `verbose=True` Print diagnostic messages.
+ 11. `timeout=10` Duration of ESP8266 watchdog (secs). If the ESP8266 crashes,
+ after this period the ESP8266 will be hard-reset.
 
-The ``user_start`` callback runs when the link between the boards has
-initialised. If the ESP8266 crashes the link times out and the driver resets
-the ESP8266. When the link is re-initialised ``user_start`` runs again. Typical
-use is to define subscriptions. The callback can launch coroutines but these
-should run to completion promptly (less than a few seconds). If such coros run
-forever, precautions apply. See section 2.3.5.
+The `user_start` callback runs when the link between the boards has
+initialised. This is where subscriptions are registered and publishing coros
+are launched. Its use is covered in detail
+[below](./README.md#235-the-user_start-callback).
 
-``INIT``: a tuple of data to be sent to ESP8266 after a reset.  
-Init elements. Entries 0-6 are strings, 7-12 are integers:
+`init`: a tuple of data to be sent to ESP8266 after a reset. The demo programs
+access this from `net_local.py`.  
+Init elements. Entries 0-6 are strings, 7-14 are integers:
 
- 0. 'init'
+ 0. 'init'.
  1. SSID for WiFi.
  2. WiFi password.
  3. Broker IP address.
- 4. MQTT user ('' for none).
+ 4. MQTT username ('' for none).
  5. MQTT password ('' for none).
- 6. SSL params (repr of a dictionary)
+ 6. SSL params (repr of a dictionary).
  7. 1/0 Use default network if possible. If 1, tries to connect to the network
  stored on the ESP8266. If this fails, it will connect to the specified
  network. If 0, ignores the saved LAN. The specified LAN becomes the new
@@ -238,104 +260,130 @@ Init elements. Entries 0-6 are strings, 7-12 are integers:
  only.
  12. keepalive time (secs) (0 = disable). Sets the broker keepalive time.
  13. 1/0 Clean Session.
+ 14. 1/0 Emit debug messages from ESP8266 UART.
 
 The Clean Session flag controls behaviour of qos == 1 messages from the broker
-after a WiFi outage. If set, such messages from the broker during the outage
-will be lost. If cleared the broker will send them once connectivity is
-restored. This presents a hazard in that the ESP8266 WiFi stack has a buffer
-which can overflow if messages arrive in quick succession. This could result in
-an ESP8266 crash with a consequent automatic reboot, in which case some of the
-backlog will be lost.
+after a WiFi outage that exceeds the broker's keepalive time. (MQTT spec
+section 3.1.2.4).
+
+If set, such messages from the broker during the outage will be lost. If
+cleared the broker will send them once connectivity is restored. This presents
+a hazard in that the ESP8266 WiFi stack has a buffer which can overflow if
+messages arrive in quick succession. This could result in an ESP8266 crash with
+a consequent automatic reboot, in which case some of the backlog will be lost.
 
 ###### [Contents](./README.md#contents)
 
 ### 2.3.2 Methods
 
- 1. ``publish`` Args topic (str), message (str), retain (bool), qos (0/1). Puts
- publication on a queue and returns immediately. Defaults: retain ``False``,
- qos 0. ``publish`` can be called at any time, even if an ESP8266 reboot is in
+ 1. `publish` Args topic (str), message (str), retain (bool), qos (0/1). Puts
+ publication on a queue and returns immediately. Defaults: retain `False`,
+ qos 0. `publish` can be called at any time, even if an ESP8266 reboot is in
  progress.
- 2. ``subscribe`` Args topic (str), callback, qos (0/1). Subscribes to the
+ 2. `subscribe` Args topic (str), callback, qos (0/1). Subscribes to the
  topic. The callback will run when a publication is received. The callback args
- are the topic and message. It should be called from the ``user_start``
+ are the topic and message. It should be called from the `user_start`
  callback to re-subscribe after an ESP8266 reboot.
- 3. ``pubq_len`` No args. Returns the length of the publication queue.
- 4. ``rtc_syn`` No args. Returns ``True`` if the RTC has been synchronised to
+ 3. `wifi` No args. Returns `True` if WiFi and broker are up. See note below.
+ 4. `pubq_len` No args. Returns the length of the publication queue.
+ 5. `rtc_syn` No args. Returns `True` if the RTC has been synchronised to
  an NTP time server.
- 5. ``status_handler`` Arg: a coroutine. Overrides the default status handler.
- 6. ``running`` No args. Returns ``True`` if WiFi and broker are up and system
+ 6. `wifi_handler` Arg: a callback. This will run each time the WiFi status
+ changes. The callback takes a single boolean arg: `True` if WiFi is up and the
+ broker is accessible. It is first called with `True` after the `user_start`
+ callback completes. See note below.
+ 7. `status_handler` Arg: a coroutine. Overrides the default status handler.
+
+Detection of outages can be slow depending on application code. The client
+pings the broker, but infrequently. Detection will occur if a publication
+fails provoking automatic reconnection attempts.
+
+Methods intended for debug/test:
+
+ 1. `running` No args. Returns `True` if WiFi and broker are up and system
  is running normally.
- 7. ``command`` Intended for test/debug. Takes an arbitrary number of
- positional args, formats them and sends them to the ESP8266. Currently the
- only supported command is 'mem' with no args. This causes the ESP8266 to
- return its memory usage, which the host driver will print. This was to check
- for memory leaks. None have been observed. See ``pbmqtt_test.py``.
+ 2. `command` Takes an arbitrary number of positional args, formats them and
+ sends them to the ESP8266. Currently the only supported command is `MEM` with
+ no args. This causes the ESP8266 to return its memory usage, which the host
+ driver will print. This was to check for memory leaks. None have been
+ observed. See `pbmqtt_test.py`.
 
 ### 2.3.3 Class Method
 
-``will`` Args topic (str), msg (str), retain, qos. Set the last will. Must be
-called before instantiating the ``MQTTlink``. Defaults: retain ``False``, qos
+`will` Args topic (str), msg (str), retain, qos. Set the last will. Must be
+called before instantiating the `MQTTlink`. Defaults: retain `False`, qos
 0.
 
 ###### [Contents](./README.md#contents)
 
-### 2.3.4 Intercepting status values
+### 2.3.4 The user_start callback
+
+This callback runs when broker connectivity is first established. In the event
+of an ESP8266 crash, the Pyboard will reset it; the callback will subsequently
+run again.
+
+Its purpose is to register subscriptions and to launch coros which use the API.
+MQTT message processing begins on the callback's return so it should run to
+completion quickly.
+
+Coroutines launched by it should either terminate quickly (less than a few
+seconds) or have provision to terminate if connectivity with the ESP8266 is
+lost owing to a crash. This is necessary because `uasyncio` does not have a
+means to deschedule a running coroutine. If the ESP8266 crashes the `exit_gate`
+ensures that all dependent coroutines have terminated before the Pyboard
+resets the ESP8266. Consequently user coros launched by `user_start` and
+designed for continuous running must quit on ESP8266 failure.
+
+The technique for doing this is shown here (taken from `pb_simple.py`).
+
+```python
+async def publish(mqtt_link, tim):
+    count = 1
+    egate = mqtt_link.exit_gate
+    async with egate:
+        while True:
+            mqtt_link.publish('result', str(count), 0, qos)
+            count += 1
+            if not await egate.sleep(tim):
+                break
+```
+
+The `ExitGate` object's `sleep()` method returns `False` if the ESP8266 fails.
+This should be used rather than `uasyncio.sleep()` for long delays to avoid
+delaying the response to an ESP8266 crash. The `egate.ending()` method returns
+`True` if the ESP8266 has failed and offers another way to terminate a coro,
+allowing the reset to proceed.
+
+See `pb_simple.py` and the
+[synchronisation primitives docs](https://github.com/peterhinch/micropython-async/blob/master/PRIMITIVES.md).
+
+###### [Contents](./README.md#contents)
+
+### 2.3.5 Intercepting status values
+
+A typical reason for interception is to handle fatal errors on initial startup,
+for example where the WiFi network or broker is unavailable. Options might be
+to prompt for user intervention or pausing for a period before rebooting.
 
 The ESP8266 can send numeric status values to the host. These are defined and
-documented in ``status_values.py``. The default handler specifies how a network
+documented in `status_values.py`. The default handler specifies how a network
 connection is established after a reset. Initially, if the ESP8266 fails to
 connect to the default LAN stored in its flash memory, it attempts to connect
-to the network specified in ``INIT``. On ESP8266 reboots it avoids flash wear
-by avoiding the specified LAN; it waits 30 seconds and reboots again.
+to the network specified in `INIT`. On ESP8266 reboots (caused by a crash) it
+saves flash wear by avoiding the specified LAN; it waits 30 seconds and
+reboots again.
 
 The behaviour in response to status messages may be modified by replacing the
 default handler with a user supplied coroutine as described in 2.3.2 above;
-the test program ``pb_status.py`` illustrates this.
+the test program `pbrange.py` illustrates this.
 
 The driver waits for the handler to terminate, then responds in a way dependent
 on the status value. If it was a fatal error the ESP8266 will be rebooted. For
 informational values execution will continue.
 
 The return value from the coroutine is ignored except in response to a
-``SPECNET`` message. If it returns 1 the driver will attempt to connect to the
+`SPECNET` message. If it returns 1 the driver will attempt to connect to the
 specified network. If it returns 0 it will reboot the ESP8266.
-
-A typical reason for interception is to handle fatal errors, prompting for user
-intervention or reporting and issuing long delays before rebooting.
-
-###### [Contents](./README.md#contents)
-
-### 2.3.5 The user_start callback
-
-This callback runs each time the ESP8266 is reset. The callback should return
-promptly, and any coroutines launched by it should terminate quickly. If the
-callback launches coroutines which run forever there is a hazard described
-below. Recommendations:
-
- 1. Have coros quit rapidly.
- 2. Start "run forever" coros elsewhere than ``user_start``.
- 3. Start them on the first run only.
-
-If you must start a run forever coro each time ``user_start`` runs consider
-this. After an error which causes the ESP8266 to be rebooted the callback runs
-again causing coroutines launched by the callback to be re-created. This will
-cause the scheduler's task queue to grow, potentially without limit.
-
-It should hence be designed to quit prior to an ESP8266 reboot (the MicroPython
-asyncio subset has no way to kill a running coro). For internal use the
-MQTTLink has an ``ExitGate`` instance ``exit_gate``. A continuously running
-coroutine should use the ``exit_gate`` context manager and poll
-``exit_gate.ending()``. If it returns ``True`` the coro should terminate. If it
-needs to pause it should issue
-
-```python
-result = await mqtt_link.exit_gate.sleep(time)
-```
-
-and quit if result is ``False``.
-
-See ``pbmqtt_test.py`` and the
-[synchronisation primitives docs](https://github.com/peterhinch/micropython-async/blob/master/PRIMITIVES.md).
 
 ###### [Contents](./README.md#contents)
 
@@ -344,9 +392,9 @@ See ``pbmqtt_test.py`` and the
 ### 2.4.1 User coroutines
 
 Where possible these should periodically yield to the scheduler with a nonzero
-delay. An ``asyncio.sleep(secs)`` or ``aysncio.sleep_ms(ms)`` will reduce
+delay. An `asyncio.sleep(secs)` or `aysncio.sleep_ms(ms)` will reduce
 competition with the bitbanging communications, minimising any impact on
-throughput. Issue a zero delay (or ``yield``) only when a fast response is
+throughput. Issue a zero delay (or `yield`) only when a fast response is
 required.
 
 ### 2.4.2 WiFi Link Behaviour
@@ -355,32 +403,35 @@ The implicit characteristics of radio links mean that WiFi is subject to
 outages of arbitrary duration: RF interference may occur, or the unit may move
 out of range of the access point.
 
-In the event of a WiFi outage the ESP8266, running the umqtt library, may
-respond in two ways. If a socket is blocking it may block forever; it will also
-wait forever if a publication with qos == 1 has taken place and the MQTT
-protocol is waiting on a PUBACK response. In this case the serial link will
-time out and the ESP8266 will be rebooted. If a socket operation is not in
-progress a WIFI_DOWN status will be sent to the Pyboard; if the outage is brief
-WIFI_UP will be sent and operation will continue. Outages longer than the link
-timeout will result in an ESP8266 reboot.
+This driver aims to handle outages as transparently as possible. If an outage
+occurs the ESP8266 signals the driver that this has occurred, signalling again
+when connectivity is restored. These events may be trapped by intercepting the
+status messages (see `pbrange.py`).
 
-An implication of this behaviour is that publications with qos == 1 may not be
-delivered if the WiFi fails and causes a reboot while waiting for the PUBACK.
-In my view qos == 1 is not strictly achievable with the current umqtt library
-over a WiFi link. On a reliable network it is effective.
+During an outage publications will be queued. An ongoing qos==1 publication
+will be delayed until connectivity is restored. Messages from the broker with
+qos==1 will be queued by the broker and will be received when connectivity
+recovers. This will end when the broker's keepalive time expires, when any last
+will is published. Whether the qos==1 messages are retransmitted then depends
+on the state of the `Clean Session` flag in `net_local.py`.
 
-The driver aims to keep the link to the broker open at all times. It does this
-by sending MQTT pings to the broker: four pings are sent during the keepalive
-time. If no response is achieved in this period the broker is presumed to have
-failed or timed out. The ``NO_NET`` status is reported (to enable user action)
-and the ESP8266 rebooted.
+Note that the ESP8266 vendor network stack has a buffer which can overrun if
+messages are sent in rapid succession. This has not been observed in testing
+but if you encounter lost messages and see `LmacRxBlk:1` on the UART this is
+the cause.
 
 ###### [Contents](./README.md#contents)
 
 # 3. The ESP8266
 
-To use the precompiled build, follow the instructions in 3.1 below. The
-remainder of the ESP8266 documentation is for those wishing to modify the
+To use the precompiled build, follow the instructions in 3.1 below. 
+
+The firmware toggles pin 0 to indicate that the code is running. Pin 2 is
+driven low when broker connectivity is present. On the reference board this
+results in the blue LED indicating connectivity status and the red LED flashing
+while running.
+
+The remainder of the ESP8266 documentation is for those wishing to modify the
 ESP8266 code. Since the Pyboard and the ESP8266 communicate via GPIO pins the
 UART/USB interface is available for debugging.
 
@@ -390,100 +441,95 @@ You will need the esptool utility which runs on a PC. It may be found
 [here](https://github.com/espressif/esptool). Under Linux after installation
 you will need to assign executable status. On my system:  
 
-``sudo chmod a+x /usr/local/bin/esptool.py``
+`sudo chmod a+x /usr/local/bin/esptool.py`
 
 Erase the flash with  
-``esptool.py erase_flash``  
+`esptool.py erase_flash`  
 Then, from the project directory, issue  
-``esptool.py --port /dev/ttyUSB0 --baud 115200 write_flash --verify --flash_size=detect -fm dio 0 firmware-combined.bin``  
+`esptool.py --port /dev/ttyUSB0 --baud 115200 write_flash --verify --flash_size=detect -fm dio 0 firmware-combined.bin`  
 These args for the reference board may need amending for other hardware.
 
 # 3.2 Files
 
-This information is for those wishing to modify the ESP8266 firmware.
+In the precompiled build all modules are implemented as frozen bytecode. The
+precompiled build's modules directory comprises the following:
 
-In the precompiled build all modules are implemented as frozen bytecode. For
-development purposes you may wish to run mqtt.py (or others) as regular source
-files. The precompiled build's modules directory comprises the following:
+ 1. The uasyncio library (including collections directory, `errno.py`,
+ `logging.py`).
+ 2. `mqtt.py` Main module.
+ 3. `mqtt_as.py` Asynchronous MQTT module.
+ 4. `syncom.py` Bitbanged communications driver.
+ 5. `status_values.py` Numeric status codes.
+ 6. `_boot.py` Modified to create main.py in filesystem (see below).
 
- 1. The uasyncio library (including collections library).
- 2. ``mqtt.py`` Main module.
- 3. ``mqtt_as.py`` Asynchronous MQTT module.
- 4. ``syncom.py`` Bitbanged communications driver.
- 5. ``aswitch.py`` Module has a retriggerable delay class.
- 6. ``asyn.py`` Synchronisation primitives.
- 7. ``status_values.py`` Numeric status codes.
- 8. ``_boot.py`` Modified to create main.py in filesystem.
+If flash space is limited unused drivers may be removed from the project's
+`modules`. The following standard files are required:
 
-To conserve space unused drivers are removed from the project's ``modules``
-directory, leaving the following required standard files:
+ 1. `flashbdev.py`
+ 2. `inisetup.py`
 
- 1. ``ntptime.py``
- 2. ``flashbdev.py``
- 3. ``inisetup.py``
-
-The ``mqtt`` module needs to auto-start after a hard reset. This requires a
-``main.py`` file. If the standard ``_boot.py`` is used you will need to create
+The `mqtt` module needs to auto-start after a hard reset. This requires a
+`main.py` file. If the standard `_boot.py` is used you will need to create
 the file as below and copy it to the filesystem:
 
 ```python
 import mqtt
 ```
 
-The modified ``_boot.py`` in this repository removes the need for this step
+The modified `_boot.py` in this repository removes the need for this step
 enabling the firmware image to be flashed to an erased flash chip. After boot
-if ``main.py`` does not exist it is created in the filesystem.
+if `main.py` does not exist it is created in the filesystem.
 
 ###### [Contents](./README.md#contents)
 
 # 3.3 Pinout
 
-This is defined in mqtt.py (``Channel`` constructor). Pin 15 is used for mckout
-because this has an on-board pull down resistor. This ensures that the ESP8266
-clock line is zero while the host asserts Reset: at that time GPIO lines are
-high impedance. If the pin lacks a pull down one should be supplied. A value of
-10KΩ or thereabouts will suffice.
+This is defined in `net_local.py` and passed to the `Channel` constructor in
+`mqtt.py`. Pin 15 is used for mckout because this has an on-board pull down
+resistor. This ensures that the ESP8266 clock line is zero while the host
+asserts Reset: at that time GPIO lines are high impedance. If the pin lacks a
+pull down one should be supplied. A value of 10KΩ or thereabouts will suffice.
 
 # 4. Mode of operation
 
 This describes the basic mode of operation for anyone wishing to modify the
-host or target code.
+host or target code. The host sends commands to the ESP8266 target, which
+returns reponses. The target is responsible for keeping the link to the broker
+open and reconnecting after outages. It handles qos==1 messages checking for
+the correct `PUBACK` and sending duplicate messages if necessary. If a
+subscribed message is received it informs the host which runs the callback.
 
-The ESP8266 connects to the broker with ``clean_session=True``. Consequently on
-startup, and after an error reboot, session details must be re-established.
-Where possible this is automatic, but user code must necessarily re-establish
-subscriptions. This is done by the ``user_start`` callback, enabling reboots to
-occur transparently.
+In the event of an outage the publication response message from the target will
+be delayed until the outage has ended and reconnection has occurred.
 
 # 4.1 Communication
 
 The host and target communicate by a symmetrical bidirectional serial protocol.
 At the hardware level it is full-duplex, synchronous and independent of
 processor speed. At the software level it is asynchronous. In this application
-the unit of communication is a string. When a ``SynCom`` is instantiated it
-does nothing until its asynchronous ``start`` method is launched. This takes a
+the unit of communication is a string. When a `SynCom` is instantiated it
+does nothing until its asynchronous `start` method is launched. This takes a
 coroutine as an argument. It waits for the other end of the link to start,
 synchronises the interface and launches the coro.
 
-This runs forever except - in the case of the host - on error. The host has a
-means of issuing a hardware reset to the target. This is triggered by the coro
-terminating. The ``SynCom`` instance resets the target, waits for synch, and
-re-launches the coro (``SynCom`` start method).
+In the case of the host this runs forever except on error when it terminates.
+The host has a means of issuing a hardware reset to the target, triggered by
+the coro terminating. The `SynCom` instance resets the target, waits for synch,
+and re-launches the coro (`SynCom` start method).
 
 The ESP8266 has no means of resetting the host, so there is no reason for its
-coro (``main_task``) to end.
+coro (`main_task`) to end.
 
 The interface also provides a means for the host to detect if the ESP8266 has
 crashed or locked up. To process incoming messages it issues
 
 ```python
-res = await channel.await_obj()
+chan_state = channel.any()
 ```
 
-This will pause as long as necessary but a result of ``None`` means that the
-channel has timed out which can be a result of ESP8266 failure. It can also
-result from a socket blocking for longer than the link timeout. Normally
-``res`` is a string.
+A result of `None` means that the channel has timed out which is a result of
+ESP8266 failure. In this instance the coro quits causing the ESP8266 to be
+reset.
 
 ###### [Contents](./README.md#contents)
 
@@ -491,45 +537,45 @@ result from a socket blocking for longer than the link timeout. Normally
 
 ## 4.2.1 Initialisation
 
-The host instantiates an ``MQTTlink`` object which creates a ``channel`` being
-a ``SynCom`` instance. This issues the ``start`` method with its own ``start``
-method as the coro argument. This will run every time the ESP8266 starts. When
-it returns it causes an ESP8266 reset.
+The host instantiates an `MQTTlink` object which creates a `channel` being
+a `SynCom` instance. This issues the `start` method with its own `start`
+method as the coro argument. This will run every time the ESP8266 starts. If it
+returns it will cause an ESP8266 reset once user coros have aborted.
 
 The host can send commands to the ESP8266 which replies with a status response.
 The ESP8266 can also send unsolicited status messages. When a command is sent
-the host waits for a response as described above, handling a ``None`` response.
-The string is parsed into a command - typically 'status' - and an action, a
-list of string arguments. In the case of 'status' messages the first of these
-is the status value.
+the host waits for a response as described above, handling a `None` response.
+The string is parsed into a command - typically `STATUS` - and an action, a
+list of string arguments. In the case of `STATUS` messages the first of these
+args is the status value.
 
-Status messages are first passed to the ``do_status`` method which performs
+Status messages are first passed to the `do_status` method which performs
 some basic housekeeping and provides optional 'verbose' print messages. It
-returns the status value as an integer. It then waits on the asynchronous
-method ``s_han`` which by default is ``default_status_handler``. This can be
-overridden by the user.
+returns the (possibly amended) status value as an integer. It then waits on the
+asynchronous method `s_han` which by default is `default_status_handler`. This
+can be overridden by the user.
 
-Each time the ``start`` method runs it behaves as follows. If the user has set
-up a will, it sends a ``will`` command to the ESP8266 and waits for a status
+Each time the `start` method runs it behaves as follows. If the user has set
+up a will, it sends a `will` command to the ESP8266 and waits for a status
 response.
 
-Assuming success it then sends an ``init`` command with the ``INIT`` parameters
+Assuming success it then sends an `init` command with the `INIT` parameters
 which causes the ESP8266 to connect to the WiFi network and then to the broker.
-The initialisation phase ends when the ESP8266 sends a ``RUNNING`` status to
-the host, when ``_running`` is set (by ``do_status``). In the meantime the
+The initialisation phase ends when the ESP8266 sends a `RUNNING` status to
+the host, when `_running` is set (by `do_status`). In the meantime the
 ESP8266 will send other status messages:
 
- 1. ``DEFNET`` It is about to try the default network in its flash ROM.
- 2. ``SPECNET`` It has failed to connect to this LAN and wants to connect to
- the one specified in ``INIT``. Unless the status handler has been overridden
- ``default_status_handler`` ensures this is done on the first boot only.
- 3. ``BROKER_CHECK`` It is about to connect to the broker.
- 4. ``BROKER_OK`` Broker connection established.
+ 1. `DEFNET` It is about to try the default network in its flash ROM.
+ 2. `SPECNET` It has failed to connect to this LAN and wants to connect to
+ the one specified in `INIT`. Unless the status handler has been overridden
+ `default_status_handler` ensures this is done on the first boot only.
+ 3. `BROKER_CHECK` It is about to connect to the broker.
+ 4. `BROKER_OK` Broker connection established.
 
-Once running it launches the user supplied coroutine. It also launches coros to
-handle publications and to keep the broker alive with periodic MQTT pings:
-``_ping()`` and ``_publish`` asynchronous methods. The initialisation phase is
-now complete.
+Once running it launches the user supplied coroutine. It also launches a coro
+to handle publications: the `_publish` asynchronous method. It triggers the
+wifi callback to indicate readiness; the initialisation phase is now complete
+and it enters the running phase.
 
 ###### [Contents](./README.md#contents)
 
@@ -537,42 +583,51 @@ now complete.
 
 This continuously running loop exits only on error when the ESP8266 is to be
 rebooted. It waits on incoming messages from the ESP8266 (terminating on
-``None``).
+`None` which indicates a watchdog timeout).
 
-The ESP8266 can send various messages, some such as 'subs' asynchronously in
-response to a subscription and others such as a 'PUBOK' status in response to
-having processed a qos == 1 'publish' message from the host. Unsolicited
-messages are:
+The ESP8266 can send various messages, some such as `SUBSCRIPTION`
+asynchronously in response to a broker message and others such as a `PUBOK`
+status in response to having processed a qos == 1 'publish' message from the
+host. Unsolicited messages are:
 
- 1. 'subs' A subscription was received.
- 2. 'time',value The ESP8266 has contacted a timeserver and has this value.
- 3. 'pingresp' The ESP8266 has pinged the broker and received a response.
- 4. 'status', WIFI_UP
- 5. 'status', WIFI_DOWN
- 6. 'status', UNKNOWN This should never occur. ESP8266 has received an unknown
- command from the host.
+ 1. `SUBSCRIPTION` A message published to a user subscription was received.
+ 2. `TIME`, value The ESP8266 has contacted a timeserver and has received this
+ time value.
+ 3. `STATUS`, `WIFI_UP`
+ 4. `STATUS`, `WIFI_DOWN`
+ 5. `STATUS`, `UNKNOWN` This should never occur. ESP8266 has received an unknown
+ command from the host or is failing to respond correctly. The driver reboots
+ it.
 
 Expected messages are:
- 1. 'mem',free,allocated Response to a 'mem' command.
- 2. 'status',PUBOK Response to a qos == 1 publication.
+ 1. `MEM`, free, allocated Response to a 'mem' command.
+ 2. `STATUS`, `PUBOK` Response to a qos == 1 publication.
 
-When a qos == 1 publication is issued the host's ``_publish`` asynchronous
-method informs the ESP8266 and starts a timer. This locks out further
-publications until a 'PUBOK' is received from the ESP8266. If the timer times
-out, ``_running`` is set ``False`` prompting a reboot in the main loop. A
-'PUBOK' stops the timer and re-enables publications which resume if any are
-queued.
+User publications are placed on a queue which is serviced by the host's
+`_publish` coroutine. When it issues a publication it informs the ESP8266 and
+sets a flag. This locks out further publications until a `PUBOK` is received
+from the ESP8266. In the case of qos==1 this occurs when the broker sends a
+PUBACK with the correct PID. A `PUBOK` clears the flag, re-enabling
+publications which resume if any are queued. See `pub_free()`.
 
-A publication with qos == 0 is sent to the ESP8266 but the timer is not started
-and no response is expected.
+In the case of a qos==0 publication the ESP8266 will respond with `PUBOK`
+immediately as no response is expected from the broker.
+
+There is a potential for overloading the ESP8266 if the publication queue fills
+during an outage. The `_publish` coro pauses after completion of a publication
+before sending another. It also implements a timeout where no response arrives
+from the ESP8266 when the network is available; in this case the ESP8266 is
+assumed to have failed and is reset.
 
 ###### [Contents](./README.md#contents)
 
-# 5. Performance
+# 5. Limitations
 
-The performance of MQTT is limited by that of the connection to the broker,
-which can be limited if the broker is on the internet. This implementation is
-also limited by the performance of the serial interface. Under operational
+## 5.1 Speed
+
+The performance of MQTT can be limited by the connection to the broker, which
+can be slow if the broker is on the internet. This implementation is also
+constrained by the performance of the serial interface. Under operational
 conditions this was measured at 118 chars/sec (chars are 7-bit).
 
 In applications such as data logging this is not usually an issue. If latency
@@ -585,14 +640,31 @@ for the duration.
 
 Under good conditions latency can be reduced to around 250ms.
 
-# 6. Postscript
+## 5.2 Reliability
 
-A few people have complemented me on my documentation. There are three reasons
-why I aim to write decent documentation:
+The ESP8266 is prone to unexplained crashes. In trials of extended running
+these occurred about once every 24 hours. The ESP8266 UART produced repeated
+`LmacRxBlk:1` messages, locking the scheduler and provoking the Pyboard to
+reboot it. Such a reboot normally occurs without data loss.
 
- 1. I use and appreciate the good documentation of others.
- 2. I enjoy writing it and it provides a reason for reviewing my code.
- 3. A function of age. If I don't write it down and revisit a project after a
- few months I'm in a hole; baffled both by the code and by the overall design.
- My first reaction is "Gordon Bennett who wrote **this**?". This hit me with a
- vengeance after shelving this project last year :-)
+The system can fail to recover from a crash in the following circumstances. If
+the broker sends qos==1 messages at a high enough rate, during the ESP8266
+reboot the broker accumulates a backlog. When connectivity is restored the
+broker floods the ESP8266 and its buffer overflows. This results in an endless
+boot loop.
+
+As noted above a backlog of qos==1 messages and consequent flooding can also
+occur if the ESP8266 moves out of WiFi range for a long enough period.
+
+In testing where qos==1 messages were sent at a rate of every 20s the system
+was stable and recovered without data loss from the occasional ESP8266 crash.
+
+# 6. References
+
+[mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
+[mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
+[mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)  
+[mosquitto client subscribe](http://mosquitto.org/man/mosquitto_sub-1.html)  
+[MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
+[python client for PC's](https://www.eclipse.org/paho/clients/python/)  
+[Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)

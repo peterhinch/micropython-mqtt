@@ -13,18 +13,19 @@ from machine import Pin, unique_id, freq
 import uasyncio as asyncio
 gc.collect()
 from network import WLAN, STA_IF, AP_IF
+import usocket as socket
 gc.collect()
 from syncom import SynCom
 gc.collect()
-import ntptime
-gc.collect()
+import ustruct as struct
 from status_values import *  # Numeric status values shared with user code.
 
 _WIFI_DELAY = 15  # Time (s) to wait for default network
+blue = Pin(2, Pin.OUT, value = 1)
 
-# Format an arbitrary list of positional args as a comma separated string
+# Format an arbitrary list of positional args as a status_values.SEP separated string
 def argformat(*a):
-    return ','.join(['{}' for x in range(len(a))]).format(*a)
+    return SEP.join(['{}' for x in range(len(a))]).format(*a)
 
 async def heartbeat():
     led = Pin(0, Pin.OUT)
@@ -39,11 +40,13 @@ class Client(MQTTClient):
     def will(cls, parms):
         cls.lw_parms = parms
 
-    def __init__(self, channel, client_id, server, t_resync, port, user,
-                 password, keepalive, ssl, ssl_params, clean):
+    def __init__(self, channel, client_id, server, port, user, password,
+                 keepalive, ssl, ssl_params, clean):
         self.channel = channel
-        self.t_resync = t_resync
         self.subscriptions = {}
+        # Config defaults:
+        # 4 repubs, delay of 10 secs between (response_time).
+        # Initially clean session.
         config = {}
         config['subs_cb'] = self.subs_cb
         config['wifi_coro'] = self.wifi_han
@@ -56,37 +59,49 @@ class Client(MQTTClient):
                          password=password, keepalive=keepalive, ssl=ssl,
                          ssl_params=ssl_params)
 
-    # If t_resync > 0, at intervals get time from timeserver, send time to channel
-    # If t_resync < 0 synchronise once only.
-    # If t_rsync == 0 no synch (task never runs)
-    async def rtc_task(self):
-        while self.isconnected():
+    # Get NTP time or 0 on any error.
+    async def get_time(self):
+        if not self.isconnected():
+            return 0
+        res = await self.broker_up()
+        if not res:
+            return 0  # No internet connectivity.
+        # connectivity check is not ideal. Could fail now... FIXME
+        # (date(2000, 1, 1) - date(1900, 1, 1)).days * 24*60*60
+        NTP_DELTA = 3155673600
+        host = "pool.ntp.org"
+        NTP_QUERY = bytearray(48)
+        NTP_QUERY[0] = 0x1b
+        t = 0
+        async with self.lock:
+            addr = socket.getaddrinfo(host, 123)[0][-1]  # Blocks 15s if no internet
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setblocking(False)
             try:
-                t = ntptime.time()  # secs since Y2K
+                s.connect(addr)
+                await self._as_write(NTP_QUERY, 48, s)
+                await asyncio.sleep(2)
+                msg = await self._as_read(48, s)
+                val = struct.unpack("!I", msg[40:44])[0]
+                t = val - NTP_DELTA
             except OSError:
-                t = 0
-                await asyncio.sleep(30)
-            if t > 16 * 365 * 24 * 3600:
-                self.channel.send(argformat(TIME, t))
-                if self.t_resync > 0:
-                    await asyncio.sleep(self.t_resync)
-                else:
-                    await asyncio.sleep(0)
-                    return
-            else:
-                await asyncio.sleep(30)
+                pass
+            s.close()
+
+        if t < 16 * 365 * 24 * 3600:
+            t = 0
+        self.dprint('Time received: ', t)
+        return t
 
     async def wifi_han(self, state):
         if state:
             self.channel.send(argformat(STATUS, WIFI_UP))
         else:
             self.channel.send(argformat(STATUS, WIFI_DOWN))
+        blue(not state)
         await asyncio.sleep(1)
 
     async def conn_han(self, _):
-        if self.t_resync:
-            loop = asyncio.get_event_loop()
-            loop.create_task(self.rtc_task())
         for topic, qos in self.subscriptions.items():
             await self.subscribe(topic, qos)
 
@@ -109,11 +124,10 @@ class Channel(SynCom):
         client = self.client
         while True:
             istr = await self.await_obj(20)  # wait for string (poll interval 20ms)
-            s = istr.split(',')
-            s = [q.replace(chr(127),',') for q in s]
+            s = istr.split(SEP)
             command = s[0]
             if command == PUBLISH:
-                await client.publish(s[1], s[2], bool(s[3]), int(s[4]))  # Latency 800ms (qos 0) 1.3s (qos 1)
+                await client.publish(s[1], s[2], bool(s[3]), int(s[4]))
                 # If qos == 1 only returns once PUBACK received.
                 self.send(argformat(STATUS, PUBOK))
             elif command == SUBSCRIBE:
@@ -123,6 +137,9 @@ class Channel(SynCom):
                 gc.collect()
                 gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
                 self.send(argformat(MEM, gc.mem_free(), gc.mem_alloc()))
+            elif command == TIME:
+                t = await client.get_time()
+                self.send(argformat(TIME, t))
             else:
                 self.send(argformat(STATUS, UNKNOWN, 'Unknown command:', istr))
 
@@ -135,12 +152,12 @@ class Channel(SynCom):
         # Await connection parameters (init record)
         while not got_params:
             istr = await self.await_obj(100)
-            ilst = istr.split(',')
+            ilst = istr.split(SEP)
             command = ilst[0]
             if command == 'init':
                 got_params = True
                 ssid, pw, broker, m_user, m_pw, ssl_params = ilst[1:7]
-                use_default, port, ssl, fast, t_resync, keepalive, clean = [int(x) for x in ilst[7:]]
+                use_default, port, ssl, fast, _, keepalive, clean, debug = [int(x) for x in ilst[7:]]
                 m_user = m_user if m_user else None
                 m_pw = m_pw if m_pw else None
             elif command == WILL:
@@ -150,6 +167,9 @@ class Channel(SynCom):
                 self.send(argformat(STATUS, UNKNOWN, 'Expected init, got: ', istr))
 
         # Got parameters
+        if debug:
+            Client.DEBUG = True  # verbose output on UART
+
         if fast:
             freq(160000000)
 
@@ -177,8 +197,8 @@ class Channel(SynCom):
         # WiFi is up: connect to the broker
         await asyncio.sleep(5)  # Let WiFi stabilise before connecting
         client_id = ubinascii.hexlify(unique_id())
-        self.client = Client(self, client_id, broker, t_resync, port, m_user,
-                             m_pw, keepalive, ssl, eval(ssl_params), clean)
+        self.client = Client(self, client_id, broker, port, m_user, m_pw,
+                             keepalive, ssl, eval(ssl_params), clean)
         self.send(argformat(STATUS, BROKER_CHECK))
         try:
             await self.client.connect()  # Clean session. Throws OSError if broker down.

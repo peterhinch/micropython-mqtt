@@ -37,6 +37,7 @@ from micropython import const
 _BITS_PER_CH = const(7)
 _BITS_SYN = const(8)
 _SYN = const(0x9d)
+_RX_BUFLEN = const(100)
 
 class SynComError(Exception):
     pass
@@ -101,12 +102,14 @@ class SynCom(object):
 # object state
     def send(self, obj):
         if self.string_mode:
-            self.lsttx.append(obj)
+            self.lsttx.append(obj)  # strings are immutable
         else:
             self.lsttx.append(pickle.dumps(obj))
 
+# Number of queued objects (None on timeout)
     def any(self):
-        return len(self.lstrx)
+        if self._running:
+            return len(self.lstrx)
 
 # Wait for an object. Return None on timeout.
 # If in string mode returns a string (or None on t/o)
@@ -156,6 +159,8 @@ class SynCom(object):
             sendstr = ''            # string for transmission
             send_idx = None         # character index. None: no current string
             getstr = ''             # receive string
+            rxbuf = bytearray(_RX_BUFLEN)
+            rxidx = 0
             while True:
                 if send_idx is None:
                     if len(self.lsttx):
@@ -173,18 +178,24 @@ class SynCom(object):
                     await self._get_byte_passive()
                 else:
                     await self._get_byte_active()
-                if self.indata:
-                    getstr = ''.join((getstr, chr(self.indata)))
-                else:               # Got 0:
-                    if len(getstr):  # if there's a string, it's complete
-                        if self.string_mode:
-                            self.lstrx.append(getstr)
-                        else:
-                            try:
-                                self.lstrx.append(pickle.loads(getstr))
-                            except:     # Pickle fail means target has crashed
-                                raise SynComError
-                    getstr = ''
+                if self.indata:  # Optimisation: buffer reduces allocations.
+                    if rxidx >= _RX_BUFLEN:  # Buffer full: append to string.
+                        getstr = ''.join((getstr, bytes(rxbuf).decode()))
+                        rxidx = 0
+                    rxbuf[rxidx] = self.indata
+                    rxidx += 1
+                elif rxidx or len(getstr):  # Got 0 but have data so string is complete.
+                                            # Append buffer.
+                    getstr = ''.join((getstr, bytes(rxbuf[:rxidx]).decode()))
+                    if self.string_mode:
+                        self.lstrx.append(getstr)
+                    else:
+                        try:
+                            self.lstrx.append(pickle.loads(getstr))
+                        except:     # Pickle fail means target has crashed
+                            raise SynComError
+                    getstr = ''  # Reset for next string
+                    rxidx = 0
 
         except SynComError:
             if self._running:
