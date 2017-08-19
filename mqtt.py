@@ -40,22 +40,23 @@ class Client(MQTTClient):
     def will(cls, parms):
         cls.lw_parms = parms
 
-    def __init__(self, channel, client_id, server, port, user, password,
-                 keepalive, ssl, ssl_params, clean):
+# mqtt_args, client_id, server, port, user, password, keepalive, ssl, ssl_params
+    def __init__(self, channel, server, port, user, password,
+                 keepalive, ssl, ssl_params, mqtt_args):
         self.channel = channel
         self.subscriptions = {}
         # Config defaults:
         # 4 repubs, delay of 10 secs between (response_time).
         # Initially clean session.
-        config = {}
-        config['subs_cb'] = self.subs_cb
-        config['wifi_coro'] = self.wifi_han
-        config['connect_coro'] = self.conn_han
-        config['clean'] = clean
+        mqtt_args['subs_cb'] = self.subs_cb
+        mqtt_args['wifi_coro'] = self.wifi_han
+        mqtt_args['connect_coro'] = self.conn_han
+        client_id = ubinascii.hexlify(unique_id())
+
         if self.lw_parms is not None:
-            config['will'] = (self.lw_parms[0], self.lw_parms[1],
+            mqtt_args['will'] = (self.lw_parms[0], self.lw_parms[1],
                               bool(self.lw_parms[2]), int(self.lw_parms[3]))
-        super().__init__(config, client_id, server, port=port, user=user,
+        super().__init__(mqtt_args, client_id, server, port=port, user=user,
                          password=password, keepalive=keepalive, ssl=ssl,
                          ssl_params=ssl_params)
 
@@ -67,6 +68,7 @@ class Client(MQTTClient):
         if not res:
             return 0  # No internet connectivity.
         # connectivity check is not ideal. Could fail now... FIXME
+        # also assumes broker is not local!
         # (date(2000, 1, 1) - date(1900, 1, 1)).days * 24*60*60
         NTP_DELTA = 3155673600
         host = "pool.ntp.org"
@@ -148,7 +150,6 @@ class Channel(SynCom):
 # from_pyboard() task. Wait forever, updating connected status.
     async def main_task(self, _):
         got_params = False
-
         # Await connection parameters (init record)
         while not got_params:
             istr = await self.await_obj(100)
@@ -157,7 +158,11 @@ class Channel(SynCom):
             if command == 'init':
                 got_params = True
                 ssid, pw, broker, m_user, m_pw, ssl_params = ilst[1:7]
-                use_default, port, ssl, fast, _, keepalive, clean, debug = [int(x) for x in ilst[7:]]
+                use_default, port, ssl, fast, keepalive, debug = (int(x) for x in ilst[7 : 13])
+                mqtt_args = {}
+                mqtt_args['clean'] = int(ilst[13])
+                mqtt_args['max_repubs'] = int(ilst[14])
+                mqtt_args['response_time'] = int(ilst[15])
                 m_user = m_user if m_user else None
                 m_pw = m_pw if m_pw else None
             elif command == WILL:
@@ -196,9 +201,8 @@ class Channel(SynCom):
 
         # WiFi is up: connect to the broker
         await asyncio.sleep(5)  # Let WiFi stabilise before connecting
-        client_id = ubinascii.hexlify(unique_id())
-        self.client = Client(self, client_id, broker, port, m_user, m_pw,
-                             keepalive, ssl, eval(ssl_params), clean)
+        self.client = Client(self, broker, port, m_user, m_pw, keepalive,
+                             ssl, eval(ssl_params), mqtt_args)
         self.send(argformat(STATUS, BROKER_CHECK))
         try:
             await self.client.connect()  # Clean session. Throws OSError if broker down.

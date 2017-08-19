@@ -12,7 +12,7 @@
 import pyb
 import uasyncio as asyncio
 from pbmqtt import MQTTlink, default_status_handler
-from net_local import init_args  # Local network, broker and pin details
+from net_local import init  # Local network, broker and pin details
 from status_values import *  # Because we're intercepting status.
 from utime import time
 
@@ -87,7 +87,8 @@ def start(mqtt_link):
     reset_count += 1
 
 MQTTlink.will('result', 'client died')
-mqtt_link = MQTTlink(user_start = start, **init_args)
+init['user_start'] = start
+mqtt_link = MQTTlink(init)
 mqtt_link.status_handler(status_handler)  # Override the default
 loop = asyncio.get_event_loop()
 loop.run_forever()

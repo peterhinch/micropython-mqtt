@@ -158,8 +158,8 @@ Mandatory positional args:
 Optional keyword only args:
 
  1. `port=0` Override default port (1883 or 8883 for SSL).
- 2. `user=None`
- 3. `password=None`
+ 2. `user=None` MQTT credentials.
+ 3. `password=None` If a password is provided a user must also exist.
  4. `keepalive=0` Period (secs) before broker regards client as having died.
  5. `ssl=False` Use SSL.
  6. `ssl_params={}`
@@ -260,6 +260,12 @@ as there is no recovery mechanism.
 Closes the socket. For use in development to prevent `LmacRxBlk:1` failures if
 an application raises an exception or is terminated with ctrl-C (see section
 2.3).
+
+### 3.2.7 broker_up (async)
+
+Unless data was received in the last second it issues an MQTT ping and waits
+for a response. If it times out (`response_time` exceeded) with no response it
+returns `False` otherwise it returns `True`.
 
 ## 3.3 Class Attributes
 

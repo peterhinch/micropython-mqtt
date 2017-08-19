@@ -12,7 +12,7 @@
 import pyb
 import uasyncio as asyncio
 from pbmqtt import MQTTlink
-from net_local import init_args  # Local network, broker and pin details.
+from net_local import init  # Local network, broker and pin details.
 
 green = pyb.LED(2)  # Green: controlled by MQTT messages.
 amber = pyb.LED(3)  # On if WiFi up.
@@ -50,6 +50,7 @@ def start(mqtt_link):
     loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds
 
 MQTTlink.will('result', 'simple client died')
-mqtt_link = MQTTlink(user_start = start, **init_args)
+init['user_start'] = start
+mqtt_link = MQTTlink(init)
 loop = asyncio.get_event_loop()
 loop.run_forever()

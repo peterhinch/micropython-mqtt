@@ -45,8 +45,7 @@ library has some significant bugfixes.
 User coros which access the API should be started in the user start coro and
 should have provision to quit if the ESP8266 fails: see `pb_simple.py`.
 
-The file `net_local.py` now has added `clean` and `debug` elements to the
-`INIT` tuple. Existing users will need to append these.
+Initialisation is now via a dict.
 
 **Test status**
 
@@ -160,7 +159,9 @@ library. For convenience all files are provided here.
 `pbmqtt.py` Python MQTT interface.  
 `status_values.py` Numeric constants shared between user code, the ESP8266
 firmware and `pbmqtt.py`; including status values sent to host from ESP8266.  
-`net_local.py` WiFi credentials, MQTT parameters, host pin numbers. Edit this.
+`net_local.py` This enables custom settings to be shared between projects. Edit
+this for WiFi credentials; also for MQTT parameters and host pin numbers if
+these differ from the defaults.
 
 ### 2.1.2 Test programs
 
@@ -214,56 +215,50 @@ This provides the host API. MQTT topics and messages are strings restricted to
 
 ### 2.3.1 Constructor
 
-This takes the following positional args. The demo programs supply most of
-these from the site-specific `net_local.py`.
- 1. `reset` A `Signal` instance associated with the reset output pin.
- 2. `sckin` Initialised input pin.
- 3. `sckout` Initialised output pin with value 0.
- 4. `srx` Initialised input pin.
- 5. `stx` Initialised output pin.
- 6. `init` A tuple of initialisation values. See below.
- 7. `user_start=None` A callback to run when communication link is up.
- 8. `args=()` Optional args for above.
- 9. `local_time_offset=0` If the host's RTC is to be synchronised to an NTP
- server, this allows an offset to be added. Unit is hours.
- 10. `verbose=True` Print diagnostic messages.
- 11. `timeout=10` Duration of ESP8266 watchdog (secs). If the ESP8266 crashes,
- after this period the ESP8266 will be hard-reset.
+This takes a single mandatory argument which is a dictionary of args. Default
+values are defined in `pbmqtt.py`. User overrides may be provided in
+`net_local.py` or in the application. Dictionary entries are as follows
+(defaults in parens):
 
+**Hardware related:**  
+`reset` A `Signal` instance associated with the reset output pin. (Y4)  
+`stx` Initialised output pin. (Y5)  
+`sckout` Initialised output pin with value 0. (Y6)  
+`srx` Initialised input pin. (Y7)  
+`sckin` Initialised input pin. (Y8)  
+`timeout` Duration of ESP8266 watchdog (secs). If the ESP8266 crashes, after
+this period the ESP8266 will be hard-reset. (10 secs)  
+`fast` Run ESP8266 at 160MHz (recommended) (`True`)
+
+**Callback:**  
+`user_start` A callback to run when communication link is up. Mandatory.  
+`args` Optional args for above. (`()`)  
 The `user_start` callback runs when the link between the boards has
 initialised. This is where subscriptions are registered and publishing coros
 are launched. Its use is covered in detail
 [below](./README.md#235-the-user_start-callback).
 
-`init`: a tuple of data to be sent to ESP8266 after a reset. The demo programs
-access this from `net_local.py`.  
-Init elements. Entries 0-6 are strings, 7-14 are integers:
+**WiFi parameters:**  
+`ssid` Mandatory. No default.  
+`password` Mandatory. No default.  
+`use_default_net` Use default network if possible. (`True`)  
+If `True`, tries to connect to the network stored on the ESP8266. If this
+fails, it will connect to the specified network.  
+If `False`, ignores the saved LAN. The specified LAN becomes the new default.
 
- 0. 'init'.
- 1. SSID for WiFi.
- 2. WiFi password.
- 3. Broker IP address.
- 4. MQTT username ('' for none).
- 5. MQTT password ('' for none).
- 6. SSL params (repr of a dictionary).
- 7. 1/0 Use default network if possible. If 1, tries to connect to the network
- stored on the ESP8266. If this fails, it will connect to the specified
- network. If 0, ignores the saved LAN. The specified LAN becomes the new
- default.
- 8. port: use 0 for default.
- 9. 1/0 ssl
- 10. 1/0 fast: if 1, clock ESP8266 at 160MHz
- 11. RTC resync interval (secs). 0 == disable. If interval > 0 the ESP8266 will
- periodically retrieve the time from an NTP server and send the result to the
- host, which will adjust its RTC. The local time offset specified to the
- constructor will be applied. If interval == -1 synchronisation will occur once
- only.
- 12. keepalive time (secs) (0 = disable). Sets the broker keepalive time.
- 13. 1/0 Clean Session.
- 14. 1/0 Emit debug messages from ESP8266 UART.
-
+**MQTT parameters:**  
+`broker` IP address of broker. Mandatory. No default.  
+`mqtt_user` Username ('')  
+`mqtt_pw` Password ('')  
+`ssl` Use SSL (`False`)  
+`ssl_params` Repr of dict. (`repr({})`)  
+`port` If 0 uses the default MQTT port. (0)  
+`keepalive` Broker keepalive time (secs) (60)  
+`max_repubs` Max number of qos==1 republications before reonnection is
+initiated (4).
+`clean_session` Behaviour after an outage. (`True`)  
 The Clean Session flag controls behaviour of qos == 1 messages from the broker
-after a WiFi outage that exceeds the broker's keepalive time. (MQTT spec
+after a WiFi outage which exceeds the broker's keepalive time. (MQTT spec
 section 3.1.2.4).
 
 If set, such messages from the broker during the outage will be lost. If
@@ -271,6 +266,25 @@ cleared the broker will send them once connectivity is restored. This presents
 a hazard in that the ESP8266 WiFi stack has a buffer which can overflow if
 messages arrive in quick succession. This could result in an ESP8266 crash with
 a consequent automatic reboot, in which case some of the backlog will be lost.
+
+**Optional RTC synchronisation:**  
+`rtc_resync` (secs). (3600)  
+0 == disable.  
+-1 == Synchronise once only.  
+If interval > 0 the ESP8266 will periodically retrieve the time from an NTP
+server and send the result to the host, which will adjust its RTC. The local
+time offset specified below will be applied.  
+`local_time_offset` If the host's RTC is to be synchronised to an NTP
+server, this allows an offset to be added. Unit is hours. (0)
+
+**Broker/network response**
+`response_time` Max expected time in secs for the broker to respond to a
+qos == 1 publication. If this is exceeded the message is republished with the
+dup flag set.
+
+**Verbosity:**  
+`verbose` Pyboard prints diagnostic messages. (`False`)  
+`debug` ESP8266 prints diagnostic messages. (`False`)  
 
 ###### [Contents](./README.md#contents)
 

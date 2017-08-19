@@ -218,7 +218,10 @@ class MQTT_base:
         tlast = self.last_rx
         if ticks_diff(ticks_ms(), tlast) < 1000:
             return True
-        await self._ping()
+        try:
+            await self._ping()
+        except OSError:
+            return False
         t = ticks_ms()
         while not self.timeout(t):
             await asyncio.sleep_ms(100)

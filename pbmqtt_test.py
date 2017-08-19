@@ -12,7 +12,7 @@ from machine import Pin, Signal
 import pyb
 import uasyncio as asyncio
 from pbmqtt import MQTTlink
-from net_local import init_args  # Local network, broker and pin details
+from net_local import init  # Local network, broker and pin details
 from status_values import MEM  # Ramcheck request (for debug only)
 
 qos = 1 # for test all messages have the same qos
@@ -70,7 +70,8 @@ def start(mqtt_link):
 
 def test():
     MQTTlink.will('result', 'client died')
-    mqtt_link = MQTTlink(user_start = start, **init_args)
+    init['user_start'] = start
+    mqtt_link = MQTTlink(init)
     loop = asyncio.get_event_loop()
     loop.run_forever()
 

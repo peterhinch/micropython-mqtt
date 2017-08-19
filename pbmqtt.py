@@ -13,9 +13,43 @@
 import uasyncio as asyncio
 from utime import localtime, time
 import pyb
+from machine import Pin, Signal
 from syncom import SynCom
 from asyn import ExitGate
 from status_values import *  # Numeric status values shared with user code.
+
+init = {
+    'reset'  : Signal(Pin(Pin.board.Y4, Pin.OPEN_DRAIN), invert = True),
+    'stx'    : Pin(Pin.board.Y5, Pin.OUT_PP),
+    'sckout' : Pin(Pin.board.Y6, Pin.OUT_PP, value = 0),
+    'srx'    : Pin(Pin.board.Y7, Pin.IN),
+    'sckin'  : Pin(Pin.board.Y8, Pin.IN),
+    'user_start' : None,
+    'args' : (),
+    'fast' : True,
+    'mqtt_user' : '',
+    'mqtt_pw' : '',
+    'ssl' : False,
+    'ssl_params' : repr({}),
+    'use_default_net' : True,
+    'port' : 0,
+    'keepalive' : 60,
+    'clean_session' : True,
+    'rtc_resync' : -1,  # Once only
+    'local_time_offset' : 0,
+    'debug' : False,  # ESP8266 verbose
+    'verbose' : False,  # Pyboard
+    'timeout' : 10,
+    'max_repubs' : 4,
+    'response_time' : 10,
+}
+
+def buildinit(d):
+    ituple = ('init', d['ssid'], d['password'], d['broker'], d['mqtt_user'],
+    d['mqtt_pw'], d['ssl_params'], int(d['use_default_net']), d['port'], int(d['ssl']),
+    int(d['fast']), d['keepalive'], int(d['debug']),
+    int(d['clean_session']), d['max_repubs'], d['response_time'])
+    return argformat(*ituple)
 
 
 # _WIFI_DOWN is bad during initialisation
@@ -146,19 +180,19 @@ class MQTTlink(object):
                 'publish OK', 'running', 'unk', 'Will registered', 'Fail to connect to broker',
                 'WiFi up', 'WiFi down')
 
-    def __init__(self, reset, sckin, sckout, srx, stx, init, user_start=None,
-                 args=(), local_time_offset=0, verbose=True, timeout=10):
-        self.user_start = (user_start, args)
-        self.init_str = argformat(*init)
+    def __init__(self, d):
+        self.user_start = (d['user_start'], d['args'])
+        self.init_str = buildinit(d)
         # Synchroniser idle until started.
-        self.rtc_synchroniser = RTCsynchroniser(self, init[11], local_time_offset)
-        self.keepalive = init[12]
+        self.rtc_synchroniser = RTCsynchroniser(self, d['rtc_resync'], d['local_time_offset'])
+        self.keepalive = d['keepalive']
         self._running = False
-        self.verbose = verbose
-        # Blocking timeout for ESP8266. Must exceed block time of ntptime (1 sec).
-        wdog = timeout * 1000
+        self.verbose = d['verbose']
+        # Watchdog timeout for ESP8266 (ms).
+        wdog = d['timeout'] * 1000
         # SynCom string mode
-        self.channel = SynCom(False, sckin, sckout, srx, stx, reset, wdog, True, verbose)
+        self.channel = SynCom(False, d['sckin'], d['sckout'], d['srx'], d['stx'],
+                              d['reset'], wdog, True, self.verbose)
         loop = asyncio.get_event_loop()
         loop.create_task(heartbeat())
         self.exit_gate = ExitGate()
