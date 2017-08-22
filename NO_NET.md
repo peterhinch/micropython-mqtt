@@ -141,7 +141,7 @@ to high transition a push-pull pin could cause spikes on the power supply. The
 truly paranoid might replace the reset wire with a 100Ω resistor to limit
 current when the pin goes low.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 # 2. The Host
 
@@ -178,7 +178,7 @@ broker address.
 `pubtest` For `pb_simple.py` and `pbmqtt_test.py`.
 `pubtest_range` For `pbrange.py`.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ## 2.2 Quick start guide
 
@@ -206,7 +206,7 @@ or "off" to control the state of the Pyboard green LED. To test this run
 mosquitto_pub -h 192.168.0.9 -t green -m on  
 mosquitto_pub -h 192.168.0.9 -t green -m off
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ## 2.3 The MQTTlink class
 
@@ -255,7 +255,7 @@ If `False`, ignores the saved LAN. The specified LAN becomes the new default.
 `port` If 0 uses the default MQTT port. (0)  
 `keepalive` Broker keepalive time (secs) (60)  
 `max_repubs` Max number of qos==1 republications before reonnection is
-initiated (4).
+initiated (4).  
 `clean_session` Behaviour after an outage. (`True`)  
 The Clean Session flag controls behaviour of qos == 1 messages from the broker
 after a WiFi outage which exceeds the broker's keepalive time. (MQTT spec
@@ -270,7 +270,7 @@ a consequent automatic reboot, in which case some of the backlog will be lost.
 **Optional RTC synchronisation:**  
 `rtc_resync` (secs). (-1)  
 0 == disable.  
--1 == Synchronise once only.  
+-1 == Synchronise once only at startup.  
 If interval > 0 the ESP8266 will periodically retrieve the time from an NTP
 server and send the result to the host, which will adjust its RTC. The local
 time offset specified below will be applied.  
@@ -292,7 +292,7 @@ synchronise once (or never).
 
 Note that the blocking is on the ESP8266. Host applications will not block.
 
-**Broker/network response**
+**Broker/network response**  
 `response_time` Max expected time in secs for the broker to respond to a
 qos == 1 publication. If this is exceeded the message is republished with the
 dup flag set.
@@ -301,7 +301,7 @@ dup flag set.
 `verbose` Pyboard prints diagnostic messages. (`False`)  
 `debug` ESP8266 prints diagnostic messages. (`False`)  
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ### 2.3.2 Methods
 
@@ -343,7 +343,7 @@ Methods intended for debug/test:
 called before instantiating the `MQTTlink`. Defaults: retain `False`, qos
 0.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ### 2.3.4 The user_start callback
 
@@ -386,7 +386,7 @@ allowing the reset to proceed.
 See `pb_simple.py` and the
 [synchronisation primitives docs](https://github.com/peterhinch/micropython-async/blob/master/PRIMITIVES.md).
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ### 2.3.5 Intercepting status values
 
@@ -414,7 +414,7 @@ The return value from the coroutine is ignored except in response to a
 `SPECNET` message. If it returns 1 the driver will attempt to connect to the
 specified network. If it returns 0 it will reboot the ESP8266.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ## 2.4 Application design
 
@@ -435,7 +435,8 @@ out of range of the access point.
 This driver aims to handle outages as transparently as possible. If an outage
 occurs the ESP8266 signals the driver that this has occurred, signalling again
 when connectivity is restored. These events may be trapped by intercepting the
-status messages (see `pbrange.py`).
+status messages (see `pbrange.py`) or - simpler - by using the `wifi_handler`
+(`pb_simple.py`).
 
 During an outage publications will be queued. An ongoing qos==1 publication
 will be delayed until connectivity is restored. Messages from the broker with
@@ -445,11 +446,10 @@ will is published. Whether the qos==1 messages are retransmitted then depends
 on the state of the `Clean Session` flag in `net_local.py`.
 
 Note that the ESP8266 vendor network stack has a buffer which can overrun if
-messages are sent in rapid succession. This has not been observed in testing
-but if you encounter lost messages and see `LmacRxBlk:1` on the UART this is
-the cause.
+messages are sent in rapid succession. If you encounter lost messages and see
+`LmacRxBlk:1` on the ESP8266 UART this is the cause.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 # 3. The ESP8266
 
@@ -509,7 +509,7 @@ The modified `_boot.py` in this repository removes the need for this step
 enabling the firmware image to be flashed to an erased flash chip. After boot
 if `main.py` does not exist it is created in the filesystem.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 # 3.3 Pinout
 
@@ -560,7 +560,7 @@ A result of `None` means that the channel has timed out which is a result of
 ESP8266 failure. In this instance the coro quits causing the ESP8266 to be
 reset.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 # 4.2 Protocol
 
@@ -606,7 +606,7 @@ to handle publications: the `_publish` asynchronous method. It triggers the
 wifi callback to indicate readiness; the initialisation phase is now complete
 and it enters the running phase.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 ## 4.2.2 Running
 
@@ -648,7 +648,7 @@ before sending another. It also implements a timeout where no response arrives
 from the ESP8266 when the network is available; in this case the ESP8266 is
 assumed to have failed and is reset.
 
-###### [Contents](./README.md#contents)
+###### [Contents](./NO_NET.md#contents)
 
 # 5. Limitations
 
@@ -679,8 +679,8 @@ reboot it. Such a reboot normally occurs without data loss.
 The system can fail to recover from a crash in the following circumstances. If
 the broker sends qos==1 messages at a high enough rate, during the ESP8266
 reboot the broker accumulates a backlog. When connectivity is restored the
-broker floods the ESP8266 and its buffer overflows. This results in an endless
-boot loop.
+broker floods the ESP8266 and its buffer overflows. If the broker's backlog
+continues to grow this can result in an endless boot loop.
 
 As noted above a backlog of qos==1 messages and consequent flooding can also
 occur if the ESP8266 moves out of WiFi range for a long enough period.
