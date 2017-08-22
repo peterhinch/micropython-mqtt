@@ -61,59 +61,59 @@ including to report a positive outcome :).
 
 # Contents
 
- 1 [Wiring](./README.md#1-wiring) Connections between host and ESP8266.
+ 1 [Wiring](./NO_NET.md#1-wiring) Connections between host and ESP8266.
  
- 2 [The Host](./README.md#2-the-host) Software on the host.
+ 2 [The Host](./NO_NET.md#2-the-host) Software on the host.
 
-  2.1 [Files](./README.md#21-files)
+  2.1 [Files](./NO_NET.md#21-files)
 
-   2.1.1 [Dependencies](./README.md#211-dependencies)
+   2.1.1 [Dependencies](./NO_NET.md#211-dependencies)
 
-   2.1.2 [Test programs](./README.md#212-test-programs)
+   2.1.2 [Test programs](./NO_NET.md#212-test-programs)
 
-  2.2 [Quick start guide](./README.md#22-quick-start-guide)
+  2.2 [Quick start guide](./NO_NET.md#22-quick-start-guide)
 
-  2.3 [The MQTTlink class](./README.md#23-the-mqttlink-class) The host API.
+  2.3 [The MQTTlink class](./NO_NET.md#23-the-mqttlink-class) The host API.
 
-   2.3.1 [Constructor](./README.md#231-constructor)
+   2.3.1 [Constructor](./NO_NET.md#231-constructor)
 
-   2.3.2 [Methods](./README.md#232-methods)
+   2.3.2 [Methods](./NO_NET.md#232-methods)
 
-   2.3.3 [Class Method](./README.md#233-class-method)
+   2.3.3 [Class Method](./NO_NET.md#233-class-method)
 
-   2.3.4 [The user_start callback](./README.md#234-the-user_start-callback)
+   2.3.4 [The user_start callback](./NO_NET.md#234-the-user_start-callback)
 
-   2.3.5 [Intercepting status values](./README.md#235-intercepting-status-values)
+   2.3.5 [Intercepting status values](./NO_NET.md#235-intercepting-status-values)
 
-   2.4 [Application design](./README.md#24-application-design)
+   2.4 [Application design](./NO_NET.md#24-application-design)
 
-   2.4.1 [User coroutines](./README.md#241-user-coroutines)
+   2.4.1 [User coroutines](./NO_NET.md#241-user-coroutines)
 
-   2.4.2 [WiFi Link Behaviour](./README.md#242-wifi-link-behaviour)
+   2.4.2 [WiFi Link Behaviour](./NO_NET.md#242-wifi-link-behaviour)
 
- 3 [The ESP8266](./README.md#3-the-esp8266) Installing and modifying the ESP8266 build.
+ 3 [The ESP8266](./NO_NET.md#3-the-esp8266) Installing and modifying the ESP8266 build.
  
-  3.1 [Installing the precompiled build](./README.md#31-installing-the-precompiled-build) Quickstart.
+  3.1 [Installing the precompiled build](./NO_NET.md#31-installing-the-precompiled-build) Quickstart.
 
-  3.2 [Files](./README.md#32-files) For users wishing to modify the ESP8266 code.
+  3.2 [Files](./NO_NET.md#32-files) For users wishing to modify the ESP8266 code.
 
-  3.3 [Pinout](./README.md#33-pinout)
+  3.3 [Pinout](./NO_NET.md#33-pinout)
  
- 4 [Mode of operation](./README.md#4-mode-of-operation) How it works under the hood.
+ 4 [Mode of operation](./NO_NET.md#4-mode-of-operation) How it works under the hood.
 
-  4.2 [Protocol](./README.md#42-protocol)
+  4.2 [Protocol](./NO_NET.md#42-protocol)
 
-  4.2.1 [Initialisation](./README.md#421-initialisation)
+  4.2.1 [Initialisation](./NO_NET.md#421-initialisation)
 
-  4.2.2 [Running](./README.md#422-running)
+  4.2.2 [Running](./NO_NET.md#422-running)
 
- 5 [Limitations](./README.md#5-limitations)
+ 5 [Limitations](./NO_NET.md#5-limitations)
 
-  5.1 [Speed](./README.md#51-speed)
+  5.1 [Speed](./NO_NET.md#51-speed)
 
-  5.2 [Reliability](./README.md#52-reliability)
+  5.2 [Reliability](./NO_NET.md#52-reliability)
 
- 6 [References](./README.md#6-references)
+ 6 [References](./NO_NET.md#6-references)
 
 # 1. Wiring
 
@@ -193,7 +193,7 @@ Modify `net_local.py` to match your MQTT broker address, WiFi SSID and
 password.
 
 Copy the above dependencies to the Pyboard. Install the supplied firmware to
-the ESP8266 [section 3.1](./README.md#31-installing-the-precompiled-build).
+the ESP8266 [section 3.1](./NO_NET.md#31-installing-the-precompiled-build).
 Copy `pb_simple.py` to the Pyboard and run it. Assuming the broker is on
 192.168.0.9, on a PC run:
 
@@ -236,7 +236,7 @@ this period the ESP8266 will be hard-reset. (10 secs)
 The `user_start` callback runs when the link between the boards has
 initialised. This is where subscriptions are registered and publishing coros
 are launched. Its use is covered in detail
-[below](./README.md#235-the-user_start-callback).
+[below](./NO_NET.md#234-the-user_start-callback).
 
 **WiFi parameters:**  
 `ssid` Mandatory. No default.  
@@ -669,6 +669,8 @@ for the duration.
 
 Under good conditions latency can be reduced to around 250ms.
 
+###### [Contents](./NO_NET.md#contents)
+
 ## 5.2 Reliability
 
 The ESP8266 is prone to unexplained crashes. In trials of extended running
@@ -697,3 +699,5 @@ was stable and recovered without data loss from the occasional ESP8266 crash.
 [MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
 [python client for PC's](https://www.eclipse.org/paho/clients/python/)  
 [Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
+
+###### [Contents](./NO_NET.md#contents)
