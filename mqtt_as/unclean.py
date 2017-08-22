@@ -14,13 +14,11 @@
 # Publishes connection statistics.
 
 from mqtt_as import MQTTClient
+from config import config
 import uasyncio as asyncio
-import ubinascii
-from machine import Pin, unique_id
+from machine import Pin
 
 SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
-
-CLIENT_ID = ubinascii.hexlify(unique_id())
 
 wifi_led = Pin(0, Pin.OUT, value = 0)  # Red LED for WiFi fail/not ready yet
 blue_led = Pin(2, Pin.OUT, value = 1)  # Message received
@@ -62,17 +60,18 @@ async def main(client):
         n += 1
 
 # Define configuration
-mqtt_config = {'subs_cb':sub_cb,
-    'wifi_coro': wifi_han,
-    'will': ('result', 'Goodbye cruel world!', False, 0),
-    'connect_coro': conn_han,
-    'clean': False
-    }
+config['subs_cb'] = sub_cb
+config['wifi_coro'] = wifi_han
+config['connect_coro'] = conn_han
+config['clean'] = False
+config['will'] = ('result', 'Goodbye cruel world!', False, 0)
+config['server'] = SERVER
+config['keepalive'] = 120
 
 loop.create_task(heartbeat())
 # Set up client
 MQTTClient.DEBUG = True  # Optional
-client = MQTTClient(mqtt_config, CLIENT_ID, SERVER, keepalive = 120)
+client = MQTTClient(config)
 
 try:
     loop.run_until_complete(main(client))

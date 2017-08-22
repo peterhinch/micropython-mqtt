@@ -8,7 +8,7 @@
 
 import gc
 import ubinascii
-from mqtt_as import MQTTClient
+from mqtt_as import MQTTClient, config
 from machine import Pin, unique_id, freq
 import uasyncio as asyncio
 gc.collect()
@@ -23,6 +23,11 @@ from status_values import *  # Numeric status values shared with user code.
 _WIFI_DELAY = 15  # Time (s) to wait for default network
 blue = Pin(2, Pin.OUT, value = 1)
 
+def loads(s):
+    d = {}
+    exec("v=" + s, d)
+    return d["v"]
+
 # Format an arbitrary list of positional args as a status_values.SEP separated string
 def argformat(*a):
     return SEP.join(['{}' for x in range(len(a))]).format(*a)
@@ -35,30 +40,17 @@ async def heartbeat():
 
 
 class Client(MQTTClient):
-    lw_parms = None
-    @classmethod
-    def will(cls, parms):
-        cls.lw_parms = parms
-
-# mqtt_args, client_id, server, port, user, password, keepalive, ssl, ssl_params
-    def __init__(self, channel, server, port, user, password,
-                 keepalive, ssl, ssl_params, mqtt_args):
+    def __init__(self, channel, config):
         self.channel = channel
         self.subscriptions = {}
         # Config defaults:
         # 4 repubs, delay of 10 secs between (response_time).
         # Initially clean session.
-        mqtt_args['subs_cb'] = self.subs_cb
-        mqtt_args['wifi_coro'] = self.wifi_han
-        mqtt_args['connect_coro'] = self.conn_han
-        client_id = ubinascii.hexlify(unique_id())
-
-        if self.lw_parms is not None:
-            mqtt_args['will'] = (self.lw_parms[0], self.lw_parms[1],
-                              bool(self.lw_parms[2]), int(self.lw_parms[3]))
-        super().__init__(mqtt_args, client_id, server, port=port, user=user,
-                         password=password, keepalive=keepalive, ssl=ssl,
-                         ssl_params=ssl_params)
+        config['subs_cb'] = self.subs_cb
+        config['wifi_coro'] = self.wifi_han
+        config['connect_coro'] = self.conn_han
+        config['client_id'] = ubinascii.hexlify(unique_id())
+        super().__init__(config)
 
     # Get NTP time or 0 on any error.
     async def get_time(self):
@@ -157,20 +149,25 @@ class Channel(SynCom):
             command = ilst[0]
             if command == 'init':
                 got_params = True
-                ssid, pw, broker, m_user, m_pw, ssl_params = ilst[1:7]
-                use_default, port, ssl, fast, keepalive, debug = (int(x) for x in ilst[7 : 13])
-                mqtt_args = {}
-                mqtt_args['clean'] = int(ilst[13])
-                mqtt_args['max_repubs'] = int(ilst[14])
-                mqtt_args['response_time'] = int(ilst[15])
-                m_user = m_user if m_user else None
-                m_pw = m_pw if m_pw else None
+                ssid, pw, broker, mqtt_user, mqtt_pw, ssl_params = ilst[1:7]
+                use_default = bool(int(ilst[7]))
+                fast = bool(int(ilst[10]))
+                debug = bool(int(ilst[12]))
+                config['server'] = broker
+                config['port'] = int(ilst[8])
+                config['user'] = mqtt_user
+                config['password'] = mqtt_pw
+                config['keepalive'] = int(ilst[11])
+                config['ssl'] = bool(int(ilst[9]))
+                config['ssl_params'] = eval(ssl_params)
+                config['response_time'] = int(ilst[15])
+                config['clean'] = bool(int(ilst[13]))
+                config['max_repubs'] = int(ilst[14])
             elif command == WILL:
-                Client.will(ilst[1:5])
+                config['will'] = (ilst[1:3] + [bool(ilst[3])] + [int(ilst[4])])
                 self.send(argformat(STATUS, WILLOK))
             else:
                 self.send(argformat(STATUS, UNKNOWN, 'Expected init, got: ', istr))
-
         # Got parameters
         if debug:
             Client.DEBUG = True  # verbose output on UART
@@ -201,8 +198,7 @@ class Channel(SynCom):
 
         # WiFi is up: connect to the broker
         await asyncio.sleep(5)  # Let WiFi stabilise before connecting
-        self.client = Client(self, broker, port, m_user, m_pw, keepalive,
-                             ssl, eval(ssl_params), mqtt_args)
+        self.client = Client(self, config)
         self.send(argformat(STATUS, BROKER_CHECK))
         try:
             await self.client.connect()  # Clean session. Throws OSError if broker down.

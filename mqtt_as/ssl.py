@@ -15,10 +15,12 @@
 from mqtt_as import MQTTClient
 from config import config
 import uasyncio as asyncio
-from machine import Pin
+import ubinascii
+from machine import Pin, unique_id
 
-SERVER = '192.168.0.9'  # Change to suit
+SERVER = 'test.mosquitto.org'
 
+CLIENT_ID = ubinascii.hexlify(unique_id())
 
 # Subscription callback
 def sub_cb(topic, msg):
@@ -40,13 +42,13 @@ async def wifi_han(state):
 
 # If you connect with clean_session True, must re-subscribe (MQTT spec 3.1.2.4)
 async def conn_han(client):
-    await client.subscribe('foo_topic', 1)
+    await client.subscribe('rats', 1)
 
 async def main(client):
     await client.connect()
     n = 0
     while True:
-        await asyncio.sleep(5)
+        await asyncio.sleep(20)  # Broker is slow
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
         await client.publish('result', '{} {}'.format(n, client.REPUB_COUNT), qos = 1)
@@ -54,13 +56,14 @@ async def main(client):
 
 # Define configuration
 config['subs_cb'] = sub_cb
-config['wifi_coro'] = wifi_han
-config['connect_coro'] = conn_han
-config['clean'] = True
 config['server'] = SERVER
+config['connect_coro'] = conn_han
+config['wifi_coro'] = wifi_han
+config['ssl'] = True
 
 # Set up client
 MQTTClient.DEBUG = True  # Optional
+ssl_params = {} #{'certfile': '/mosquitto.org.crt'}
 client = MQTTClient(config)
 
 loop = asyncio.get_event_loop()

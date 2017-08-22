@@ -21,16 +21,17 @@ This contains two separate projects:
 
 ## 1. The "resilient" driver
 
-This is an alternative to the official driver and runs on the ESP8266. It
-should run on ESP32 but at the time of writing this is untested. Its principal
-advantages are:  
+This is an alternative to the official driver and runs on the ESP8266 and
+ESP32. At the time of writing testing on ESP32 has not been exhaustive. Its
+principal advantages are:  
  1. Non-blocking operation for applications using uasyncio.
  2. Automatic recovery from WiFi an broker outages.
  3. True qos == 1 operation with retransmission.
  4. Improved WiFi range because of its tolerance of poor connectivity.
 
 Its main drawback is code size. Run as frozen bytecode it uses about 50% of the
-RAM on the ESP8266.
+RAM on the ESP8266. On ESP32 it runs as a standard Python module with 64K of
+RAM free.
 
 It is documented [here](./mqtt_as/README.md).
 

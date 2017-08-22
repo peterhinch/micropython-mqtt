@@ -88,6 +88,7 @@ def start(mqtt_link):
 
 MQTTlink.will('result', 'client died')
 init['user_start'] = start
+
 mqtt_link = MQTTlink(init)
 mqtt_link.status_handler(status_handler)  # Override the default
 loop = asyncio.get_event_loop()

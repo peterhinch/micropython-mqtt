@@ -45,7 +45,7 @@ library has some significant bugfixes.
 User coros which access the API should be started in the user start coro and
 should have provision to quit if the ESP8266 fails: see `pb_simple.py`.
 
-Initialisation is now via a dict.
+Initialisation is now via a dictionary.
 
 **Test status**
 
@@ -268,7 +268,7 @@ messages arrive in quick succession. This could result in an ESP8266 crash with
 a consequent automatic reboot, in which case some of the backlog will be lost.
 
 **Optional RTC synchronisation:**  
-`rtc_resync` (secs). (3600)  
+`rtc_resync` (secs). (-1)  
 0 == disable.  
 -1 == Synchronise once only.  
 If interval > 0 the ESP8266 will periodically retrieve the time from an NTP
@@ -276,6 +276,21 @@ server and send the result to the host, which will adjust its RTC. The local
 time offset specified below will be applied.  
 `local_time_offset` If the host's RTC is to be synchronised to an NTP
 server, this allows an offset to be added. Unit is hours. (0)
+
+RTC synchronisation is not ideal. It needs to call `socket.getaddrinfo()` each
+time to retrieve a timeserver from the pool. Unfortunately this method blocks,
+for a long period if internet access is down.
+
+Synchronisation should work if the broker is on the WAN because it checks for
+broker connectivity before attempting a synch. If the broker is on the LAN,
+problems arise if internet connectivity is lost. The lengthy blocking results
+in timeouts and repeated resetting of the ESP8266 until the outage is cleared.
+While this is non-fatal, it will prevent operation during an internet outage
+if the broker is on the LAN. Pending the development of a nonblocking version
+of `socket.getaddrinfo()`, if the broker is local the recommendation is to
+synchronise once (or never).
+
+Note that the blocking is on the ESP8266. Host applications will not block.
 
 **Broker/network response**
 `response_time` Max expected time in secs for the broker to respond to a

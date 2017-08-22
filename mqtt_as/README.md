@@ -49,37 +49,48 @@ Near the limit of WiFi range communication delays may be incurred owing to
 retransmissions and reconnections but nonblocking behaviour and qos == 1
 integrity are maintained.
 
-It supports qos levels 0 and 1. In the case of qos == 1 packets retransmissions
-will occur until the packet has successfully been transferred. If the WiFi
-fails (e.g. the device moves out out of range of the AP) the coroutine
-performing the publication will pause until connectivity resumes.
+It supports qos levels 0 and 1. In the case of packets with qos == 1
+retransmissions will occur until the packet has successfully been transferred.
+If the WiFi fails (e.g. the device moves out out of range of the AP) the
+coroutine performing the publication will pause until connectivity resumes.
 
 The driver requires the `uasyncio` library and is intended for applications
 that use it. It uses nonblocking sockets and does not block the scheduler. The
 design is based on the official `umqtt` library but it has been substantially
 modified for resilience and for asynchronous operation.
 
-Testing has been performed on the ESP8266 however the code should be portable
-to other MicroPython WiFi connected devices such as ESP32.
+## 1.3 Project Status
 
-## 1.3 Limitations
+The API has changed. Configuration is now via a dictionary, with a default
+supplied in the main module. Cross-project settings (e.g. WiFi credentials for
+ESP32) may be provided in `config.py` with per-project settings in the
+application itself.
+
+Testing has mainly been performed on the ESP8266. It has been tested on ESP32
+but this platform has issues. The code works but is **NOT** resilient. It will
+handle qos==1 messages reliably but will not tolerate outages. Issues have been
+raised.
+
+My attempts to test with SSL/TLS have failed, doubtless owing to my lack of
+experience. Feedback on this issue would be very welcome.
+
+## 1.4 Limitations
 
 The module is too large to compile on the ESP8266 and should be precompiled or
-frozen as bytecode.
-
-It is currently untested on the ESP32 and has not been tested with SSL/TLS.
-Feedback on these issues would be very welcome.
+preferably frozen as bytecode.
 
 # 2. Getting started
 
 ## 2.1 Program files
 
  1. `mqtt_as.py` The main module.
- 2. `clean.py` Test/demo program using MQTT Clean Session.
- 3. `unclean.py` Test/demo program with MQTT Clean Session `False`.
- 4. `range.py` For WiFi range testing.
- 5. `pubtest` Bash script illustrating publication with Mosquitto.
- 6. `main.py` Example for auto-starting an application.
+ 2. `config.py` Stores cross-project settings.
+ 3. `clean.py` Test/demo program using MQTT Clean Session.
+ 4. `unclean.py` Test/demo program with MQTT Clean Session `False`.
+ 5. `range.py` For WiFi range testing.
+ 6. `pubtest` Bash script illustrating publication with Mosquitto.
+ 7. `main.py` Example for auto-starting an application.
+ 8. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
 
 ## 2.2 Installation
 
@@ -88,7 +99,11 @@ Ensure this is installed on the device.
 
 The module is too large to compile on the ESP8266. It must either be cross
 compiled or (preferably) built as frozen bytecode: copy `mqtt_as.py` to
-`esp8266/modules` in the source tree, build and deploy.
+`esp8266/modules` in the source tree, build and deploy. Copy `config.py` to the
+filesystem for convenience.
+
+On the ESP32 simply copy the Python source to the filesystem (items 1 and 2
+above as a minimum).
 
 ## 2.3 Example Usage
 
@@ -96,14 +111,16 @@ The following illustrates the library's use. If a PC client publishes a message
 with the topic `foo_topic` the topic and message are printed. The code
 periodically publishes an incrementing count under the topic `result`.
 
+On ESP8266 it assumes that the board is connected to WiFi (the board remembers
+the network if it has to reconnect). The ESP32 behaves differently and requires
+WiFi config data. Edit `config.py` to suit.
+
 ```python
 from mqtt_as import MQTTClient
+from config import config
 import uasyncio as asyncio
-import ubinascii
-from machine import unique_id
 
 SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
-CLIENT_ID = ubinascii.hexlify(unique_id())  # ID unique to this device
 
 def callback(topic, msg):
     print((topic, msg))
@@ -121,13 +138,12 @@ async def main(client):
         await client.publish('result', '{}'.format(n), qos = 1)
         n += 1
 
-mqtt_config = {
-    'subs_cb': callback,
-    'connect_coro': conn_han,
-    }
+config['subs_cb'] = callback
+config['connect_coro'] = conn_han
+config['server'] = SERVER
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
-client = MQTTClient(mqtt_config, CLIENT_ID, SERVER)
+client = MQTTClient(config)
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
@@ -148,51 +164,56 @@ this.
 
 ## 3.1 Constructor
 
-This takes the following arguments defining the broker connection.  
-Mandatory positional args:
+This takes a dictionary as argument. The default is `mqtt_as.config`. Normally
+an application imports this and modifies selected entries as required. Entries
+are:
 
- 1. `mqtt_args` A dict of MQTT parameters (see below).
- 2. `client_id` A `bytes` instance: MQTT client ID should be unique for broker.
- 3. `server` Broker IP address.
+**WiFi Parameters**
 
-Optional keyword only args:
+These are only required for ESP32. On the ESP8266 the device is assumed to be
+connected before the user application begins. The chip reconnects automatically.
 
- 1. `port=0` Override default port (1883 or 8883 for SSL).
- 2. `user=None` MQTT credentials.
- 3. `password=None` If a password is provided a user must also exist.
- 4. `keepalive=0` Period (secs) before broker regards client as having died.
- 5. `ssl=False` Use SSL.
- 6. `ssl_params={}`
+'ssid' [`None`]  
+'wifi_pw' [`None`]  
 
-### 3.1.1 The mqtt_args dict
+**MQTT parameters**
 
-This may contain any of the following entries and serves to modify the default
-MQTT characteristics. Defaults are in [].
+'client_id' [auto-generated unique ID] Must be a bytes instance.  
+'server' [`None`] Broker IP address (mandatory).  
+'port' [0] 0 signifies default port (1883 or 8883 for SSL).  
+'user' [`''`] MQTT credentials (if required).  
+'password' [`''`] If a password is provided a user must also exist.  
+'keepalive' [60] Period (secs) before broker regards client as having died.  
+'ssl' [False] If `True` use SSL.  
+'ssl_params' [{}]  
+'response_time' [10] Time in which server is expected to respond (s). See note
+below.  
+'clean_init' [`True`] Clean Session state on initial connection.  
+'clean' [`True`] Clean session state on reconnection.  
+'max_repubs' [4] Maximum no. of republications before reconnection is
+ attempted.  
+'will' : [`None`] A list or tuple defining the last will (see below).
 
- 1. `response_time` Time in which server is expected to respond (s). See below.
- [10]
- 2. `subs_cb` Subscription callback. The callback must take two args, `topic`
- and `message`. It runs when a subscibed publication is received. [a null
- function]
- 3. `wifi_coro` A coroutine. Defines a task to run when the network state
- changes. The coro receives a single boolean arg being the network state. [A
- null coro]
- 4. `connect_coro` A coroutine. Defines a task to run when a connection to the
- broker has been established. This is typically used to register and renew
- subscriptions. The coro receives a single argument, the client instance. [A
- null coro]
- 5. `will` A list or tuple defining the last will (see below). [`None`]
- 6. `clean_init` Clean Session state on initial connection. [`True`]
- 7. `clean` Clean session state on reconnection. [`True`]
- 8. `max_repubs` Maximum no. of republications before reconnection is
- attempted. [4]
+**Callbacks and coros**  
 
-The `response_time` arg works as follows. If a read or write operation times
+'subs_cb' [a null lambda function] Subscription callback. Runs when a message
+is received whose topic matches a subscription. The callback must take two
+args, `topic` and `message`.  
+'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
+state changes. The coro receives a single boolean arg being the network state.  
+'connect_coro' [a null coro] A coroutine. Defines a task to run when a
+connection to the broker has been established. This is typically used to
+register and renew subscriptions. The coro receives a single argument, the
+client instance.
+
+**Notes**
+
+The `response_time` entry works as follows. If a read or write operation times
 out, the connection is presumed dead and the reconnection process begins. If a
 qos == 1 publication is not acknowledged in this period, republication will
 occur. May need extending for slow internet connections.
 
-The `will` argument defines a publication which the broker will issue if it
+The `will` entry defines a publication which the broker will issue if it
 determines that the connection has timed out. This is a tuple or list comprising
 [`topic` (string), `msg` (string), `retain` (bool), `qos` (0 or 1)]. If the arg
 is provided all elements are mandatory.

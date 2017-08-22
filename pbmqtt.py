@@ -51,7 +51,6 @@ def buildinit(d):
     int(d['clean_session']), d['max_repubs'], d['response_time'])
     return argformat(*ituple)
 
-
 # _WIFI_DOWN is bad during initialisation
 _BAD_STATUS = (BROKER_FAIL, WIFI_DOWN, UNKNOWN)
 _DIRE_STATUS = (BROKER_FAIL, UNKNOWN)  # Always fatal
@@ -71,12 +70,9 @@ async def heartbeat():
 
 # Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
 def validate(s, item):
-    g = (a for a in s if a == 0 or a >= 127)
-    try:
-        ch = next(g)
-        raise ValueError('Illegal character {} in {}'.format(ch, item))
-    except:
-        pass
+    s = s.encode('UTF8')
+    if any(True for a in s if a == 0 or a >= 127):
+        raise ValueError('Illegal character in {} in {}'.format(s, item))
 
 # Replace to handle status changes. In the case of fatal status values the
 # ESP8266 will be rebooted on return. You may want to pause for remedial
