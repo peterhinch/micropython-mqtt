@@ -57,7 +57,9 @@ config['server'] = SERVER
 config['connect_coro'] = conn_han
 config['wifi_coro'] = wifi_han
 config['ssl'] = True
-# config['ssl_params'] = {'certfile': '/mosquitto.org.crt'}
+# I haven't a clue what I should be doing here. Please help!
+# config['ssl_params'] = {'certfile': '/mosquitto.org.crt'} Nope. Arg rejected.
+# config['ssl_params'] = {'server_hostname' : SERVER} Nope. Crash and burn.
 
 # Set up client
 MQTTClient.DEBUG = True  # Optional

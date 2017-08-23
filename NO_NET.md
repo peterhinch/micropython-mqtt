@@ -277,21 +277,6 @@ time offset specified below will be applied.
 `local_time_offset` If the host's RTC is to be synchronised to an NTP
 server, this allows an offset to be added. Unit is hours. (0)
 
-RTC synchronisation is not ideal. It needs to call `socket.getaddrinfo()` each
-time to retrieve a timeserver from the pool. Unfortunately this method blocks,
-for a long period if internet access is down.
-
-Synchronisation should work if the broker is on the WAN because it checks for
-broker connectivity before attempting a synch. If the broker is on the LAN,
-problems arise if internet connectivity is lost. The lengthy blocking results
-in timeouts and repeated resetting of the ESP8266 until the outage is cleared.
-While this is non-fatal, it will prevent operation during an internet outage
-if the broker is on the LAN. Pending the development of a nonblocking version
-of `socket.getaddrinfo()`, if the broker is local the recommendation is to
-synchronise once (or never).
-
-Note that the blocking is on the ESP8266. Host applications will not block.
-
 **Broker/network response**  
 `response_time` Max expected time in secs for the broker to respond to a
 qos == 1 publication. If this is exceeded the message is republished with the

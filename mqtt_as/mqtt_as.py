@@ -255,7 +255,30 @@ class MQTT_base:
         async with self.lock:
             await self._as_write(b"\xc0\0")
 
+    # Check internet connectivity by sending DNS lookup to Google's 8.8.8.8
+    async def wan_ok(self, packet = b'$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01'):
+        if not self.isconnected():  # WiFi is down
+            return False
+        length = 32  # DNS query and response packet size
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setblocking(False)
+        s.connect(('8.8.8.8', 53))
+        await asyncio.sleep(1)
+        try:
+            await self._as_write(packet, sock = s)
+            await asyncio.sleep(2)
+            res = await self._as_read(length, s)
+            if len(res) == length:
+                return True  # DNS response size OK
+        except OSError:  # Timeout on read: no connectivity.
+            return False
+        finally:
+            s.close()
+        return False
+
     async def broker_up(self):  # Test broker connectivity
+        if not self.isconnected():
+            return False
         tlast = self.last_rx
         if ticks_diff(ticks_ms(), tlast) < 1000:
             return True

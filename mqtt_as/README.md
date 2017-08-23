@@ -288,6 +288,12 @@ Unless data was received in the last second it issues an MQTT ping and waits
 for a response. If it times out (`response_time` exceeded) with no response it
 returns `False` otherwise it returns `True`.
 
+### 3.2.8 wan_ok (async)
+
+Returns `True` if internet connectivity is available, else `False`. It first
+checks current WiFi and broker connectivity. If present, it sends a DNS query
+to '8.8.8.8' and checks for a valid response.
+
 ## 3.3 Class Attributes
 
  1. `DEBUG` If `True` causes diagnostic messages to be printed.

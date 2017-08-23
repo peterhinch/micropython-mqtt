@@ -56,11 +56,10 @@ class Client(MQTTClient):
     async def get_time(self):
         if not self.isconnected():
             return 0
-        res = await self.broker_up()
+        res = await self.wan_ok()
         if not res:
             return 0  # No internet connectivity.
         # connectivity check is not ideal. Could fail now... FIXME
-        # also assumes broker is not local!
         # (date(2000, 1, 1) - date(1900, 1, 1)).days * 24*60*60
         NTP_DELTA = 3155673600
         host = "pool.ntp.org"
