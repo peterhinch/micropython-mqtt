@@ -368,6 +368,9 @@ delaying the response to an ESP8266 crash. The `egate.ending()` method returns
 `True` if the ESP8266 has failed and offers another way to terminate a coro,
 allowing the reset to proceed.
 
+Note that owing to [this issue](https://github.com/micropython/micropython/issues/3153)
+a `return` statement should not be issued within an `async with` block.
+
 See `pb_simple.py` and the
 [synchronisation primitives docs](https://github.com/peterhinch/micropython-async/blob/master/PRIMITIVES.md).
 

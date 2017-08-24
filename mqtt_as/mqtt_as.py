@@ -154,7 +154,12 @@ class MQTT_base:
         while len(data) < n:
             if self._timeout(t) or not self.isconnected():
                 raise OSError(-1)
-            msg = sock.read(n - len(data))
+            try:
+                msg = sock.read(n - len(data))
+            except OSError as e:  # Connect still in progress (ESP32).
+                msg = None  # https://github.com/micropython/micropython-esp32/issues/166
+                if e.args[0] not in [uerrno.EINPROGRESS, uerrno.ETIMEDOUT, 119]:
+                    raise
             if msg == b'':  # Connection closed by host (?)
                 raise OSError(-1)
             if msg is not None:  # data received
@@ -173,10 +178,15 @@ class MQTT_base:
         while bytes_wr:
             if self._timeout(t) or not self.isconnected():
                 raise OSError(-1)
-            n = sock.write(bytes_wr)
+            try:
+                n = sock.write(bytes_wr)
+            except OSError as e:  # Connect still in progress (ESP32).
+                n = 0  # https://github.com/micropython/micropython-esp32/issues/166
+                if e.args[0] not in [uerrno.EINPROGRESS, uerrno.ETIMEDOUT, 119]:
+                    raise
             if n:
                 t = ticks_ms()
-            bytes_wr = bytes_wr[n:]
+                bytes_wr = bytes_wr[n:]
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
 
     async def _send_str(self, s):
@@ -245,8 +255,10 @@ class MQTT_base:
             await self._send_str(self._user)
             await self._send_str(self._pswd)
         # read causes ECONNABORTED if broker is out; triggers a reconnect.
-        self.dprint('About to read.')  # TEST ESP32
-        resp = await self._as_read(4)  # On ESP32 this times out
+        # This is intended behaviour on ESP8266.
+#        self.dprint('About to read.')  # TEST ESP32
+# On ESP32 after a WiFi outage this times out causing an endless reconnect loop
+        resp = await self._as_read(4)
         self.dprint('Connected to broker.')
         if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:
             raise OSError(-1)
