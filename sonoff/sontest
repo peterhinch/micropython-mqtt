@@ -1,0 +1,9 @@
+#! /bin/bash
+# mosquitto_sub -h 192.168.0.9 -t sonoff_result -q 1
+while :
+do
+    mosquitto_pub -h 192.168.0.9 -t sonoff_led -q 1 -m on
+    sleep 10
+    mosquitto_pub -h 192.168.0.9 -t sonoff_led -q 1 -m off
+    sleep 10
+done

@@ -157,6 +157,7 @@ class Channel(SynCom):
                 config['user'] = mqtt_user
                 config['password'] = mqtt_pw
                 config['keepalive'] = int(ilst[11])
+                config['ping_interval'] = int(ilst[16])
                 config['ssl'] = bool(int(ilst[9]))
                 config['ssl_params'] = eval(ssl_params)
                 config['response_time'] = int(ilst[15])

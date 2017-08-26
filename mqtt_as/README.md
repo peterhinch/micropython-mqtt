@@ -184,6 +184,7 @@ connected before the user application begins. The chip reconnects automatically.
 'user' [`''`] MQTT credentials (if required).  
 'password' [`''`] If a password is provided a user must also exist.  
 'keepalive' [60] Period (secs) before broker regards client as having died.  
+'ping_interval' [0] Period (secs) between broker pings. 0 == use default.  
 'ssl' [False] If `True` use SSL.  
 'ssl_params' [{}]  
 'response_time' [10] Time in which server is expected to respond (s). See note
@@ -308,7 +309,9 @@ If `keepalive` is defined in the constructor call, the broker will assume that
 connectivity has been lost if no messages have been received in that period.
 The module attempts to keep the connection open by issuing an MQTT ping upto
 four times during the keepalive interval. (It pings if the last response from
-the broker was over 1/4 of the keepalive period).
+the broker was over 1/4 of the keepalive period). More frequent pings may be
+desirable to educe latency in subscribe-only applications. This may be achieved
+using the `ping_interval` configuration option.
 
 If the broker times out it will issue the "last will" publication (if any).
 

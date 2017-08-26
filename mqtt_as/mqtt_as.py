@@ -37,6 +37,7 @@ config = {
     'user' : '',
     'password' : '',
     'keepalive' : 60,
+    'ping_interval' : 0,
     'ssl' : False,
     'ssl_params' : {},
     'response_time' : 10,
@@ -48,7 +49,7 @@ config = {
     'wifi_coro' : eliza,
     'connect_coro' : eliza,
     'ssid' : None,
-    'wifi_pw' : None
+    'wifi_pw' : None,
     }
 
 class MQTTException(Exception):
@@ -440,15 +441,18 @@ class MQTTClient(MQTT_base):
     def __init__(self, config):
         super().__init__(config)
         self._isconnected = False  # Current connection state
-        keepalive = 1000 * config['keepalive']  # ms
+        keepalive = 1000 * self._keepalive  # ms
         self._ping_interval = keepalive // 4 if keepalive else 20000
+        p_i = config['ping_interval'] * 1000  # Can specify shorter e.g. for subscribe-only
+        if p_i and p_i < self._ping_interval:
+            self._ping_interval = p_i
         self._in_connect = False
         self._has_connected = False  # Define 'Clean Session' value to use.
 
     async def wifi_connect(self):
-        self.dprint('WiFi connect') # TEST
         s = self._sta_if
         if ESP32:
+            self.dprint('WiFi connect') # TEST
             s.disconnect()  # sleep() necessary to achieve reconnection. ugh.
             sleep(0.1)  # https://github.com/micropython/micropython-esp32/issues/167
             await asyncio.sleep(1)

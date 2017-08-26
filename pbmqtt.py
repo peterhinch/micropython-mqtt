@@ -34,6 +34,7 @@ init = {
     'use_default_net' : True,
     'port' : 0,
     'keepalive' : 60,
+    'ping_interval' : 0,
     'clean_session' : True,
     'rtc_resync' : -1,  # Once only
     'local_time_offset' : 0,
@@ -48,7 +49,7 @@ def buildinit(d):
     ituple = ('init', d['ssid'], d['password'], d['broker'], d['mqtt_user'],
     d['mqtt_pw'], d['ssl_params'], int(d['use_default_net']), d['port'], int(d['ssl']),
     int(d['fast']), d['keepalive'], int(d['debug']),
-    int(d['clean_session']), d['max_repubs'], d['response_time'])
+    int(d['clean_session']), d['max_repubs'], d['response_time'], d['ping_interval'])
     return argformat(*ituple)
 
 # _WIFI_DOWN is bad during initialisation

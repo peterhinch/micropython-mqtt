@@ -1,4 +1,4 @@
-# clean.py Test of asynchronous mqtt client with clean session False.
+# range.py Test of asynchronous mqtt client with clean session False.
 # (C) Copyright Peter Hinch 2017.
 # Released under the MIT licence.
 

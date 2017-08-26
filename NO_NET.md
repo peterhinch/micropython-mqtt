@@ -254,6 +254,7 @@ If `False`, ignores the saved LAN. The specified LAN becomes the new default.
 `ssl_params` Repr of dict. (`repr({})`)  
 `port` If 0 uses the default MQTT port. (0)  
 `keepalive` Broker keepalive time (secs) (60)  
+`ping_interval` Time between broker pings (secs) (0) (0 == use default)  
 `max_repubs` Max number of qos==1 republications before reonnection is
 initiated (4).  
 `clean_session` Behaviour after an outage. (`True`)  
@@ -266,6 +267,11 @@ cleared the broker will send them once connectivity is restored. This presents
 a hazard in that the ESP8266 WiFi stack has a buffer which can overflow if
 messages arrive in quick succession. This could result in an ESP8266 crash with
 a consequent automatic reboot, in which case some of the backlog will be lost.
+
+The client pings the broker up to four times in the `keepalive` period. In the
+case of applications which publish rarely or never, pinging more frequently
+speeds the detection of outages. The `ping_interval` parameter enables this to
+be accomplished. The default value of 0 results in standard behaviour.
 
 **Optional RTC synchronisation:**  
 `rtc_resync` (secs). (-1)  
