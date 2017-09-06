@@ -17,8 +17,8 @@ from config import config
 import uasyncio as asyncio
 from machine import Pin
 
-SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
-
+SERVER = '192.168.0.9'  # Change to suit
+# SERVER = 'iot.eclipse.org'
 wifi_led = Pin(0, Pin.OUT, value = 0)  # Red LED for WiFi fail/not ready yet
 blue_led = Pin(2, Pin.OUT, value = 1)  # Message received
 
@@ -49,7 +49,11 @@ async def conn_han(client):
     await client.subscribe('foo_topic', 1)
 
 async def main(client):
-    await client.connect()
+    try:
+        await client.connect()
+    except OSError:
+        print('Connection failed.')
+        return
     n = 0
     while True:
         await asyncio.sleep(5)

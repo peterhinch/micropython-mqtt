@@ -66,18 +66,30 @@ supplied in the main module. Cross-project settings (e.g. WiFi credentials for
 ESP32) may be provided in `config.py` with per-project settings in the
 application itself.
 
-Testing has mainly been performed on the ESP8266. It has been tested on ESP32
-but this platform has issues. The code works but is **NOT** resilient. It will
-handle qos==1 messages reliably but will not tolerate outages. Issues have been
-raised.
-
 My attempts to test with SSL/TLS have failed, doubtless owing to my lack of
 experience. Feedback on this issue would be very welcome.
 
-## 1.4 Limitations
+## 1.4 ESP8266 limitations
 
 The module is too large to compile on the ESP8266 and should be precompiled or
 preferably frozen as bytecode.
+
+## 1.5 ESP32 issues
+
+This platform has issues. During WiFi and broker connection and reconnection it
+has proved necessary to issue `utime.sleep_ms(20)`. After sending data to the
+socket a delay of 20ms also proved necessary to prevent a timeout occurring
+while waiting for a response (without the delay, the incoming data is never
+recognised). These delays block the scheduler. 
+
+It recovers from outages but this hasn't been tested as thoroughly as on the
+ESP8266. The board must be power cycled between runs of an application. Issues
+have been raised.
+
+Currently (5th Sept 2017) DNS lookups don't work (`usocket.getaddrinfo()`).
+Hence broker addresses must be numeric IP's.
+
+The module works without recourse to cross compilation or frozen bytecode.
 
 # 2. Getting started
 
@@ -199,9 +211,9 @@ below.
 
 'subs_cb' [a null lambda function] Subscription callback. Runs when a message
 is received whose topic matches a subscription. The callback must take two
-args, `topic` and `message`.  
+args, `topic` and `message`. These will be `bytes` instances.  
 'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
-state changes. The coro receives a single boolean arg being the network state.  
+state changes. The coro receives a single `bool` arg being the network state.  
 'connect_coro' [a null coro] A coroutine. Defines a task to run when a
 connection to the broker has been established. This is typically used to
 register and renew subscriptions. The coro receives a single argument, the

@@ -43,7 +43,11 @@ async def conn_han(client):
     await client.subscribe('foo_topic', 1)
 
 async def main(client):
-    await client.connect()
+    try:
+        await client.connect()
+    except OSError:
+        print('Connection failed.')
+        return
     n = 0
     while True:
         await asyncio.sleep(5)
