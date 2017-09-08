@@ -45,10 +45,10 @@ async def pulse(led):
     await asyncio.sleep(3)
     led.off()
 
-def cbgreen(command, text):
-    if text == 'on':
+def cbgreen(topic, msg):
+    if msg == 'on':
         green.on()
-    elif text == 'off':
+    elif msg == 'off':
         green.off()
     else:
         print('led value must be "on" or "off"')
@@ -61,7 +61,7 @@ def cbgreen(command, text):
 
 def start(mqtt_link):
     global reset_count
-    mqtt_link.subscribe('green', cbgreen, qos)    # LED control qos 1
+    mqtt_link.subscribe('green', qos, cbgreen)    # LED control qos 1
     loop = asyncio.get_event_loop()
     loop.create_task(ramcheck(mqtt_link))  # Check RAM every 30 minutes
     loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds

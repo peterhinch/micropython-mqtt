@@ -26,30 +26,15 @@ reset_count = 0     # ESP8266 forced resets. Expect 1 at start.
 status_vals = []    # Unhandled status numbers
 gcount = 1          # Count since power up
 
-async def status_handler(mqtt_link, status):
+def cbnet(state, objlink):
     global out_time
-    res = await default_status_handler(mqtt_link, status)
-    if res is not None:  # Handle failure on initialisation
-        # res == 1 occurs on 1st run only. Tells driver to try the network
-        # specified in net_local.
-        # res == 0 indicates failure to connect. The default handler waits 30 secs
-        # before returning 0 to give time for the network to come up.
-        # If we return 0 the ESP8266 will be rebooted
-        return res
-    # WiFi handling for demo: easier to use wifi_handler (see pb_simple.py)
-    if status == WIFI_UP:
+    if state:
         amber.on()
         delta = time() - out_time
-        mqtt_link.publish('result', 'WiFi up: out time = {}s'.format(delta), 0, qos)
-        return
-    if status == WIFI_DOWN:
-        out_time = time()
+        objlink.publish('result', 'WiFi up: out time = {}s'.format(delta), 0, qos)
+    else:
         amber.off()
-        return
-    if status == PUBOK:
-        return
-    status_vals.append(status)  # We will publish non-routine values
-
+        out_time = time()
 
 async def publish(mqtt_link, tim):
     global status_vals, gcount
@@ -67,7 +52,6 @@ async def publish(mqtt_link, tim):
             if not await egate.sleep(tim):
                 break
 
-
 async def pulse(led, ms=3000):
     led.on()
     await asyncio.sleep_ms(ms)
@@ -80,7 +64,8 @@ def cbgreen(command, text):
 # The user_start callback. See docs 2.3.5.
 def start(mqtt_link):
     global reset_count
-    mqtt_link.subscribe('green', cbgreen, qos)    # LED control qos 1
+    mqtt_link.subscribe('green', qos, cbgreen)    # LED control qos 1
+    mqtt_link.wifi_handler(cbnet, mqtt_link)  # Detect WiFi changes
     loop = asyncio.get_event_loop()
     loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds
     loop.create_task(pulse(blue))  # Flash blue LED each time we restart ESP8266
@@ -90,6 +75,5 @@ MQTTlink.will('result', 'client died')
 init['user_start'] = start
 
 mqtt_link = MQTTlink(init)
-mqtt_link.status_handler(status_handler)  # Override the default
 loop = asyncio.get_event_loop()
 loop.run_forever()

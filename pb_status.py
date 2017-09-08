@@ -1,80 +1,92 @@
-# pb_status.py Demonstrate status interception for Pyboard MQTT link
-# This example replaces the default. See pbrange.py for the case where the
-# default is run before trapping other status values.
+# pb_status.py TEST PROGRAM for Pyboard MQTT link
+# Demonstrates the interception of status messages.
 
 # Author: Peter Hinch.
 # Copyright Peter Hinch 2017 Released under the MIT license.
 
 # From PC issue (for example)
-# Turn the Pyboard green LED on (or off):
 # mosquitto_pub -h 192.168.0.9 -t green -m on
-# Check the publications from the Pyboard:
 # mosquitto_sub -h 192.168.0.9 -t result
 
-from machine import Pin, Signal
 import pyb
 import uasyncio as asyncio
-from pbmqtt import MQTTlink
-from net_local import INIT  # Local network details
-from status_values import *
+from pbmqtt import MQTTlink, default_status_handler
+from net_local import init  # Local network, broker and pin details
+from status_values import *  # Because we're intercepting status.
+from utime import time
 
-green = pyb.LED(2)
-blue = pyb.LED(4)
-qos = 1 # for test all messages have the same qos
-reset_count = 0
+out_time = time()   # Time WiFi outages
+                    # red led is used for heartbeat by pbmqtt.py
+green = pyb.LED(2)  # Pulse on any msg addressed to green
+amber = pyb.LED(3)  # On if WiFi up
+blue = pyb.LED(4)   # Pulse on ESP8266 reboot
+qos = 1             # for test all messages have the same qos
+reset_count = 0     # ESP8266 forced resets. Expect 1 at start.
+status_vals = []    # Unhandled status numbers
+gcount = 1          # Count since power up
 
 async def status_handler(mqtt_link, status):
-    await asyncio.sleep_ms(0)
-    if status == SPECNET:  # Couldn't start default network.
-        if mqtt_link.first_run:
-            mqtt_link.first_run = False
-            return 1  # Try specified network on 1st run only
-        print('Unable to start network. Pausing for 1 minute before reboot')
-        await asyncio.sleep(60)
-        return 0
-    if status == BROKER_FAIL:
-        print('Broker is down. Pausing for 1 minute before reboot')
-        await asyncio.sleep(60)
-        return
+    global out_time
+    res = await default_status_handler(mqtt_link, status)
+    if res is not None:  # Handle failure on initialisation
+        # res == 1 occurs on 1st run only. Tells driver to try the network
+        # specified in net_local.
+        # res == 0 indicates failure to connect. The default handler waits 30 secs
+        # before returning 0 to give time for the network to come up.
+        # If we return 0 the ESP8266 will be rebooted
+        return res
+    # WiFi handling for demo: easier to use wifi_handler (see pb_simple.py)
     if status == WIFI_UP:
-        blue.on()
-        mqtt_link.publish('result', 'WiFi up', 0, qos)
+        amber.on()
+        delta = time() - out_time
+        mqtt_link.publish('result', 'WiFi up: out time = {}s'.format(delta), 0, qos)
         return
     if status == WIFI_DOWN:
-        blue.off()
+        out_time = time()
+        amber.off()
         return
+    if status == PUBOK:
+        return
+    status_vals.append(status)  # We will publish non-routine values
 
 async def publish(mqtt_link, tim):
-    count = 1
-    while True:
-        mqtt_link.publish('result', str(count), 0, qos)
-        count += 1
-        await asyncio.sleep(tim)
+    global status_vals, gcount
+    count = 1  # Count since last ESP8266 reboot
+    egate = mqtt_link.exit_gate
+    async with egate:
+        while True:
+            mqtt_link.publish('result', '{} {} {}'.format(gcount, count, reset_count), 0, qos)
+            count += 1
+            gcount += 1
+            if status_vals:
+                msg = 'status: {}'.format(repr(status_vals))
+                mqtt_link.publish('result', msg, 0, qos)
+                status_vals = []
+            if not await egate.sleep(tim):
+                break
+
+async def pulse(led, ms=3000):
+    led.on()
+    await asyncio.sleep_ms(ms)
+    led.off()
 
 def cbgreen(command, text):
-    if text == 'on':
-        green.on()
-    elif text == 'off':
-        green.off()
-    else:
-        print('led value must be "on" or "off"')
+    loop = asyncio.get_event_loop()
+    loop.create_task(pulse(green, 500))
 
+# The user_start callback. See docs 2.3.5.
 def start(mqtt_link):
-    mqtt_link.subscribe('green', cbgreen, qos)    # LED control qos 1
-
-def test():
-    stx = Pin(Pin.board.Y5, Pin.OUT_PP)         # Define pins
-    sckout = Pin(Pin.board.Y6, Pin.OUT_PP, value = 0)
-    srx = Pin(Pin.board.Y7, Pin.IN)
-    sckin = Pin(Pin.board.Y8, Pin.IN)
-    reset = Pin(Pin.board.Y4, Pin.OPEN_DRAIN)
-    sig_reset = Signal(reset, invert = True)
-
-    MQTTlink.will('result', 'simple client died')
-    mqtt_link = MQTTlink(sig_reset, sckin, sckout, srx, stx, INIT, start, local_time_offset = 1)
-    mqtt_link.status_handler(status_handler)  # Override the default
+    global reset_count
+    mqtt_link.subscribe('green', qos, cbgreen)    # LED control qos 1
     loop = asyncio.get_event_loop()
     loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds
-    loop.run_forever()
+    loop.create_task(pulse(blue))  # Flash blue LED each time we restart ESP8266
+    reset_count += 1
 
-test()
+MQTTlink.will('result', 'client died')
+init['user_start'] = start
+
+mqtt_link = MQTTlink(init)
+mqtt_link.status_handler(status_handler)  # Override the default
+loop = asyncio.get_event_loop()
+loop.run_forever()

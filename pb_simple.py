@@ -18,6 +18,7 @@ green = pyb.LED(2)  # Green: controlled by MQTT messages.
 amber = pyb.LED(3)  # On if WiFi up.
 qos = 1             # for test all messages have the same qos.
 
+# Because this coro normally runs forever, must use the exit gate.
 async def publish(mqtt_link, tim):
     count = 1
     egate = mqtt_link.exit_gate  # See docs 2.3.5.
@@ -28,10 +29,10 @@ async def publish(mqtt_link, tim):
             if not await egate.sleep(tim):
                 break
 
-def cbgreen(command, text):
-    if text == 'on':
+def cbgreen(topic, msg):
+    if msg == 'on':
         green.on()
-    elif text == 'off':
+    elif msg == 'off':
         green.off()
     else:
         print('led value must be "on" or "off"')
@@ -44,7 +45,7 @@ def cbnet(state):
 
 # The user_start callback. See docs 2.3.5.
 def start(mqtt_link):
-    mqtt_link.subscribe('green', cbgreen, qos)  # LED control qos 1
+    mqtt_link.subscribe('green', qos, cbgreen)  # LED control qos 1
     mqtt_link.wifi_handler(cbnet)  # Detect WiFi changes
     loop = asyncio.get_event_loop()
     loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds

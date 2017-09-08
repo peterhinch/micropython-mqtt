@@ -25,22 +25,26 @@ Unofficial guides may be found via these links:
 [uasyncio tutorial](https://github.com/peterhinch/micropython-async/blob/master/TUTORIAL.md).
 
 The ESP8266 operates in station mode. The host interface supports the MQTT
-functionality provided in the umqtt library. It aims to keep the link to the
-broker open continuously, enabling applications which seldom or never publish
-to receive messages. The host implements a watchdog to reboot the ESP8266 in
-the event of fatal errors or crashes.
+functionality provided in the official umqtt library. It aims to keep the link
+to the broker open continuously, enabling applications which seldom or never
+publish to receive messages. The host implements a watchdog to reboot the
+ESP8266 in the event of fatal errors or crashes.
 
 ###### [Main README](./README.md)
 
 # Project status
 
-V0.2 Aug 2017
+V0.21 Sept 2017
 
-Now uses the `resilient` MQTT library. ESP8266 reboots no longer occur
-routinely, happening only in the event of ESP8266 failure. The `resilient`
+Now uses the `resilient` MQTT library. The ESP8266 is now rebooted only in the
+event of ESP8266 failure such as a fatal input buffer overflow. The `resilient`
 library has some significant bugfixes.
 
+Allows custom args to `subscribe` and `wifi_handler` callbacks.
+
 **API Changes**
+
+The `subscribe` method argument order has changed.
 
 User coros which access the API should be started in the user start coro and
 should have provision to quit if the ESP8266 fails: see `pb_simple.py`.
@@ -133,7 +137,8 @@ test programs, but host pins may be changed at will in `net_local.py`.
 | mckout  |    15   |  D8  |   Y8    | sckin   |
 | reset   |  reset  |  rst |   Y4    | reset   |
 
-Host and target should share a sigle power supply with a common ground.
+Host and target must share a common ground. They need not share a common power
+source - the order in which they are powered up is not critical.
 
 Note on the reset connection. The default `net_local.py` instantiates the pin
 with `Pin.OPEN_DRAIN` because some boards have a capacitor to ground. On a low
@@ -170,8 +175,8 @@ Pyboard green LED on and off and can display regular publications from the
 host.  
 `pbmqtt_test.py` Demonstrates the ramcheck facility.  
 `pbrange.py` Tests WiFi range and demos operation near the limit of range using
-the Pyboard LED's for feedback. Also demonstrates the interception of status
-messages.
+the Pyboard LED's for feedback.
+`pb_status.py` Demonstrates the interception of status messages.
 
 Bash scripts to periodically publish to the above test programs. Adapt to your
 broker address.  
@@ -296,27 +301,34 @@ dup flag set.
 
 ### 2.3.2 Methods
 
- 1. `publish` Args topic (str), message (str), retain (bool), qos (0/1). Puts
+ 1. `publish` Args: topic (str), message (str), retain (bool), qos (0/1). Puts
  publication on a queue and returns immediately. Defaults: retain `False`,
  qos 0. `publish` can be called at any time, even if an ESP8266 reboot is in
  progress.
- 2. `subscribe` Args topic (str), callback, qos (0/1). Subscribes to the
- topic. The callback will run when a publication is received. The callback args
- are the topic and message. It should be called from the `user_start`
- callback to re-subscribe after an ESP8266 reboot.
+ 2. `subscribe` Mandatory args: topic (str), qos (0/1), callback. Further
+ positional args may be supplied.  
+ Subscribes to the topic. The callback will run when a publication to the topic
+ is received. The callback args are the topic, message plus any optional args
+ supplied. Subscriptions should be performed in the `user_start`  callback to
+ re-subscribe after an ESP8266 reboot. Multiple subscriptions may have separate
+ callbacks.
  3. `wifi` No args. Returns `True` if WiFi and broker are up. See note below.
  4. `pubq_len` No args. Returns the length of the publication queue.
  5. `rtc_syn` No args. Returns `True` if the RTC has been synchronised to
  an NTP time server.
- 6. `wifi_handler` Arg: a callback. This will run each time the WiFi status
- changes. The callback takes a single boolean arg: `True` if WiFi is up and the
- broker is accessible. It is first called with `True` after the `user_start`
- callback completes. See note below.
+ 6. `wifi_handler` Mandatory arg: a callback.  Further positional args may be
+ supplied.  
+ The callback will run each time the WiFi status changes. Callback arg is a
+ `bool` followed by any user supplied args. The `bool` indicates if WiFi is up
+ and the  broker is accessible. It is first called with `True` after the
+ `user_start` callback completes. See note below.
  7. `status_handler` Arg: a coroutine. Overrides the default status handler.
+ The coro takes two args, the `MQTTlink` instance and the status value.
 
 Detection of outages can be slow depending on application code. The client
 pings the broker, but infrequently. Detection will occur if a publication
-fails provoking automatic reconnection attempts.
+fails provoking automatic reconnection attempts. The `ping_interval` config
+value may be used to speed detection.
 
 Methods intended for debug/test:
 
@@ -447,16 +459,17 @@ messages are sent in rapid succession. If you encounter lost messages and see
 
 # 3. The ESP8266
 
-To use the precompiled build, follow the instructions in 3.1 below. 
+To use the precompiled build, follow the instructions in 3.1 below. The
+remainder of the ESP8266 documentation is for those wishing to modify the
+ESP8266 code. 
 
 The firmware toggles pin 0 to indicate that the code is running. Pin 2 is
 driven low when broker connectivity is present. On the reference board this
 results in the blue LED indicating connectivity status and the red LED flashing
 while running.
 
-The remainder of the ESP8266 documentation is for those wishing to modify the
-ESP8266 code. Since the Pyboard and the ESP8266 communicate via GPIO pins the
-UART/USB interface is available for debugging.
+Since the Pyboard and the ESP8266 communicate via GPIO pins the UART/USB
+interface is available for checking status messages and debugging.
 
 # 3.1 Installing the precompiled build
 
@@ -467,9 +480,9 @@ you will need to assign executable status. On my system:
 `sudo chmod a+x /usr/local/bin/esptool.py`
 
 Erase the flash with  
-`esptool.py erase_flash`  
+`esptool.py --port /dev/ttyUSB0 --baud 115200 erase_flash`  
 Then, from the project directory, issue  
-`esptool.py --port /dev/ttyUSB0 --baud 115200 write_flash --verify --flash_size=detect -fm dio 0 firmware-combined.bin`  
+`esptool.py --port /dev/ttyUSB0 --baud 115200 write_flash --verify --flash_size=detect -fm qio 0 firmware-combined.bin`  
 These args for the reference board may need amending for other hardware.
 
 # 3.2 Files

@@ -63,6 +63,10 @@ def argformat(*a):
 def printtime():
     print('{:02d}:{:02d}:{:02d} '.format(localtime()[3], localtime()[4], localtime()[5]), end='')
 
+def qos_check(qos):
+    if not isinstance(qos, int) or not (qos == 0 or qos == 1):
+        raise ValueError('Only qos 0 and 1 are supported.')
+
 async def heartbeat():
     led = pyb.LED(1)
     while True:
@@ -198,7 +202,7 @@ class MQTTlink(object):
         self.pubs = []
         self._pub_free = True  # No publication in progress
         self.s_han = default_status_handler
-        self.wifi_han = lambda *_ : None
+        self.wifi_han = (lambda *_ : None, ())
         self._wifi_up = False
         # Only specify network on first run
         self.first_run = True
@@ -206,6 +210,7 @@ class MQTTlink(object):
 
 # API
     def publish(self, topic, msg, retain=False, qos=0):
+        qos_check(qos)
         validate(topic, 'topic')  # Raise ValueError if invalid.
         validate(msg, 'message')
         self.pubs.append((topic, msg, 1 if retain else 0, qos))
@@ -213,8 +218,9 @@ class MQTTlink(object):
     def pubq_len(self):
         return len(self.pubs)
 
-    def subscribe(self, topic, callback, qos=0):
-        self.subs[topic] = callback
+    def subscribe(self, topic, qos, callback, *args):
+        qos_check(qos)
+        self.subs[topic] = (callback, args)
         self.channel.send(argformat(SUBSCRIBE, topic, qos))
 
     # Command handled directly by mqtt.py on ESP8266 e.g. MEM
@@ -228,8 +234,8 @@ class MQTTlink(object):
     def status_handler(self, coro):
         self.s_han = coro
 
-    def wifi_handler(self, cb):
-        self.wifi_han = cb
+    def wifi_handler(self, cb, *args):
+        self.wifi_han = (cb, args)
 
     def running(self):
         return self._running
@@ -274,7 +280,8 @@ class MQTTlink(object):
         # Detect WiFi status changes. Ignore initialisation and repeats
         if last_status != -1 and iact != last_status and iact in (WIFI_UP, WIFI_DOWN):
             self._wifi_up = iact == WIFI_UP
-            self.wifi_han(self._wifi_up)
+            cb, args = self.wifi_han
+            cb(self._wifi_up, *args)
         if self.verbose:
             if iact != UNKNOWN:
                 if iact != last_status:  # Ignore repeats
@@ -365,7 +372,8 @@ class MQTTlink(object):
         loop = asyncio.get_event_loop()
         loop.create_task(self._publish())
         self.rtc_synchroniser._start()  # Run coro if synchronisation is required.
-        self.wifi_han(True)
+        cb, args = self.wifi_han
+        cb(True, *args)
 
 # Initialisation is complete. Process messages from ESP8266.
         iact = -1                   # Invalidate last status for change detection
@@ -378,7 +386,9 @@ class MQTTlink(object):
                 command, action = self.get_cmd(res)
                 if command == SUBSCRIPTION:
                     if action[0] in self.subs: # topic found
-                        self.subs[action[0]](*action)  # Run the callback
+                        cb, args = self.subs[action[0]]
+                        action += args
+                        cb(*action)  # Run the callback
                 elif command == STATUS:  # 1st arg of status is an integer
                     iact = self.do_status(action, iact) # Update pub q and wifi status
                     await self.s_han(self, iact)
