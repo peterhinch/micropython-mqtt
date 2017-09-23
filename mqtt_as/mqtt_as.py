@@ -27,6 +27,12 @@ BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT]
 
 ESP32 = platform == 'esp32'
 
+# Set up special handling for sonoff and similar devices requiring periodic yield to RTOS
+SONOFF = False
+def sonoff():
+    global SONOFF
+    SONOFF = True
+
 # ESP32. It is not enough to regularly yield to RTOS with machine.idle(). There are
 # two cases where an explicit sleep() is required. Where data has been written to the
 # socket and a response is awaited, a timeout may occur without a >= 20ms sleep.
@@ -478,12 +484,12 @@ class MQTTClient(MQTT_base):
                 return
             s.active(True)
             s.connect()  # ESP8266 remembers connection.
-# on sonoff sleep_ms() was necessary. Original version had await asyncio.sleep(1)
-# which worked fine on other platforms. On sonoff it sometimes waited so long that
-# the wdt cut in and crashed the code.
-            while s.status() == network.STAT_CONNECTING:
-                await asyncio.sleep_ms(0)  # Break out on fail or success
-                sleep_ms(10)
+            while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
+                if SONOFF:  # Without sleep_ms(10) sonoff sometimes waited so long for DHCP that
+                    yield  # the wdt cut in and crashed the code.
+                    sleep_ms(10)
+                else:
+                    await asyncio.sleep(1)  # Other platforms are OK
 
         # Ensure connection stays up for a few secs.
         self.dprint('Checking WiFi integrity.')
@@ -585,8 +591,13 @@ class MQTTClient(MQTT_base):
     # broker connection. Must handle conditions at edge of WiFi range.
     async def _keep_connected(self):
         while True:
-            if self.isconnected():
-                await asyncio.sleep(1)
+            if self.isconnected():  # Pause for 1 second
+                if SONOFF:
+                    for _ in range(10):
+                        sleep_ms(10)  # Prevents spurious WiFi dropouts
+                        await asyncio.sleep_ms(90)
+                else:
+                    await asyncio.sleep(1)
                 gc.collect()
             else:
                 self._sta_if.disconnect()
