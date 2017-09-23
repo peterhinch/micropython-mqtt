@@ -478,17 +478,22 @@ class MQTTClient(MQTT_base):
                 return
             s.active(True)
             s.connect()  # ESP8266 remembers connection.
-
-            await asyncio.sleep(1)
+# on sonoff sleep_ms() was necessary. Original version had await asyncio.sleep(1)
+# which worked fine on other platforms. On sonoff it sometimes waited so long that
+# the wdt cut in and crashed the code.
             while s.status() == network.STAT_CONNECTING:
-                await asyncio.sleep(1)  # Break out on fail or success
+                await asyncio.sleep_ms(0)  # Break out on fail or success
+                sleep_ms(10)
+
         # Ensure connection stays up for a few secs.
+        self.dprint('Checking WiFi integrity.')
         t = ticks_ms()
         while ticks_diff(ticks_ms(), t) < 5000:
             if not s.isconnected():
                 raise OSError('WiFi connection fail.')  # in 1st 5 secs
             esp32_pause()
             await asyncio.sleep(1)
+        self.dprint('Got reliable connection')
         # Timed out: assumed reliable
 
 
@@ -619,5 +624,4 @@ class MQTTClient(MQTT_base):
                 return await super().publish(topic, msg, retain, qos)
             except OSError:
                 pass
-            self.dprint('dup failed. Reconnect and repub with new PID.')
             self._reconnect()  # Broker or WiFi fail.

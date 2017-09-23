@@ -67,10 +67,10 @@ class Sonoff(MQTTClient):
         config['will'] = (self.T_RESULT, 'Goodbye from Sonoff!', False, 0)
         config['server'] = SERVER
         config['keepalive'] = 120
-        # The clean settings ensure that commands sent during an outage will be honoured
+        # Setting clean False ensures that commands sent during an outage will be honoured
         # when connectivity resumes.
-        config['clean'] = False
-        config['clean_init'] = False
+        config['clean'] = True
+        config['clean_init'] = True
         # ping_interval = 5 ensures that LED starts flashing promptly on an outage.
         # This interval is much too fast for a public broker on the WAN.
 #        config['ping_interval'] = 5
