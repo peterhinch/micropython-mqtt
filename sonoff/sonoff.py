@@ -116,6 +116,8 @@ class Sonoff(MQTTClient):
             msg = 'RC:,Repeat'
         elif data >= 0:
             msg = ','.join(('RC:', hex(data), hex(addr)))
+        else:
+            msg = ','.join(('RC:,Error', str(data)))
         self.pub_msg('remote', msg)
 
     # Callback for all pushbutton actions.
