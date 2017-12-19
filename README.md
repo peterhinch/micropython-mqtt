@@ -21,11 +21,15 @@ This contains two separate projects:
 
 ## 1. The "resilient" driver
 
-This is an alternative to the official driver and runs on the ESP8266 and
-ESP32. At the time of writing testing on ESP32 has not been exhaustive. Its
-principal advantages are:  
+This is an alternative to the official driver and is targeted on the ESP8266.
+
+It will run on ESP32 but there are known problems consequent on the
+"experimental" status of the firmware. In particular the ESP32 does not recover
+from WiFi outages. See [this issue](https://github.com/micropython/micropython-esp32/issues/167).
+
+The principal features of this driver are:  
  1. Non-blocking operation for applications using uasyncio.
- 2. Automatic recovery from WiFi an broker outages.
+ 2. Automatic recovery from WiFi and broker outages.
  3. True qos == 1 operation with retransmission.
  4. Improved WiFi range because of its tolerance of poor connectivity.
 
