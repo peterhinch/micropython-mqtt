@@ -15,7 +15,8 @@ from utime import localtime, time
 import pyb
 from machine import Pin, Signal
 from syncom import SynCom
-from asyn import ExitGate
+import asyn
+#from asyn import StopTask, Cancellable, sleep
 from status_values import *  # Numeric status values shared with user code.
 
 init = {
@@ -73,6 +74,13 @@ async def heartbeat():
         await asyncio.sleep_ms(500)
         led.toggle()
 
+# awaitable task cancellation
+class Killer():
+    def __await__(self):
+        yield from asyn.Cancellable.cancel_all()
+
+    __iter__ = __await__
+
 # Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
 def validate(s, item):
     s = s.encode('UTF8')
@@ -114,32 +122,28 @@ class RTCsynchroniser():
         i = self._rtc_interval  # 0 == no synch. -1 == once only. > 1 = secs
         if i and (i > 0 or self._rtc_last_syn == 0):
             loop = asyncio.get_event_loop()
-            loop.create_task(self._do_rtc())
+            loop.create_task(asyn.Cancellable(self._do_rtc)())
 
-    async def _do_rtc(self):
+    @asyn.cancellable
+    async def _do_rtc(self, task_no):
         lnk = self._lnk
         lnk.vbprint('Start RTC synchroniser')
         self._time_valid = not self._rtc_last_syn == 0  # Valid on restart
-        egate = lnk.exit_gate
-        async with egate:
-            while not egate.ending():  # Until parent task has died
-                while not self._time_valid:
-                    lnk.channel.send(TIME)
-                    # Give time for response
-                    if not await egate.sleep(5):
-                        break
-                    if not self._time_valid:
-                        # WiFi may be down. Delay before retry.
-                        if not await egate.sleep(60):
-                            break
-                else:  # Valid time received or restart
-                    if self._rtc_interval < 0:
-                        break  # One resync only: done
-                    tend = self._rtc_last_syn + self._rtc_interval
-                    twait = max(tend - time(), 5)  # Prolonged outage
-                    if not await egate.sleep(twait):
-                        break
-                    self._time_valid = False
+        while True:
+            while not self._time_valid:
+                lnk.channel.send(TIME)
+                # Give 5s time for response
+                await asyn.sleep(5)
+                if not self._time_valid:
+                    # WiFi may be down. Delay 1 min before retry.
+                    await asyn.sleep(60)
+            else:  # Valid time received or restart
+                if self._rtc_interval < 0:
+                    break  # One resync only: done
+                tend = self._rtc_last_syn + self._rtc_interval
+                twait = max(tend - time(), 5)  # Prolonged outage
+                await asyn.sleep(twait)
+                self._time_valid = False
 
     def _do_time(self, action):  # TIME received from ESP8266
         lnk = self._lnk
@@ -196,8 +200,14 @@ class MQTTlink(object):
                               d['reset'], wdog, True, self.verbose)
         loop = asyncio.get_event_loop()
         loop.create_task(heartbeat())
-        self.exit_gate = ExitGate()
-        loop.create_task(self.channel.start(self.start, self.exit_gate))
+#        self.barrier = Barrier(ntasks + 2)  # User tasks + self._publish + RTCsynchroniser._do_rtc
+        # Start the SynCom instance. This will run self.start(). If an error
+        # occurs self.quit() is called which cancels all NamedTask instances
+        # and returns to Syncom's start() method. This waits on Cancellable.cancel_all()
+        # before forcing a failure on the ESP8266 and re-running self.start()
+        # to perform a clean restart.
+#        loop.create_task(self.channel.start(self.start, asyn.Cancellable.cancel_all()))
+        loop.create_task(self.channel.start(self.start, Killer()))
         self.subs = {} # Callbacks indexed by topic
         self.pubs = []
         self._pub_free = True  # No publication in progress
@@ -249,6 +259,9 @@ class MQTTlink(object):
         if args is not ():
             self.vbprint(*args)
         self._running = False
+        # Note that if this method is called from self.start return is to
+        # SynCom's start method which will wait on the Killer instance to
+        # cancel all Cancellable tasks
 
 # On publication of a qos 1 message this is called with False. This prevents
 # further pubs until the response is received, ensuring we wait for the PUBACK
@@ -294,30 +307,28 @@ class MQTTlink(object):
 
 
 # PUBLISH
-    async def _publish(self):
-        egate = self.exit_gate
-        async with egate:
-            while not egate.ending():  # Until parent task has died
-                if len(self.pubs): 
-                    args = self.pubs.pop(0)
-                    secs = 0
-                    # pub free can be a long time coming if WiFi is down
-                    while not self._pub_free:
-                        # If pubs are queued, wait 1 sec to respect ESP8266 buffers
-                        if not await egate.sleep(1):
-                            break
-                        if self._wifi_up:
-                            secs += 1
-                        if secs > 60:
-                            self.quit('No response from ESP8266')
-                            break
-                    else:
-                        self.channel.send(argformat(PUBLISH, *args))
-                        # All pubs send PUBOK.
-                        # No more pubs allowed until PUBOK received.
-                        self.pub_free(False)
+    @asyn.cancellable
+    async def _publish(self, task_no):
+        while True:
+            if len(self.pubs): 
+                args = self.pubs.pop(0)
+                secs = 0
+                # pub free can be a long time coming if WiFi is down
+                while not self._pub_free:
+                    # If pubs are queued, wait 1 sec to respect ESP8266 buffers
+                    await asyncio.sleep(1)
+                    if self._wifi_up:
+                        secs += 1
+                    if secs > 60:
+                        self.quit('No response from ESP8266')
+                        break
                 else:
-                    await asyncio.sleep_ms(20)
+                    self.channel.send(argformat(PUBLISH, *args))
+                    # All pubs send PUBOK.
+                    # No more pubs allowed until PUBOK received.
+                    self.pub_free(False)
+            else:
+                await asyncio.sleep_ms(20)
 
 # start() is run each time the channel acquires sync i.e. on startup and also
 # after an ESP8266 crash and reset.
@@ -370,7 +381,7 @@ class MQTTlink(object):
             self.user_start[0](self, *self.user_start[1])  # User start function
 
         loop = asyncio.get_event_loop()
-        loop.create_task(self._publish())
+        loop.create_task(asyn.Cancellable(self._publish)())
         self.rtc_synchroniser._start()  # Run coro if synchronisation is required.
         cb, args = self.wifi_han
         cb(True, *args)

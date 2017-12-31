@@ -358,36 +358,24 @@ Its purpose is to register subscriptions and to launch coros which use the API.
 MQTT message processing begins on the callback's return so it should run to
 completion quickly.
 
-Coroutines launched by it should either terminate quickly (less than a few
-seconds) or have provision to terminate if connectivity with the ESP8266 is
-lost owing to a crash. This is necessary because `uasyncio` does not have a
-means to deschedule a running coroutine. If the ESP8266 crashes the `exit_gate`
-ensures that all dependent coroutines have terminated before the Pyboard
-resets the ESP8266. Consequently user coros launched by `user_start` and
-designed for continuous running must quit on ESP8266 failure.
-
-The technique for doing this is shown here (taken from `pb_simple.py`).
+Coroutines launched by it which communicate with the ESP8266 should have
+provision to be cancelled if connectivity with the ESP8266 is lost. This can
+occur if the ESP8266 crashes. The technique for doing this relies on the
+cancellation API in `asyn.py` and is shown here (taken from `pb_simple.py`).
 
 ```python
-async def publish(mqtt_link, tim):
+@asyn.cancellable
+async def publish(_, mqtt_link, tim):
     count = 1
-    egate = mqtt_link.exit_gate
-    async with egate:
-        while True:
-            mqtt_link.publish('result', str(count), 0, qos)
-            count += 1
-            if not await egate.sleep(tim):
-                break
+    while True:
+        mqtt_link.publish('result', str(count), 0, qos)
+        count += 1
+        await asyn.sleep(tim)  # Use asyn.sleep for fast cancellation response
 ```
 
-The `ExitGate` object's `sleep()` method returns `False` if the ESP8266 fails.
-This should be used rather than `uasyncio.sleep()` for long delays to avoid
-delaying the response to an ESP8266 crash. The `egate.ending()` method returns
-`True` if the ESP8266 has failed and offers another way to terminate a coro,
-allowing the reset to proceed.
-
-Note that owing to [this issue](https://github.com/micropython/micropython/issues/3153)
-a `return` statement should not be issued within an `async with` block.
+Note the use of `asyn.sleep()` for delays of more than around 1s. This speeds
+the response to task cancellation, which would otherwise be pending until an
+`asyncio.sleep()` had elapsed.
 
 See `pb_simple.py` and the
 [synchronisation primitives docs](https://github.com/peterhinch/micropython-async/blob/master/PRIMITIVES.md).

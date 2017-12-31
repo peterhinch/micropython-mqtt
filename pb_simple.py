@@ -13,21 +13,19 @@ import pyb
 import uasyncio as asyncio
 from pbmqtt import MQTTlink
 from net_local import init  # Local network, broker and pin details.
+import asyn
 
 green = pyb.LED(2)  # Green: controlled by MQTT messages.
 amber = pyb.LED(3)  # On if WiFi up.
 qos = 1             # for test all messages have the same qos.
 
-# Because this coro normally runs forever, must use the exit gate.
-async def publish(mqtt_link, tim):
+@asyn.cancellable
+async def publish(_, mqtt_link, tim):
     count = 1
-    egate = mqtt_link.exit_gate  # See docs 2.3.5.
-    async with egate:
-        while True:
-            mqtt_link.publish('result', str(count), 0, qos)
-            count += 1
-            if not await egate.sleep(tim):
-                break
+    while True:
+        mqtt_link.publish('result', str(count), 0, qos)
+        count += 1
+        await asyn.sleep(tim)  # Use asyn.sleep for fast response to StopTask
 
 def cbgreen(topic, msg):
     if msg == 'on':
@@ -48,7 +46,7 @@ def start(mqtt_link):
     mqtt_link.subscribe('green', qos, cbgreen)  # LED control qos 1
     mqtt_link.wifi_handler(cbnet)  # Detect WiFi changes
     loop = asyncio.get_event_loop()
-    loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds
+    loop.create_task(asyn.Cancellable(publish, mqtt_link, 10)()) # Publish a count every 10 seconds
 
 MQTTlink.will('result', 'simple client died')
 init['user_start'] = start

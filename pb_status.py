@@ -10,6 +10,7 @@
 
 import pyb
 import uasyncio as asyncio
+import asyn
 from pbmqtt import MQTTlink, default_status_handler
 from net_local import init  # Local network, broker and pin details
 from status_values import *  # Because we're intercepting status.
@@ -49,21 +50,19 @@ async def status_handler(mqtt_link, status):
         return
     status_vals.append(status)  # We will publish non-routine values
 
-async def publish(mqtt_link, tim):
+@asyn.cancellable
+async def publish(_, mqtt_link, tim):
     global status_vals, gcount
     count = 1  # Count since last ESP8266 reboot
-    egate = mqtt_link.exit_gate
-    async with egate:
-        while True:
-            mqtt_link.publish('result', '{} {} {}'.format(gcount, count, reset_count), 0, qos)
-            count += 1
-            gcount += 1
-            if status_vals:
-                msg = 'status: {}'.format(repr(status_vals))
-                mqtt_link.publish('result', msg, 0, qos)
-                status_vals = []
-            if not await egate.sleep(tim):
-                break
+    while True:
+        mqtt_link.publish('result', '{} {} {}'.format(gcount, count, reset_count), 0, qos)
+        count += 1
+        gcount += 1
+        if status_vals:
+            msg = 'status: {}'.format(repr(status_vals))
+            mqtt_link.publish('result', msg, 0, qos)
+            status_vals = []
+        await asyn.sleep(tim)
 
 async def pulse(led, ms=3000):
     led.on()
@@ -79,7 +78,7 @@ def start(mqtt_link):
     global reset_count
     mqtt_link.subscribe('green', qos, cbgreen)    # LED control qos 1
     loop = asyncio.get_event_loop()
-    loop.create_task(publish(mqtt_link, 10)) # Publish a count every 10 seconds
+    loop.create_task(asyn.Cancellable(publish, mqtt_link, 10)()) # Publish a count every 10 seconds
     loop.create_task(pulse(blue))  # Flash blue LED each time we restart ESP8266
     reset_count += 1
 
