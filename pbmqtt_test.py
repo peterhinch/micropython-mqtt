@@ -25,13 +25,13 @@ reset_count = 0
 # User tasks. Instantiated as Cancellable tasks: these will be terminated
 # with the StopTask exception if the link stops running
 @asyn.cancellable
-async def ramcheck(_, mqtt_link):
+async def ramcheck(mqtt_link):
     while True:
         mqtt_link.command(MEM)
         await asyn.sleep(1800)  # use asyn.sleep() for fast cancellation
 
 @asyn.cancellable
-async def publish(_, mqtt_link, tim):
+async def publish(mqtt_link, tim):
     count = 1
     while True:
         mqtt_link.publish('result', '{} {}'.format(count, reset_count), 0, qos)

@@ -2,7 +2,7 @@
 # Demonstrates the interception of status messages.
 
 # Author: Peter Hinch.
-# Copyright Peter Hinch 2017 Released under the MIT license.
+# Copyright Peter Hinch 2017-2018 Released under the MIT license.
 
 # From PC issue (for example)
 # mosquitto_pub -h 192.168.0.9 -t green -m on
@@ -51,7 +51,7 @@ async def status_handler(mqtt_link, status):
     status_vals.append(status)  # We will publish non-routine values
 
 @asyn.cancellable
-async def publish(_, mqtt_link, tim):
+async def publish(mqtt_link, tim):
     global status_vals, gcount
     count = 1  # Count since last ESP8266 reboot
     while True:

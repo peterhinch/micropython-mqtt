@@ -1,7 +1,7 @@
 # pb_simple.py Minimal publish/subscribe test program for Pyboard MQTT link
 
 # Author: Peter Hinch.
-# Copyright Peter Hinch 2017 Released under the MIT license.
+# Copyright Peter Hinch 2017-2018 Released under the MIT license.
 
 # From PC issue (for example)
 # Turn the Pyboard green LED on (or off):
@@ -20,7 +20,7 @@ amber = pyb.LED(3)  # On if WiFi up.
 qos = 1             # for test all messages have the same qos.
 
 @asyn.cancellable
-async def publish(_, mqtt_link, tim):
+async def publish(mqtt_link, tim):
     count = 1
     while True:
         mqtt_link.publish('result', str(count), 0, qos)

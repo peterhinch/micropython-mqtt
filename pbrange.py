@@ -38,7 +38,7 @@ def cbnet(state, objlink):
         out_time = time()
 
 @asyn.cancellable
-async def publish(_, mqtt_link, tim):
+async def publish(mqtt_link, tim):
     global status_vals, gcount
     count = 1  # Count since last ESP8266 reboot
     while True:

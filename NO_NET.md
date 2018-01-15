@@ -34,7 +34,7 @@ ESP8266 in the event of fatal errors or crashes.
 
 # Project status
 
-V0.21 Sept 2017
+V0.22 Jan 2018
 
 Now uses the `resilient` MQTT library. The ESP8266 is now rebooted only in the
 event of ESP8266 failure such as a fatal input buffer overflow. The `resilient`
@@ -42,14 +42,14 @@ library has some significant bugfixes.
 
 Allows custom args to `subscribe` and `wifi_handler` callbacks.
 
+The Pyboard cient requires `uasyncio` V1.7.1 or newer with firmware build dated
+7th Jan 2018 or later.
+
 **API Changes**
 
-The `subscribe` method argument order has changed.
-
-User coros which access the API should be started in the user start coro and
-should have provision to quit if the ESP8266 fails: see `pb_simple.py`.
-
-Initialisation is now via a dictionary.
+The Pyboard code now uses the new task cancellation functionality in`uasyncio`.
+User programs will need to be adapted to use the `@asyn.cancellable` decorator:
+see `pb_simple.py`.
 
 **Test status**
 

@@ -5,7 +5,7 @@
 # On fatal error performs hardware reset on ESP8266.
 
 # Author: Peter Hinch.
-# Copyright Peter Hinch 2017 Released under the MIT license.
+# Copyright Peter Hinch 2017-2018 Released under the MIT license.
 
 # SynCom throughput 118 char/s measured 8th Aug 2017 sending a publication
 # while application running. ESP8266 running at 160MHz. (Chars are 7 bits).
@@ -16,7 +16,6 @@ import pyb
 from machine import Pin, Signal
 from syncom import SynCom
 import asyn
-#from asyn import StopTask, Cancellable, sleep
 from status_values import *  # Numeric status values shared with user code.
 
 init = {
@@ -74,19 +73,6 @@ async def heartbeat():
         await asyncio.sleep_ms(500)
         led.toggle()
 
-# awaitable task cancellation
-class Killer():
-    def __await__(self):
-        yield from asyn.Cancellable.cancel_all()
-
-    __iter__ = __await__
-
-# Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
-def validate(s, item):
-    s = s.encode('UTF8')
-    if any(True for a in s if a == 0 or a >= 127):
-        raise ValueError('Illegal character in {} in {}'.format(s, item))
-
 # Replace to handle status changes. In the case of fatal status values the
 # ESP8266 will be rebooted on return. You may want to pause for remedial
 # action before the reboot. Information statuses can be ignored with rapid
@@ -125,7 +111,7 @@ class RTCsynchroniser():
             loop.create_task(asyn.Cancellable(self._do_rtc)())
 
     @asyn.cancellable
-    async def _do_rtc(self, task_no):
+    async def _do_rtc(self):
         lnk = self._lnk
         lnk.vbprint('Start RTC synchroniser')
         self._time_valid = not self._rtc_last_syn == 0  # Valid on restart
@@ -168,6 +154,19 @@ class RTCsynchroniser():
     def _rtc_syn(self):
         return self._rtc_last_syn > 0
 
+# Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
+def validate(s, item):
+    s = s.encode('UTF8')
+    if any(True for a in s if a == 0 or a >= 127):
+        raise ValueError('Illegal character in {} in {}'.format(s, item))
+
+# awaitable task cancellation
+class Killer():
+    def __await__(self):
+        yield from asyn.Cancellable.cancel_all()
+
+    __iter__ = __await__
+
 
 class MQTTlink(object):
     lw_topic = None
@@ -200,13 +199,11 @@ class MQTTlink(object):
                               d['reset'], wdog, True, self.verbose)
         loop = asyncio.get_event_loop()
         loop.create_task(heartbeat())
-#        self.barrier = Barrier(ntasks + 2)  # User tasks + self._publish + RTCsynchroniser._do_rtc
         # Start the SynCom instance. This will run self.start(). If an error
         # occurs self.quit() is called which cancels all NamedTask instances
         # and returns to Syncom's start() method. This waits on Cancellable.cancel_all()
         # before forcing a failure on the ESP8266 and re-running self.start()
         # to perform a clean restart.
-#        loop.create_task(self.channel.start(self.start, asyn.Cancellable.cancel_all()))
         loop.create_task(self.channel.start(self.start, Killer()))
         self.subs = {} # Callbacks indexed by topic
         self.pubs = []
@@ -308,7 +305,7 @@ class MQTTlink(object):
 
 # PUBLISH
     @asyn.cancellable
-    async def _publish(self, task_no):
+    async def _publish(self):
         while True:
             if len(self.pubs): 
                 args = self.pubs.pop(0)
@@ -379,7 +376,6 @@ class MQTTlink(object):
         self.vbprint('About to run user program.')
         if self.user_start is not None:
             self.user_start[0](self, *self.user_start[1])  # User start function
-
         loop = asyncio.get_event_loop()
         loop.create_task(asyn.Cancellable(self._publish)())
         self.rtc_synchroniser._start()  # Run coro if synchronisation is required.
@@ -414,7 +410,6 @@ class MQTTlink(object):
                     return self.quit('Got unhandled command, resetting ESP8266:', command, action)  # ESP8266 has failed
 
             await asyncio.sleep_ms(20)
-
             if not self._running:  # self.quit() has been called.
                 await self.s_han(self, NO_NET)
                 return self.quit('Not running, resetting ESP8266')
