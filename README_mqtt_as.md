@@ -10,7 +10,7 @@ but duplication can occur. Level 2 avoids duplication; it is unsuported by the
 official driver and by this module. Duplicates can readily be handled at the
 application level.
 
-###### [Main README](../README.md)
+###### [Main README](./README.md)
 
 ## 1.1 Rationale
 
@@ -97,12 +97,15 @@ The module works without recourse to cross compilation or frozen bytecode.
 
  1. `mqtt_as.py` The main module.
  2. `config.py` Stores cross-project settings.
- 3. `clean.py` Test/demo program using MQTT Clean Session.
- 4. `unclean.py` Test/demo program with MQTT Clean Session `False`.
- 5. `range.py` For WiFi range testing.
- 6. `pubtest` Bash script illustrating publication with Mosquitto.
- 7. `main.py` Example for auto-starting an application.
- 8. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
+ 3. `remote_mqtt` Folder containing all files of mqtt for platforms without WIFI 
+ 4. `sonoff` Folder containing test files for sonoff devices
+ 5. `tests` Folder containing test files for mqtt_as
+ 5.1. `clean.py` Test/demo program using MQTT Clean Session.
+ 5.2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
+ 5.3. `range.py` For WiFi range testing.
+ 5.4. `pubtest` Bash script illustrating publication with Mosquitto.
+ 5.5. `main.py` Example for auto-starting an application.
+ 5.6. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
 
 ## 2.2 Installation
 
@@ -322,7 +325,7 @@ connectivity has been lost if no messages have been received in that period.
 The module attempts to keep the connection open by issuing an MQTT ping upto
 four times during the keepalive interval. (It pings if the last response from
 the broker was over 1/4 of the keepalive period). More frequent pings may be
-desirable to educe latency in subscribe-only applications. This may be achieved
+desirable to reduce latency in subscribe-only applications. This may be achieved
 using the `ping_interval` configuration option.
 
 If the broker times out it will issue the "last will" publication (if any).
