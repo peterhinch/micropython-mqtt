@@ -158,7 +158,7 @@ config['connect_coro'] = conn_han
 config['server'] = SERVER
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
-client = MQTTClient(config)
+client = MQTTClient(**config)
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
