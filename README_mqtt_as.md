@@ -73,18 +73,25 @@ experience. Feedback on this issue would be very welcome.
 
 The module is too large to compile on the ESP8266 and should be precompiled or
 preferably frozen as bytecode.
+To save about 150-250 Bytes on the ESP8266 there is a minimal version `mqtt_as_minimal.py`
+that works exactly like the full version but has all code not related to ESP8266 removed
+as well as some functions that are not commonly used.
 
 ## 1.5 ESP32 issues
 
-This platform has issues. During WiFi and broker connection and reconnection it
-has proved necessary to issue `utime.sleep_ms(20)`. After sending data to the
-socket a delay of 20ms also proved necessary to prevent a timeout occurring
-while waiting for a response (without the delay, the incoming data is never
-recognised). These delays block the scheduler. 
+When using the official port of the ESP32 this platform has issues. 
+During WiFi and broker connection and reconnection it has proved necessary 
+to issue `utime.sleep_ms(20)`. After sending data to the socket a delay 
+of 20ms also proved necessary to prevent a timeout occurring while waiting 
+for a response (without the delay, the incoming data is never recognised). 
+These delays block the scheduler. 
 
 It recovers from outages but this hasn't been tested as thoroughly as on the
 ESP8266. The board must be power cycled between runs of an application. Issues
 have been raised.
+
+The [loboris fork](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo)
+does not suffer from these problems.
 
 Currently (5th Sept 2017) DNS lookups don't work (`usocket.getaddrinfo()`).
 Hence broker addresses must be numeric IP's.
@@ -96,16 +103,18 @@ The module works without recourse to cross compilation or frozen bytecode.
 ## 2.1 Program files
 
  1. `mqtt_as.py` The main module.
- 2. `config.py` Stores cross-project settings.
- 3. `remote_mqtt` Folder containing all files of mqtt for platforms without WIFI 
- 4. `sonoff` Folder containing test files for sonoff devices
- 5. `tests` Folder containing test files for mqtt_as
- 5.1. `clean.py` Test/demo program using MQTT Clean Session.
- 5.2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
- 5.3. `range.py` For WiFi range testing.
- 5.4. `pubtest` Bash script illustrating publication with Mosquitto.
- 5.5. `main.py` Example for auto-starting an application.
- 5.6. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
+ 2. `mqtt_as_minimal.py` The main module cut down for the ESP8266 to save RAM
+ 3. `config.py` Stores cross-project settings.
+ 4. `tests` Folder containing test files for mqtt_as
+ 4.1. `clean.py` Test/demo program using MQTT Clean Session.
+ 4.2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
+ 4.3. `range.py` For WiFi range testing.
+ 4.4. `pubtest` Bash script illustrating publication with Mosquitto.
+ 4.5. `main.py` Example for auto-starting an application.
+ 4.6. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
+ 5. `remote_mqtt` Folder containing all files of mqtt for platforms without WIFI 
+ 6. `sonoff` Folder containing test files for sonoff devices
+ 
 
 ## 2.2 Installation
 
@@ -113,12 +122,17 @@ The only dependency is uasyncio from the [MicroPython library](https://github.co
 Ensure this is installed on the device.
 
 The module is too large to compile on the ESP8266. It must either be cross
-compiled or (preferably) built as frozen bytecode: copy `mqtt_as.py` to
-`esp8266/modules` in the source tree, build and deploy. Copy `config.py` to the
-filesystem for convenience.
+compiled or (preferably) built as frozen bytecode: copy the repo to
+`esp8266/modules` in the source tree, build and deploy. If your firmware 
+gets too big, remove all unnecessary files of just copy the ones you need.
+Minimal requirements:
+- directory `micropython_mqtt_as` with these files in it:
+    - `__init__.py` to make it a package
+    - `mqtt_as.py` or `mqtt_as_minimal.py`
+    - `config.py` for convenience, optional
 
-On the ESP32 simply copy the Python source to the filesystem (items 1 and 2
-above as a minimum).
+
+On the ESP32 simply copy the above listed directory structure to the filesystem.
 
 ## 2.3 Example Usage
 
@@ -131,8 +145,8 @@ the network if it has to reconnect). The ESP32 behaves differently and requires
 WiFi config data. Edit `config.py` to suit.
 
 ```python
-from mqtt_as import MQTTClient
-from config import config
+from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config
 import uasyncio as asyncio
 
 SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
@@ -179,9 +193,12 @@ this.
 
 ## 3.1 Constructor
 
-This takes a dictionary as argument. The default is `mqtt_as.config`. Normally
-an application imports this and modifies selected entries as required. Entries
-are:
+This takes all keywords found in the dictionary in `config.py` as argument. 
+As a convenience you can also use this dictionary by importing it and changing
+the values. You then call the constructor by `MQTTClient(**config)`, this
+automatically matches the contents of the dict to the keywords of the constructor.
+
+Entries of config dictionary are:
 
 **WiFi Parameters**
 
