@@ -37,7 +37,7 @@ Its main drawback is code size. Run as frozen bytecode it uses about 50% of the
 RAM on the ESP8266. On ESP32 it runs as a standard Python module with 64K of
 RAM free.
 
-It is documented [here](./mqtt_as/README.md).
+It is documented [here](./README_mqtt_as.md).
 
 ## 2. MQTT for generic MicroPython targets
 
@@ -49,4 +49,4 @@ five GPIO pins accessible via the `machine` library should suffice.
 
 The driver is non-blocking and is designed for applications using uasyncio.
 
-It is documented [here](./NO_NET.md).
+It is documented [here](./remote_mqtt/NO_NET.md).

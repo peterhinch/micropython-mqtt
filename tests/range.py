@@ -12,28 +12,31 @@
 # blue LED pulse == message received
 # Publishes connection statistics.
 
-from mqtt_as import MQTTClient, config
-from config import config
+from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config
 import uasyncio as asyncio
 from machine import Pin
 
 SERVER = '192.168.0.9'  # Change to suit
 # SERVER = 'iot.eclipse.org'
-wifi_led = Pin(0, Pin.OUT, value = 0)  # Red LED for WiFi fail/not ready yet
-blue_led = Pin(2, Pin.OUT, value = 1)  # Message received
+wifi_led = Pin(0, Pin.OUT, value=0)  # Red LED for WiFi fail/not ready yet
+blue_led = Pin(2, Pin.OUT, value=1)  # Message received
 
 loop = asyncio.get_event_loop()
 
 outages = 0
+
 
 async def pulse():  # This demo pulses blue LED each time a subscribed msg arrives.
     blue_led(False)
     await asyncio.sleep(1)
     blue_led(True)
 
+
 def sub_cb(topic, msg):
     print((topic, msg))
     loop.create_task(pulse())
+
 
 async def wifi_han(state):
     global outages
@@ -45,8 +48,10 @@ async def wifi_han(state):
         print('WiFi or broker is down.')
     await asyncio.sleep(1)
 
+
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
+
 
 async def main(client):
     try:
@@ -59,7 +64,7 @@ async def main(client):
         await asyncio.sleep(5)
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos = 1)
+        await client.publish('result', '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos=1)
         n += 1
 
 # Define configuration
