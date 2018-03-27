@@ -106,13 +106,13 @@ The module works without recourse to cross compilation or frozen bytecode.
  2. `mqtt_as_minimal.py` The main module cut down for the ESP8266 to save RAM
  3. `config.py` Stores cross-project settings.
  4. `tests` Folder containing test files for mqtt_as
- 4.1. `clean.py` Test/demo program using MQTT Clean Session.
- 4.2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
- 4.3. `range.py` For WiFi range testing.
- 4.4. `pubtest` Bash script illustrating publication with Mosquitto.
- 4.5. `main.py` Example for auto-starting an application.
- 4.6. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
- 5. `remote_mqtt` Folder containing all files of mqtt for platforms without WIFI 
+    1. `clean.py` Test/demo program using MQTT Clean Session.
+    2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
+    3. `range.py` For WiFi range testing.
+    4. `pubtest` Bash script illustrating publication with Mosquitto.
+    5. `main.py` Example for auto-starting an application.
+    6. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
+ 5. `remote_mqtt` Folder containing all files of mqtt for platforms without WIFI and tests
  6. `sonoff` Folder containing test files for sonoff devices
  
 
