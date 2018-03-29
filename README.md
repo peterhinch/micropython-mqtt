@@ -1,3 +1,29 @@
+# Changes to base repo of Peter Hinich
+
+1. Sorted files and made a structure so you know which file belongs where without reading the documentation every time
+2. Made repo a module to be used like 
+*from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config*
+making it possible to just clone the repo and copy it to `espXXXX/modules` also reducing file clutter in this directory.
+3. Removed unnecessary workarounds of official ESP32 port for ESP32 loboris fork (Feel free to report issues).
+4. Changed MQTTClient constructor initialization from using a dictionary to using keywords with default parameters. It's still possible to use the dictionary for initialization with almost no changes to existing codebase
+5. Made a minimal version of mqtt_as for the ESP8266 to save some RAM
+6. All other files are updated to the new changes and are usable (e.g. tests).
+7. Updated documentation to reflect all changes
+
+Motivation for the changes:
+For my project I had to adapt the library to use it on the ESP32 with loboris fork but also use it on my ESP8266 that is short on RAM all the time.
+Therefore I had the following motivation for each of the above mentioned changes:
+1. I don't like to walk through a mess of files not knowing which one is important or where it belongs to and I don't want to read all the documentation just to know which files belong where.
+2. Like all modules this should be a directory as well, making usage easier.
+3. Made it work with loboris fork but did not want to use workarounds that are not needed on this fork. (Peter Hinich made it work with loboris port as well but has the workarounds still in it to be safe)
+4. I felt that this kind of initialization is the more pythonic way of doing things but apart from that it has an important advantage on the ESP8266, removing the config dict completely uses 100-200 Bytes less, which is important on ESP8266.
+5. This version for the ESP8266 has all non related code (workarounds for ESP32) and also some not commonly functions removed, saving another 150-250 Bytes so that after all changes I get 250-450 Bytes more RAM which is about 2% of the available RAM.
+6. Although I do not need any other file I felt that it is important to finish the work I started and not leave half the repo unusable.
+7. Wouldn't want issues because of wrong documentation or frustrated users. Have fun with it :D
+
+
+
 # Introduction
 
 MQTT is an easily used networking protocol designed for IOT (internet of
