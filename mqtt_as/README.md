@@ -91,6 +91,15 @@ Hence broker addresses must be numeric IP's.
 
 The module works without recourse to cross compilation or frozen bytecode.
 
+There is an experimental [fork](https://github.com/kevinkk525/micropython-mqtt.git)
+for the Loboris port of the ESP32 firmware. This has removed the 20ms blocking
+`sleep_ms(20)` calls apparently without ill-effects. However exhaustive testing
+has not been performed.
+
+As of (29th March 2018) both the official and the Loboris port still suffer
+from some stability issues. I plan to issue an update, hopefully later this year,
+when the ESP32's inherent stability has improved.
+
 # 2. Getting started
 
 ## 2.1 Program files

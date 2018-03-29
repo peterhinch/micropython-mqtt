@@ -25,7 +25,7 @@ _SOCKET_POLL_DELAY = const(5)  # 100ms added greatly to publish latency
 # Legitimate errors while waiting on a socket. See uasyncio __init__.py open_connection().
 BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT]
 
-ESP32 = platform == 'esp32'
+ESP32 = platform == 'esp32' or platform == 'esp32_LoBo'
 
 # Set up special handling for sonoff and similar devices requiring periodic yield to RTOS
 SONOFF = False
