@@ -8,7 +8,8 @@
 
 import gc
 import ubinascii
-from mqtt_as import MQTTClient, config
+from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config
 from machine import Pin, unique_id, freq
 import uasyncio as asyncio
 gc.collect()
@@ -21,7 +22,8 @@ import ustruct as struct
 from status_values import *  # Numeric status values shared with user code.
 
 _WIFI_DELAY = 15  # Time (s) to wait for default network
-blue = Pin(2, Pin.OUT, value = 1)
+blue = Pin(2, Pin.OUT, value=1)
+
 
 def loads(s):
     d = {}
@@ -29,8 +31,11 @@ def loads(s):
     return d["v"]
 
 # Format an arbitrary list of positional args as a status_values.SEP separated string
+
+
 def argformat(*a):
     return SEP.join(['{}' for x in range(len(a))]).format(*a)
+
 
 async def heartbeat():
     led = Pin(0, Pin.OUT)
@@ -50,7 +55,7 @@ class Client(MQTTClient):
         config['wifi_coro'] = self.wifi_han
         config['connect_coro'] = self.conn_han
         config['client_id'] = ubinascii.hexlify(unique_id())
-        super().__init__(config)
+        super().__init__(**config)
 
     # Get NTP time or 0 on any error.
     async def get_time(self):
@@ -101,13 +106,14 @@ class Client(MQTTClient):
     def subs_cb(self, topic, msg):
         self.channel.send(argformat(SUBSCRIPTION, topic.decode('UTF8'), msg.decode('UTF8')))
 
+
 class Channel(SynCom):
     def __init__(self):
         mtx = Pin(14, Pin.OUT)              # Define pins
         mckout = Pin(15, Pin.OUT, value=0)  # clocks must be initialised to 0
         mrx = Pin(13, Pin.IN)
         mckin = Pin(12, Pin.IN)
-        super().__init__(True, mckin, mckout, mrx, mtx, string_mode = True)
+        super().__init__(True, mckin, mckout, mrx, mtx, string_mode=True)
         self.cstatus = False  # Connection status
         self.client = None
 
@@ -189,7 +195,7 @@ class Channel(SynCom):
             self.send(argformat(STATUS, SPECNET))
             # Pause for confirmation. User may opt to reboot instead.
             istr = await self.await_obj(100)
-            ap = WLAN(AP_IF) # create access-point interface
+            ap = WLAN(AP_IF)  # create access-point interface
             ap.active(False)         # deactivate the interface
             sta_if.active(True)
             sta_if.connect(ssid, pw)
@@ -218,6 +224,7 @@ class Channel(SynCom):
             gc.collect()
             gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
             await asyncio.sleep(1)
+
 
 loop = asyncio.get_event_loop()
 loop.create_task(heartbeat())

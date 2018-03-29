@@ -34,7 +34,8 @@
 # mosquitto_sub -h 192.168.0.9 -t sonoff_result -q 1
 
 import gc
-from mqtt_as import MQTTClient, config, sonoff
+from micropython_mqtt_as.mqtt_as import MQTTClient, sonoff
+from micropython_mqtt_as.config import config
 sonoff()  # Specify special handling
 gc.collect()
 import uasyncio as asyncio
@@ -56,20 +57,22 @@ QOS = 1
 
 # Default topic names. Caller can override. Set name to None if unused.
 topics = {
-    'led' : b'sonoff_led',  # Incoming subscriptions
-    'relay' : b'sonoff_relay',
-    'debug' : b'sonoff_result',  # Outgoing publications
-    'button' : b'sonoff_result',
-    'remote' : b'sonoff_result',  # Set to None if no R/C decoder fitted
-    'will' : b'sonoff_result',
-    }
+    'led': b'sonoff_led',  # Incoming subscriptions
+    'relay': b'sonoff_relay',
+    'debug': b'sonoff_result',  # Outgoing publications
+    'button': b'sonoff_result',
+    'remote': b'sonoff_result',  # Set to None if no R/C decoder fitted
+    'will': b'sonoff_result',
+}
+
 
 class Sonoff(MQTTClient):
-    led = Signal(Pin(13, Pin.OUT, value = 1), invert = True)
-    relay = Pin(12, Pin.OUT, value = 0)
+    led = Signal(Pin(13, Pin.OUT, value=1), invert=True)
+    relay = Pin(12, Pin.OUT, value=0)
     button = Pushbutton(Pin(0, Pin.IN))
     # Pin 5 on serial connector is GPIO14. Pullup in case n/c
-    pin5 = Pin(14, Pin.IN, pull = Pin.PULL_UP)
+    pin5 = Pin(14, Pin.IN, pull=Pin.PULL_UP)
+
     def __init__(self, dict_topics):
         self.topics = dict_topics
         # OVERRIDE CONFIG DEFAULTS.
@@ -90,7 +93,7 @@ class Sonoff(MQTTClient):
         # ping_interval = 5 ensures that LED starts flashing promptly on an outage.
         # This interval is much too fast for a public broker on the WAN.
 #        config['ping_interval'] = 5
-        super().__init__(config)
+        super().__init__(**config)
         if self.topics['button'] is not None:
             # CONFIGURE PUSHBUTTON
             self.button.press_func(self.btn_action, ('Button press',))
@@ -108,7 +111,7 @@ class Sonoff(MQTTClient):
     def pub_msg(self, topic_name, msg):
         topic = self.topics[topic_name]
         if topic is not None and not self.outage:
-            loop.create_task(self.publish(topic, msg, qos = QOS))
+            loop.create_task(self.publish(topic, msg, qos=QOS))
 
     # Callback for message from IR remote.
     def rc_cb(self, data, addr):
@@ -194,6 +197,8 @@ class Sonoff(MQTTClient):
             n += 1
 
 # Topic names in dict enables multiple Sonoff units to run this code. Only main.py differs.
+
+
 def run(dict_topics=topics):
     MQTTClient.DEBUG = True
     client = Sonoff(dict_topics)
