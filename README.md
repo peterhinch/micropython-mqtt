@@ -1,4 +1,4 @@
-# Changes to base repo of Peter Hinich
+# Changes to base repo of Peter Hinch
 
 1. Sorted files and made a structure so you know which file belongs where without reading the documentation every time
 2. Made repo a module to be used like 
@@ -16,7 +16,7 @@ For my project I had to adapt the library to use it on the ESP32 with loboris fo
 Therefore I had the following motivation for each of the above mentioned changes:
 1. I don't like to walk through a mess of files not knowing which one is important or where it belongs to and I don't want to read all the documentation just to know which files belong where.
 2. Like all modules this should be a directory as well, making usage easier.
-3. Made it work with loboris fork but did not want to use workarounds that are not needed on this fork. (Peter Hinich made it work with loboris port as well but has the workarounds still in it to be safe)
+3. Made it work with loboris fork but did not want to use workarounds that are not needed on this fork. (Peter Hinch made it work with loboris port as well but has the workarounds still in it to be safe)
 4. I felt that this kind of initialization is the more pythonic way of doing things but apart from that it has an important advantage on the ESP8266, removing the config dict completely uses 100-200 Bytes less, which is important on ESP8266.
 5. This version for the ESP8266 has all non related code (workarounds for ESP32) and also some not commonly functions removed, saving another 150-250 Bytes so that after all changes I get 250-450 Bytes more RAM which is about 2% of the available RAM.
 6. Although I do not need any other file I felt that it is important to finish the work I started and not leave half the repo unusable.
