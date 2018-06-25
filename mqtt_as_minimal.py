@@ -5,16 +5,20 @@
 import gc
 import usocket as socket
 import ustruct as struct
+
 gc.collect()
 from ubinascii import hexlify
 import uasyncio as asyncio
+
 gc.collect()
 from utime import ticks_ms, ticks_diff, sleep_ms
 from uerrno import EINPROGRESS, ETIMEDOUT
+
 gc.collect()
 from micropython import const
 from machine import unique_id
 import network
+
 gc.collect()
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
@@ -43,7 +47,7 @@ def qos_check(qos):
         raise ValueError('Only qos 0 and 1 are supported.')
 
 
-class Lock():
+class Lock:
     def __init__(self):
         self._locked = False
 
@@ -61,6 +65,9 @@ class Lock():
 
     def locked(self):
         return self._locked
+
+    def release(self):  # workaround until fixed https://github.com/micropython/micropython/issues/3153
+        self._locked = False
 
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.

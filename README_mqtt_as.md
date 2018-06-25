@@ -75,7 +75,7 @@ The module is too large to compile on the ESP8266 and should be precompiled or
 preferably frozen as bytecode.
 To save about 150-250 Bytes on the ESP8266 there is a minimal version `mqtt_as_minimal.py`
 that works exactly like the full version but has all code not related to ESP8266 removed
-as well as some functions that are not commonly used.
+as well as some functions that are not commonly used and all debug messages.
 
 ## 1.5 ESP32 issues
 

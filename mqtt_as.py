@@ -73,7 +73,7 @@ def qos_check(qos):
         raise ValueError('Only qos 0 and 1 are supported.')
 
 
-class Lock():
+class Lock:
     def __init__(self):
         self._locked = False
 
@@ -91,6 +91,9 @@ class Lock():
 
     def locked(self):
         return self._locked
+
+    def release(self):  # workaround until fixed https://github.com/micropython/micropython/issues/3153
+        self._locked = False
 
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.
