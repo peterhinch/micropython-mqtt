@@ -1,3 +1,7 @@
+# WARNING: 
+The latest commits made this repository <b>NOT USEABLE AS A DROP-IN REPLACEMENT</b> for the original module of Peter Hinch.
+This is due to the changes in point 7 explained below.
+
 # Changes to base repo of Peter Hinch
 
 1. Sorted files and made a structure so you know which file belongs where without reading the documentation every time
@@ -9,7 +13,7 @@ making it possible to just clone the repo and copy it to `espXXXX/modules` also 
 4. Changed MQTTClient constructor initialization from using a dictionary to using keywords with default parameters. It's still possible to use the dictionary for initialization with almost no changes to existing codebase
 5. Made a minimal version of mqtt_as for the ESP8266 to save some RAM
 6. Added support for "unsubscribe"
-7. Added support for recognizing retained publications (makes change in "subs_cb" neccessary as it now has to take 3 args)
+7. Added support for recognizing retained publications (makes change in "subs_cb" necessary as it now has to take 3 args [topic,msg,retained])
 8. All other files are updated to the new changes and are usable (e.g. tests).
 9. Updated documentation to reflect all changes
 
