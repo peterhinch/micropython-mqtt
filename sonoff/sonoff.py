@@ -36,15 +36,18 @@
 import gc
 from micropython_mqtt_as.mqtt_as import MQTTClient, sonoff
 from micropython_mqtt_as.config import config
+
 sonoff()  # Specify special handling
 gc.collect()
 import uasyncio as asyncio
 from machine import Pin, Signal
 from aswitch import Pushbutton
+
 gc.collect()
 from aremote import *
 from network import WLAN, STA_IF
 from utime import ticks_ms, ticks_diff
+
 gc.collect()
 
 SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
@@ -92,7 +95,7 @@ class Sonoff(MQTTClient):
         config['clean_init'] = True
         # ping_interval = 5 ensures that LED starts flashing promptly on an outage.
         # This interval is much too fast for a public broker on the WAN.
-#        config['ping_interval'] = 5
+        #        config['ping_interval'] = 5
         super().__init__(**config)
         if self.topics['button'] is not None:
             # CONFIGURE PUSHBUTTON
@@ -128,7 +131,7 @@ class Sonoff(MQTTClient):
         self.pub_msg('button', msg)
 
     # Callback for subscribed messages
-    def sub_cb(self, topic, msg):
+    def sub_cb(self, topic, msg, retained):
         if topic == self.topics['relay']:
             if msg == M_ON or msg == M_OFF:
                 self.relay(int(msg == M_ON))
@@ -195,6 +198,7 @@ class Sonoff(MQTTClient):
                 n, self.REPUB_COUNT, self.outages, gc.mem_free(), gc.mem_alloc(), self.max_outage)
             self.pub_msg('debug', msg)
             n += 1
+
 
 # Topic names in dict enables multiple Sonoff units to run this code. Only main.py differs.
 

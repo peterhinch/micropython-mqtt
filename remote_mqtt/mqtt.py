@@ -103,13 +103,13 @@ class Client(MQTTClient):
         for topic, qos in self.subscriptions.items():
             await self.subscribe(topic, qos)
 
-    def subs_cb(self, topic, msg):
+    def subs_cb(self, topic, msg, retained):
         self.channel.send(argformat(SUBSCRIPTION, topic.decode('UTF8'), msg.decode('UTF8')))
 
 
 class Channel(SynCom):
     def __init__(self):
-        mtx = Pin(14, Pin.OUT)              # Define pins
+        mtx = Pin(14, Pin.OUT)  # Define pins
         mckout = Pin(15, Pin.OUT, value=0)  # clocks must be initialised to 0
         mrx = Pin(13, Pin.IN)
         mckin = Pin(12, Pin.IN)
@@ -117,8 +117,8 @@ class Channel(SynCom):
         self.cstatus = False  # Connection status
         self.client = None
 
-# Task runs continuously. Process incoming Pyboard messages.
-# Started by main_task() after client instantiated.
+    # Task runs continuously. Process incoming Pyboard messages.
+    # Started by main_task() after client instantiated.
     async def from_pyboard(self):
         client = self.client
         while True:
@@ -142,9 +142,9 @@ class Channel(SynCom):
             else:
                 self.send(argformat(STATUS, UNKNOWN, 'Unknown command:', istr))
 
-# Runs when channel has synchronised. No return: Pyboard resets ESP on fail.
-# Get parameters from Pyboard. Process them. Connect. Instantiate client. Start
-# from_pyboard() task. Wait forever, updating connected status.
+    # Runs when channel has synchronised. No return: Pyboard resets ESP on fail.
+    # Get parameters from Pyboard. Process them. Connect. Instantiate client. Start
+    # from_pyboard() task. Wait forever, updating connected status.
     async def main_task(self, _):
         got_params = False
         # Await connection parameters (init record)
@@ -196,7 +196,7 @@ class Channel(SynCom):
             # Pause for confirmation. User may opt to reboot instead.
             istr = await self.await_obj(100)
             ap = WLAN(AP_IF)  # create access-point interface
-            ap.active(False)         # deactivate the interface
+            ap.active(False)  # deactivate the interface
             sta_if.active(True)
             sta_if.connect(ssid, pw)
             while not sta_if.isconnected():

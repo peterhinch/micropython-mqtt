@@ -91,7 +91,7 @@ ESP8266. The board must be power cycled between runs of an application. Issues
 have been raised.
 
 The [loboris fork](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo)
-does not suffer from these problems.
+does not suffer from these problems as far as I can tell by short tests (more needed).
 
 Currently (5th Sept 2017) DNS lookups don't work (`usocket.getaddrinfo()`).
 Hence broker addresses must be numeric IP's.
@@ -151,8 +151,8 @@ import uasyncio as asyncio
 
 SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
 
-def callback(topic, msg):
-    print((topic, msg))
+def callback(topic, msg, retained):
+    print((topic, msg, retained))
 
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
@@ -230,8 +230,9 @@ below.
 **Callbacks and coros**  
 
 'subs_cb' [a null lambda function] Subscription callback. Runs when a message
-is received whose topic matches a subscription. The callback must take two
-args, `topic` and `message`. These will be `bytes` instances.  
+is received whose topic matches a subscription. The callback must take three
+args, `topic`,`message` and `retained`. These will be `bytes` instances, 
+except `retained` which will be `bool` instance.  
 'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
 state changes. The coro receives a single `bool` arg being the network state.  
 'connect_coro' [a null coro] A coroutine. Defines a task to run when a
@@ -326,6 +327,16 @@ returns `False` otherwise it returns `True`.
 Returns `True` if internet connectivity is available, else `False`. It first
 checks current WiFi and broker connectivity. If present, it sends a DNS query
 to '8.8.8.8' and checks for a valid response.
+
+### 3.2.9 unsubscribe (async)
+
+Unsubscribes a topic, so no messages will be received anymore.
+
+The coro will pause until a `UNSUBACK` has been received from the broker, if
+necessary reconnecting to a failed network.
+
+Args:
+ 1. `topic`
 
 ## 3.3 Class Attributes
 

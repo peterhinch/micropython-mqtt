@@ -402,6 +402,23 @@ class MQTT_base:
             if self._timeout(t):
                 raise OSError(-1)
 
+    # Can raise OSError if WiFi fails. Subclass traps
+    async def unsubscribe(self, topic):
+        self.suback = False
+        pkt = bytearray(b"\xa2\0\0\0")
+        self.pid = newpid(self.pid)
+        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), self.pid)
+        self.pkt = pkt
+        async with self.lock:
+            await self._as_write(pkt)
+            await self._send_str(topic)
+
+        t = ticks_ms()
+        while not self.suback:
+            await asyncio.sleep_ms(200)
+            if self._timeout(t):
+                raise OSError(-1)
+
     # Wait for a single incoming MQTT message and process it.
     # Subscribed messages are delivered to a callback previously
     # set by .setup() method. Other (internal) MQTT
@@ -433,6 +450,12 @@ class MQTT_base:
                 raise OSError(-1)
             self.suback = True
 
+        if op == 0xB0:  # UNSUBACK
+            resp = await self._as_read(3)
+            if resp[1] != self.pkt[2] or resp[2] != self.pkt[3]:
+                raise OSError(-1)
+            self.suback = True
+
         if op & 0xf0 != 0x30:
             return
         sz = await self._recv_len()
@@ -445,12 +468,13 @@ class MQTT_base:
             pid = pid[0] << 8 | pid[1]
             sz -= 2
         msg = await self._as_read(sz)
-        self._cb(topic, msg)
-        if op & 6 == 2:
+        retained = op & 0x01
+        self._cb(topic, msg, bool(retained))
+        if op & 6 == 2:  # qos 1
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
             await self._as_write(pkt)
-        elif op & 6 == 4:
+        elif op & 6 == 4:  # qos 2 not supported
             raise OSError(-1)
 
 
@@ -496,7 +520,7 @@ class MQTTClient(MQTT_base):
             await asyncio.sleep(1)
             s.connect(self._ssid, self._wifi_pw)
             while not s.isconnected():  # ESP32 does not yet support STAT_CONNECTING
-                esp32_pause()   # https://github.com/micropython/micropython-esp32/issues/167 still seems necessary
+                esp32_pause()  # https://github.com/micropython/micropython-esp32/issues/167 still seems necessary
                 await asyncio.sleep(1)
 
         else:  # ESP8266
@@ -642,6 +666,15 @@ class MQTTClient(MQTT_base):
             await self._connection()
             try:
                 return await super().subscribe(topic, qos)
+            except OSError:
+                pass
+            self._reconnect()  # Broker or WiFi fail.
+
+    async def unsubscribe(self, topic):
+        while 1:
+            await self._connection()
+            try:
+                return await super().unsubscribe(topic)
             except OSError:
                 pass
             self._reconnect()  # Broker or WiFi fail.
