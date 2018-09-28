@@ -1,3 +1,7 @@
+# DON'T USE THIS BRANCH, main branch is ahead of this one.
+Main branch has latest commits but this branch still works as a drop-in replacement to the original repo.
+
+
 # Introduction
 
 MQTT is an easily used networking protocol designed for IOT (internet of
