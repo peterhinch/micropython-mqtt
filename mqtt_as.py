@@ -5,16 +5,20 @@
 import gc
 import usocket as socket
 import ustruct as struct
+
 gc.collect()
 from ubinascii import hexlify
 import uasyncio as asyncio
+
 gc.collect()
 from utime import ticks_ms, ticks_diff, sleep_ms
 from uerrno import EINPROGRESS, ETIMEDOUT
+
 gc.collect()
 from micropython import const
 from machine import unique_id, idle
 import network
+
 gc.collect()
 from sys import platform
 
@@ -52,6 +56,7 @@ if ESP32:
             sleep_ms(20)
 else:
     esp32_pause = lambda *_: None
+
 
 # Default "do little" coro for optional user replacement
 
@@ -146,6 +151,7 @@ class MQTT_base:
         self.suback = False
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = Lock()
+        self.lock_operation = Lock()
         if ESP32 and platform != 'esp32_LoBo':
             loop = asyncio.get_event_loop()
             loop.create_task(self._idle_task())
@@ -386,38 +392,42 @@ class MQTT_base:
 
     # Can raise OSError if WiFi fails. Subclass traps
     async def subscribe(self, topic, qos):
-        self.suback = False
-        pkt = bytearray(b"\x82\0\0\0")
-        self.pid = newpid(self.pid)
-        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, self.pid)
-        self.pkt = pkt
-        async with self.lock:
-            await self._as_write(pkt)
-            await self._send_str(topic)
-            await self._as_write(qos.to_bytes(1, "little"))
+        async with self.lock_operation:
+            self.suback = False
+            pkt = bytearray(b"\x82\0\0\0")
+            self.pid = newpid(self.pid)
+            struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, self.pid)
+            self.pkt = pkt
+            async with self.lock:
+                await self._as_write(pkt)
+                await self._send_str(topic)
+                await self._as_write(qos.to_bytes(1, "little"))
 
-        t = ticks_ms()
-        while not self.suback:
-            await asyncio.sleep_ms(200)
-            if self._timeout(t):
-                raise OSError(-1)
+            t = ticks_ms()
+            while not self.suback:
+                await asyncio.sleep_ms(200)
+                if self._timeout(t):
+                    self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
+                    raise OSError(-1)
 
     # Can raise OSError if WiFi fails. Subclass traps
     async def unsubscribe(self, topic):
-        self.suback = False
-        pkt = bytearray(b"\xa2\0\0\0")
-        self.pid = newpid(self.pid)
-        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), self.pid)
-        self.pkt = pkt
-        async with self.lock:
-            await self._as_write(pkt)
-            await self._send_str(topic)
+        async with self.lock_operation:
+            self.suback = False
+            pkt = bytearray(b"\xa2\0\0\0")
+            self.pid = newpid(self.pid)
+            struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), self.pid)
+            self.pkt = pkt
+            async with self.lock:
+                await self._as_write(pkt)
+                await self._send_str(topic)
 
-        t = ticks_ms()
-        while not self.suback:
-            await asyncio.sleep_ms(200)
-            if self._timeout(t):
-                raise OSError(-1)
+            t = ticks_ms()
+            while not self.suback:
+                await asyncio.sleep_ms(200)
+                if self._timeout(t):
+                    self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
+                    raise OSError(-1)
 
     # Wait for a single incoming MQTT message and process it.
     # Subscribed messages are delivered to a callback previously
