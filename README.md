@@ -16,6 +16,7 @@ making it possible to just clone the repo and copy it to `espXXXX/modules` also 
 7. Added support for recognizing retained publications (makes change in "subs_cb" necessary as it now has to take 3 args [topic,msg,retained])
 8. All other files are updated to the new changes and are usable (e.g. tests).
 9. Updated documentation to reflect all changes
+10. Fixes a reliability problem when having many subscribe/unsubscribe in a short time, resulting endless reconnects (see commit for changes and explanation)
 
 Motivation for the changes:
 For my project I had to adapt the library to use it on the ESP32 with loboris fork but also use it on my ESP8266 that is short on RAM all the time.
@@ -29,7 +30,7 @@ Therefore I had the following motivation for each of the above mentioned changes
 7. I made a huge workaround in a subclass to recognize retained messages instead of just supporting it directly
 8. Although I do not need any other file I felt that it is important to finish the work I started and not leave half the repo unusable.
 9. Wouldn't want issues because of wrong documentation or frustrated users. Have fun with it :D
-
+10. was simply needed. Sadly makes the module a little bigger
 
 
 # Introduction
