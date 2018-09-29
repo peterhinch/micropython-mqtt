@@ -345,29 +345,30 @@ class MQTT_base:
     # If WiFi fails completely subclass re-publishes with new PID.
     async def publish(self, topic, msg, retain, qos):
         if qos:
-            self.pid = newpid(self.pid)
-            self.rcv_pid = 0
-        async with self.lock:
-            await self._publish(topic, msg, retain, qos, 0)
-        if qos == 0:
-            return
-
-        count = 0
-        while 1:  # Await PUBACK, republish on timeout
-            t = ticks_ms()
-            while self.pid != self.rcv_pid:
-                await asyncio.sleep_ms(200)
-                if self._timeout(t) or not self.isconnected():
-                    break  # Must repub or bail out
-            else:
-                return  # PID's match. All done.
-            # No match
-            if count >= self._max_repubs or not self.isconnected():
-                raise OSError(-1)  # Subclass to re-publish with new PID
+            async with self.lock_operation:
+                self.pid = newpid(self.pid)
+                self.rcv_pid = 0
+                count = 0
+                while 1:  # Await PUBACK, republish on timeout
+                    t = ticks_ms()
+                    while self.pid != self.rcv_pid:
+                        await asyncio.sleep_ms(200)
+                        if self._timeout(t) or not self.isconnected():
+                            break  # Must repub or bail out
+                    else:
+                        self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
+                        return  # PID's match. All done.
+                    # No match
+                    if count >= self._max_repubs or not self.isconnected():
+                        self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
+                        raise OSError(-1)  # Subclass to re-publish with new PID
+                    async with self.lock:
+                        await self._publish(topic, msg, retain, qos, dup=1)
+                    count += 1
+                    self.REPUB_COUNT += 1
+        else:
             async with self.lock:
-                await self._publish(topic, msg, retain, qos, dup=1)
-            count += 1
-            self.REPUB_COUNT += 1
+                await self._publish(topic, msg, retain, qos, 0)
 
     async def _publish(self, topic, msg, retain, qos, dup):
         pkt = bytearray(b"\x30\0\0\0")
