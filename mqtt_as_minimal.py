@@ -249,6 +249,8 @@ class MQTT_base:
                 self.pid = newpid(self.pid)
                 self.rcv_pid = 0
                 count = 0
+                async with self.lock:
+                    await self._publish(topic, msg, retain, qos, 0)
                 while 1:  # Await PUBACK, republish on timeout
                     t = ticks_ms()
                     while self.pid != self.rcv_pid:
