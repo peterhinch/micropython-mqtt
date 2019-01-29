@@ -97,7 +97,7 @@ class Lock:
     def locked(self):
         return self._locked
 
-    def release(self):  # workaround until fixed https://github.com/micropython/micropython/issues/3153
+    def release(self):
         self._locked = False
 
 
@@ -293,7 +293,8 @@ class MQTT_base:
             await self._as_write(b"\xc0\0")
 
     # Check internet connectivity by sending DNS lookup to Google's 8.8.8.8
-    async def wan_ok(self, packet=b'$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01'):
+    async def wan_ok(self,
+                     packet=b'$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01'):
         if not self.isconnected():  # WiFi is down
             return False
         length = 32  # DNS query and response packet size
@@ -358,11 +359,9 @@ class MQTT_base:
                         if self._timeout(t) or not self.isconnected():
                             break  # Must repub or bail out
                     else:
-                        self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                         return  # PID's match. All done.
                     # No match
                     if count >= self._max_repubs or not self.isconnected():
-                        self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                         raise OSError(-1)  # Subclass to re-publish with new PID
                     async with self.lock:
                         await self._publish(topic, msg, retain, qos, dup=1)
@@ -410,7 +409,6 @@ class MQTT_base:
             while not self.suback:
                 await asyncio.sleep_ms(200)
                 if self._timeout(t):
-                    self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                     raise OSError(-1)
 
     # Can raise OSError if WiFi fails. Subclass traps
@@ -429,7 +427,6 @@ class MQTT_base:
             while not self.suback:
                 await asyncio.sleep_ms(200)
                 if self._timeout(t):
-                    self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                     raise OSError(-1)
 
     # Wait for a single incoming MQTT message and process it.

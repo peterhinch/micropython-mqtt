@@ -66,7 +66,7 @@ class Lock:
     def locked(self):
         return self._locked
 
-    def release(self):  # workaround until fixed https://github.com/micropython/micropython/issues/3153
+    def release(self):
         self._locked = False
 
 
@@ -258,11 +258,9 @@ class MQTT_base:
                         if self._timeout(t) or not self.isconnected():
                             break  # Must repub or bail out
                     else:
-                        self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                         return  # PID's match. All done.
                     # No match
                     if count >= self._max_repubs or not self.isconnected():
-                        self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                         raise OSError(-1)  # Subclass to re-publish with new PID
                     async with self.lock:
                         await self._publish(topic, msg, retain, qos, dup=1)
@@ -310,7 +308,6 @@ class MQTT_base:
             while not self.suback:
                 await asyncio.sleep_ms(200)
                 if self._timeout(t):
-                    self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                     raise OSError(-1)
 
     # Can raise OSError if WiFi fails. Subclass traps
@@ -329,7 +326,6 @@ class MQTT_base:
             while not self.suback:
                 await asyncio.sleep_ms(200)
                 if self._timeout(t):
-                    self.lock_operation.release()  # needed until bug fixed and released: https://github.com/micropython/micropython/issues/3153
                     raise OSError(-1)
 
     # Wait for a single incoming MQTT message and process it.
