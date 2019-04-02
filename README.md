@@ -5,9 +5,10 @@ things) applications. It is well suited for controlling hardware devices and
 for reading sensors across a local network or the internet.
 
 It is a means of communicating between multiple clients. A single server, also
-known as a broker, manages the network. Clients may include ESP8266 modules or
-other networked computers. Typical server hardware is a Raspberry Pi or other
-small Linux machine which may be left running 24/7. Public brokers
+known as a broker, manages the network. Clients may include ESP8266, ESP32 and
+Pyboard D modules and other networked computers. Typical server hardware is a
+Raspberry Pi or other small Linux machine which may be left running 24/7.
+Public brokers
 [also exist](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers).
 
 An effective PC client and server is [mosquitto](https://mosquitto.org/).
@@ -21,11 +22,11 @@ This contains two separate projects:
 
 ## 1. The "resilient" driver
 
-This is an alternative to the official driver and is targeted on the ESP8266.
-
-It will run on ESP32 but there are known problems consequent on the
-"experimental" status of the firmware. In particular the ESP32 does not recover
-from WiFi outages. See [this issue](https://github.com/micropython/micropython-esp32/issues/167).
+This is an alternative to the official driver. It has been tested on the
+following platforms.
+ 1. ESP8266
+ 2. ESP32
+ 3. Pyboard D
 
 The principal features of this driver are:  
  1. Non-blocking operation for applications using uasyncio.
@@ -33,9 +34,9 @@ The principal features of this driver are:
  3. True qos == 1 operation with retransmission.
  4. Improved WiFi range because of its tolerance of poor connectivity.
 
-Its main drawback is code size. Run as frozen bytecode it uses about 50% of the
-RAM on the ESP8266. On ESP32 it runs as a standard Python module with 64K of
-RAM free.
+It has the drawback of increased code size which is an issue on the ESP8266.
+Run as frozen bytecode it uses about 50% of the RAM on the ESP8266. On ESP32
+and Pyboard D it may be run as a standard Python module.
 
 It is documented [here](./mqtt_as/README.md).
 

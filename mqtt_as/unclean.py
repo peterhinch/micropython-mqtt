@@ -1,5 +1,5 @@
 # clean.py Test of asynchronous mqtt client with clean session False.
-# (C) Copyright Peter Hinch 2017.
+# (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
@@ -13,15 +13,9 @@
 # blue LED heartbeat: demonstrates scheduler is running.
 # Publishes connection statistics.
 
-from mqtt_as import MQTTClient
-from config import config
+from mqtt_as import MQTTClient, config
+from config import SERVER, wifi_led, blue_led
 import uasyncio as asyncio
-from machine import Pin
-
-SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
-
-wifi_led = Pin(0, Pin.OUT, value = 0)  # Red LED for WiFi fail/not ready yet
-blue_led = Pin(2, Pin.OUT, value = 1)  # Message received
 
 loop = asyncio.get_event_loop()
 
@@ -29,16 +23,18 @@ outages = 0
 
 # Demonstrate scheduler is operational.
 async def heartbeat():
+    s = True
     while True:
         await asyncio.sleep_ms(500)
-        blue_led(not blue_led())
+        blue_led(s)
+        s = not s
 
 def sub_cb(topic, msg):
     print((topic, msg))
 
 async def wifi_han(state):
     global outages
-    wifi_led(state)  # Off == WiFi down (LED is active low)
+    wifi_led(not state)
     if state:
         print('WiFi is up.')
     else:
