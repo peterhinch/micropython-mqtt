@@ -1,14 +1,13 @@
 # config.py Local configuration for mqtt_as demo programs.
 from sys import platform
+from mqtt_as import config
 
-SERVER = '192.168.0.33'  # Change to suit
-# SERVER = 'iot.eclipse.org'
+config['server'] = '192.168.0.10'  # Change to suit
+# config['server'] = 'iot.eclipse.org'
 
 # Not needed if you're only using ESP8266
-if platform != 'esp8266':
-    from mqtt_as import config
-    config['ssid'] = 'my_SSID'
-    config['wifi_pw'] = 'my_WiFi_password'
+config['ssid'] = 'my_SSID'
+config['wifi_pw'] = 'my_WiFi_password'
 
 # For demos ensure the same calling convention for LED's on all platforms.
 # ESP8266 Feather Huzzah reference board has active low LED's on pins 0 and 2.

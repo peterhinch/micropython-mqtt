@@ -101,13 +101,16 @@ application employs its features.
 
 The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
 the LAN prior to running there is no need explicitly to specify these. On other
-platforms `config.py` should be edited to provide them. A cross-platform file:
+platforms `config.py` should be edited to provide them. A sample cross-platform
+file:
 ```python
-from mqtt_as import config, ESP8266
+from mqtt_as import config
 
-if not ESP8266:
-    config['ssid'] = 'my_WiFi_SSID'
-    config['wifi_pw'] = 'my_password'
+config['server'] = '192.168.0.33'  # Change to suit e.g. 'iot.eclipse.org'
+
+# Not needed for ESP8266:
+config['ssid'] = 'my_WiFi_SSID'
+config['wifi_pw'] = 'my_password'
 ```
 
 ## 2.2 Installation

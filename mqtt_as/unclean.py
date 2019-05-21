@@ -14,7 +14,7 @@
 # Publishes connection statistics.
 
 from mqtt_as import MQTTClient, config
-from config import SERVER, wifi_led, blue_led
+from config import wifi_led, blue_led
 import uasyncio as asyncio
 
 loop = asyncio.get_event_loop()
@@ -65,7 +65,6 @@ config['wifi_coro'] = wifi_han
 config['connect_coro'] = conn_han
 config['clean'] = False
 config['will'] = ('result', 'Goodbye cruel world!', False, 0)
-config['server'] = SERVER
 config['keepalive'] = 120
 
 loop.create_task(heartbeat())

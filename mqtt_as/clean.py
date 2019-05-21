@@ -13,7 +13,7 @@
 # blue LED heartbeat: demonstrates scheduler is running.
 
 from mqtt_as import MQTTClient, config
-from config import SERVER, wifi_led, blue_led  # Local definitions
+from config import wifi_led, blue_led  # Local definitions
 import uasyncio as asyncio
 
 # Subscription callback
@@ -56,7 +56,6 @@ config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
 config['connect_coro'] = conn_han
 config['clean'] = True
-config['server'] = SERVER
 
 # Set up client
 MQTTClient.DEBUG = True  # Optional

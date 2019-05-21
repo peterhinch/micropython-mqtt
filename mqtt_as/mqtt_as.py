@@ -35,6 +35,7 @@ else:
 ESP8266 = platform == 'esp8266'
 ESP32 = platform == 'esp32'
 PYBOARD = platform == 'pyboard'
+LOBO = platform == 'esp32_LoBo'
 
 # Default "do little" coro for optional user replacement
 async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
@@ -459,16 +460,20 @@ class MQTTClient(MQTT_base):
         else:
 #            if not [x for x in s.scan() if x[0].decode() == self._ssid]:
 #                raise OSError
+            s.active(True)
             s.connect(self._ssid, self._wifi_pw)
-            if PYBOARD:  # Doesn't yet support STAT_CONNECTING
-                for _ in range(10):
+            if PYBOARD:  # Doesn't yet have STAT_CONNECTING constant
+                while s.status() in (1, 2):
                     await asyncio.sleep(1)
-                    if s.isconnected():
-                        break
+            elif LOBO:
+                while s.status() == 1:
+                    await asyncio.sleep(1)
             else:
                 while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
                     await asyncio.sleep(1)
 
+        if not s.isconnected():
+            raise OSError
         # Ensure connection stays up for a few secs.
         self.dprint('Checking WiFi integrity.')
         for _ in range(5):
@@ -569,6 +574,8 @@ class MQTTClient(MQTT_base):
                 gc.collect()
             else:
                 self._sta_if.disconnect()
+#                if PYBOARD:
+#                    self._sta_if.deinit()
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()

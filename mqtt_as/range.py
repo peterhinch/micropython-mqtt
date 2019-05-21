@@ -13,7 +13,7 @@
 # Publishes connection statistics.
 
 from mqtt_as import MQTTClient, config
-from config import SERVER, wifi_led, blue_led
+from config import wifi_led, blue_led
 import uasyncio as asyncio
 
 loop = asyncio.get_event_loop()
@@ -60,7 +60,6 @@ config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
 config['will'] = ('result', 'Goodbye cruel world!', False, 0)
 config['connect_coro'] = conn_han
-config['server'] = SERVER
 config['keepalive'] = 120
 
 # Set up client
@@ -71,3 +70,4 @@ try:
     loop.run_until_complete(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.
     client.close()
+    blue_led(True)
