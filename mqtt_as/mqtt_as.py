@@ -434,6 +434,49 @@ class MQTT_base:
             raise OSError(-1)
 
 
+# mDNS packet encoding and decoding functions
+def mdns_createrequestpacket(name):
+    q = bytearray(b'\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00')
+    for x in name.encode().split(b"."):
+        q.append(len(x))
+        q.extend(x)
+    q.extend(b"\x00\x00\x01\x00\x01")
+    return q
+
+def mdns_extractpackedname(buf, o):
+    names = [ ]
+    while buf[o] != 0:
+        if buf[o] & 0xc0:
+            o = struct.unpack_from("!H", buf, o)[0] & 0x3FFF
+        else:
+            names.append(bytes(buf[o+1:o+1+buf[o]]))
+            o += 1+buf[o]
+    return b".".join(names).decode()
+
+def mdns_lenpackedname(buf, o):
+    i = 0
+    while (buf[o+i] != 0) and ((buf[o+i] & 0xc0) != 0xc0):
+        i += 1 + buf[o+i]
+    return i + (1 if buf[o+i] == 0 else 2)
+
+def mdns_decoderesponsepacket(name, buf):
+    hostipnumber = ''
+    try:
+        pkt_id, flags, qst_count, ans_count = struct.unpack_from("!HHHH", buf)
+        o = 12
+        for i in range(qst_count):
+            o += mdns_lenpackedname(buf, o) + 4
+        for i in range(ans_count):
+            l = mdns_lenpackedname(buf, o)
+            if name == mdns_extractpackedname(buf, o):
+                hostipnumber = ".".join(map(str, buf[o+l+10:o+l+14]))
+            o += 10 + l + struct.unpack_from("!H", buf, o+l+8)[0]
+    except IndexError:
+        print("Index error processing packet; probably malformed data")
+    return hostipnumber
+
+
+
 # MQTTClient class. Handles issues relating to connectivity.
 
 class MQTTClient(MQTT_base):
@@ -482,12 +525,56 @@ class MQTTClient(MQTT_base):
             await asyncio.sleep(1)
         self.dprint('Got reliable connection')
 
+
+    # based on the wan_ok(), but unfortunately not able to reuse _as_write() and _as_read()
+    async def _as_mdns_send_read_udp(self, packet = b'\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x04mqtt\x05local\x00\x00\x01\x00\x01'):
+        MDNS_ADDR = '224.0.0.251'
+        MDNS_PORT = const(5353)
+
+        si = self._sta_if
+        ipnumber = si.ifconfig()[0]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        member_info = bytes(tuple(map(int, MDNS_ADDR.split("."))) + tuple(map(int, ipnumber.split("."))))
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, member_info)
+        sock.setblocking(False)
+        
+        sock.sendto(packet, (MDNS_ADDR, MDNS_PORT))
+        await asyncio.sleep(1)
+        
+        t = ticks_ms()
+        while not self._timeout(t) and si.isconnected():
+            try:
+                return sock.recvfrom(250)  # (buf, addr)
+            except OSError as e:
+                if e.args[0] not in BUSY_ERRORS and e.args[0] != EAGAIN:
+                    raise
+            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
+        raise OSError(-1)
+        
+        print(buf, addr)
+        return ''
+
+    async def getmdnsaddr(self, name):
+        print("getmdnsaddr", name)
+        packet = mdns_createrequestpacket(name)
+        buf, addr = await self._as_mdns_send_read_udp(packet)
+        #if addr[0] != ipnumber: (disallowed in minimaldns code)
+        hostipnumber = mdns_decoderesponsepacket(name, buf)
+        print("hostipnumber", hostipnumber)
+        return hostipnumber
+
     async def connect(self):
         if not self._has_connected:
             await self.wifi_connect()  # On 1st call, caller handles error
             # Note this blocks if DNS lookup occurs. Do it once to prevent
             # blocking during later internet outage:
-            self._addr = socket.getaddrinfo(self.server, self.port)[0][-1]
+            if self.server[-6:] == '.local':
+                hostipnumber = await self.getmdnsaddr(self.server)
+                self._addr = (hostipnumber, self.port)
+            else:
+                self._addr = socket.getaddrinfo(self.server, self.port)[0][-1]
+            
         self._in_connect = True  # Disable low level ._isconnected check
         clean = self._clean if self._has_connected else self._clean_init
         await self._connect(clean)
