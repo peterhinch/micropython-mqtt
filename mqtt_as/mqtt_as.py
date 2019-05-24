@@ -551,9 +551,6 @@ class MQTTClient(MQTT_base):
                     raise
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
         raise OSError(-1)
-        
-        print(buf, addr)
-        return ''
 
     async def getmdnsaddr(self, name):
         print("getmdnsaddr", name)
