@@ -14,7 +14,7 @@ config['wifi_pw'] = 'my_WiFi_password'
 # ESP32 is assumed to have user supplied active low LED's on same pins.
 # Call with blue_led(True) to light
 
-if platform == 'esp8266' or platform == 'esp32':
+if platform == 'esp8266' or platform == 'esp32' or platform == 'esp32_LoBo':
     from machine import Pin
     def ledfunc(pin):
         pin = pin

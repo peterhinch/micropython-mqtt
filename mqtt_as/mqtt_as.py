@@ -466,8 +466,12 @@ class MQTTClient(MQTT_base):
                 while s.status() in (1, 2):
                     await asyncio.sleep(1)
             elif LOBO:
-                while s.status() == 1:
+                i = 0
+                while not s.isconnected():
                     await asyncio.sleep(1)
+                    i+= 1
+                    if i >= 10:
+                        break
             else:
                 while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
                     await asyncio.sleep(1)
