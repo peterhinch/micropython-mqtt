@@ -13,7 +13,7 @@ from ubinascii import hexlify
 import uasyncio as asyncio
 gc.collect()
 from utime import ticks_ms, ticks_diff, sleep_ms
-from uerrno import EINPROGRESS, ETIMEDOUT
+from uerrno import EINPROGRESS, ETIMEDOUT, EAGAIN
 gc.collect()
 from micropython import const
 from machine import unique_id
