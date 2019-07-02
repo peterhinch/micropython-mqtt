@@ -1,6 +1,10 @@
-# mqtt_as.py Asynchronous version of umqt.robust
-# (C) Copyright Peter Hinch 2017.
+# mqtt_as.py Asynchronous version of umqtt.robust
+# (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Kevin Köck 2018-2019.
 # Released under the MIT licence.
+# Support for Sonoff removed.
+# ESP32 hacks removed to reflect improvements to firmware.
+# Pyboard D support added
 
 import gc
 import usocket as socket
@@ -16,7 +20,7 @@ from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
 from micropython import const
-from machine import unique_id, idle
+from machine import unique_id
 import network
 
 gc.collect()
@@ -27,40 +31,19 @@ _DEFAULT_MS = const(20)
 _SOCKET_POLL_DELAY = const(5)  # 100ms added greatly to publish latency
 
 # Legitimate errors while waiting on a socket. See uasyncio __init__.py open_connection().
-BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT]
-
-ESP32 = platform == 'esp32' or platform == 'esp32_LoBo'
-
-# Set up special handling for sonoff and similar devices requiring periodic yield to RTOS
-SONOFF = False
-
-
-def sonoff():
-    global SONOFF
-    SONOFF = True
-
-
-# ESP32. It is not enough to regularly yield to RTOS with machine.idle(). There are
-# two cases where an explicit sleep() is required. Where data has been written to the
-# socket and a response is awaited, a timeout may occur without a >= 20ms sleep.
-# Secondly during WiFi connection sleeps are required to prevent hangs.
-if ESP32:
+if platform == 'esp32' or platform == 'esp32_LoBo':
     # https://forum.micropython.org/viewtopic.php?f=16&t=3608&p=20942#p20942
-    BUSY_ERRORS += [118, 119]  # Add in weird ESP32 errors
-    # 20ms seems about the minimum before we miss data read from a socket.
-
-    if platform == 'esp32_LoBo':
-        esp32_pause = lambda *_: None
-    else:
-        def esp32_pause():  # https://github.com/micropython/micropython-esp32/issues/167
-            sleep_ms(20)
+    BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT, 118, 119]  # Add in weird ESP32 errors
 else:
-    esp32_pause = lambda *_: None
+    BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT]
+
+ESP8266 = platform == 'esp8266'
+ESP32 = platform == 'esp32'
+PYBOARD = platform == 'pyboard'
+LOBO = platform == 'esp32_LoBo'
 
 
 # Default "do little" coro for optional user replacement
-
-
 async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
     await asyncio.sleep_ms(_DEFAULT_MS)
 
@@ -127,7 +110,7 @@ class MQTT_base:
         else:
             self._set_last_will(*will)
         # WiFi config
-        self._ssid = ssid  # For ESP32
+        self._ssid = ssid  # For ESP32 / Pyboard D
         self._wifi_pw = wifi_pw
         self._ssl = ssl
         self._ssl_params = ssl_params
@@ -152,9 +135,6 @@ class MQTT_base:
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = Lock()
         self.lock_operation = Lock()
-        if ESP32 and platform != 'esp32_LoBo':
-            loop = asyncio.get_event_loop()
-            loop.create_task(self._idle_task())
 
     def _set_last_will(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
@@ -172,18 +152,12 @@ class MQTT_base:
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
 
-    async def _idle_task(self):
-        while True:
-            await asyncio.sleep_ms(10)
-            idle()  # Yield to underlying RTOS
-
     async def _as_read(self, n, sock=None):  # OSError caught by superclass
         if sock is None:
             sock = self._sock
         data = b''
         t = ticks_ms()
         while len(data) < n:
-            esp32_pause()  # Necessary or we can time out.
             if self._timeout(t) or not self.isconnected():
                 raise OSError(-1)
             try:
@@ -219,7 +193,6 @@ class MQTT_base:
             if n:
                 t = ticks_ms()
                 bytes_wr = bytes_wr[n:]
-            esp32_pause()  # Precaution. How to prove whether it's necessary?
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
 
     async def _send_str(self, s):
@@ -435,7 +408,6 @@ class MQTT_base:
     # messages processed internally.
     # Immediate return if no data available. Called from ._handle_msg().
     async def wait_msg(self):
-        esp32_pause()
         res = self._sock.read(1)  # Throws OSError on WiFi fail
         if res is None:
             return
@@ -524,37 +496,39 @@ class MQTTClient(MQTT_base):
 
     async def wifi_connect(self):
         s = self._sta_if
-        if ESP32:
-            s.disconnect()
-            esp32_pause()  # Otherwise sometimes fails to reconnect and hangs
-            await asyncio.sleep(1)
-            s.connect(self._ssid, self._wifi_pw)
-            while not s.isconnected():  # ESP32 does not yet support STAT_CONNECTING
-                esp32_pause()  # https://github.com/micropython/micropython-esp32/issues/167 still seems necessary
-                await asyncio.sleep(1)
-
-        else:  # ESP8266
+        if ESP8266:
             if s.isconnected():  # 1st attempt, already connected.
                 return
             s.active(True)
             s.connect()  # ESP8266 remembers connection.
             while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
-                if SONOFF:  # Without sleep_ms(10) sonoff sometimes waited so long for DHCP that
-                    yield  # the wdt cut in and crashed the code.
-                    sleep_ms(10)
-                else:
-                    await asyncio.sleep(1)  # Other platforms are OK
+                await asyncio.sleep(1)
+        else:
+            s.active(True)
+            s.connect(self._ssid, self._wifi_pw)
+            if PYBOARD:  # Doesn't yet have STAT_CONNECTING constant
+                while s.status() in (1, 2):
+                    await asyncio.sleep(1)
+            elif LOBO:
+                i = 0
+                while not s.isconnected():
+                    await asyncio.sleep(1)
+                    i += 1
+                    if i >= 10:
+                        break
+            else:
+                while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
+                    await asyncio.sleep(1)
 
+        if not s.isconnected():
+            raise OSError
         # Ensure connection stays up for a few secs.
         self.dprint('Checking WiFi integrity.')
-        t = ticks_ms()
-        while ticks_diff(ticks_ms(), t) < 5000:
+        for _ in range(5):
             if not s.isconnected():
-                raise OSError('WiFi connection fail.')  # in 1st 5 secs
-            esp32_pause()
+                raise OSError  # in 1st 5 secs
             await asyncio.sleep(1)
         self.dprint('Got reliable connection')
-        # Timed out: assumed reliable
 
     async def connect(self):
         if not self._has_connected:
@@ -638,22 +612,18 @@ class MQTTClient(MQTT_base):
     async def _connection(self):
         while not self._isconnected:
             await asyncio.sleep(1)
-            esp32_pause()  # Else sometimes fails to reconnect
 
     # Scheduled on 1st successful connection. Runs forever maintaining wifi and
     # broker connection. Must handle conditions at edge of WiFi range.
     async def _keep_connected(self):
         while True:
             if self.isconnected():  # Pause for 1 second
-                if SONOFF:
-                    for _ in range(10):
-                        sleep_ms(10)  # Prevents spurious WiFi dropouts
-                        await asyncio.sleep_ms(90)
-                else:
-                    await asyncio.sleep(1)
+                await asyncio.sleep(1)
                 gc.collect()
             else:
                 self._sta_if.disconnect()
+                # if PYBOARD:
+                #    self._sta_if.deinit()
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()

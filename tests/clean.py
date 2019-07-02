@@ -1,5 +1,5 @@
 # clean.py Test of asynchronous mqtt client with clean session.
-# (C) Copyright Peter Hinch 2017.
+# (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
@@ -12,35 +12,35 @@
 # red LED: ON == WiFi fail
 # blue LED heartbeat: demonstrates scheduler is running.
 
-from mqtt_as import MQTTClient
-from config import config
+from micropython_mqtt.mqtt_as import MQTTClient, config
+from config import wifi_led, blue_led  # Local definitions
 import uasyncio as asyncio
-from machine import Pin
-
-SERVER = '192.168.0.9'  # Change to suit
 
 
 # Subscription callback
 def sub_cb(topic, msg):
     print((topic, msg))
 
+
 # Demonstrate scheduler is operational.
 async def heartbeat():
-    led = Pin(2, Pin.OUT)
+    s = True
     while True:
         await asyncio.sleep_ms(500)
-        led(not led())
+        blue_led(s)
+        s = not s
 
-wifi_led = Pin(0, Pin.OUT, value=0)  # LED on for WiFi fail/not ready yet
 
 async def wifi_han(state):
-    wifi_led(state)
+    wifi_led(not state)
     print('Wifi is ', 'up' if state else 'down')
     await asyncio.sleep(1)
+
 
 # If you connect with clean_session True, must re-subscribe (MQTT spec 3.1.2.4)
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
+
 
 async def main(client):
     try:
@@ -53,15 +53,15 @@ async def main(client):
         await asyncio.sleep(5)
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', '{} {}'.format(n, client.REPUB_COUNT), qos = 1)
+        await client.publish('result', '{} {}'.format(n, client.REPUB_COUNT), qos=1)
         n += 1
+
 
 # Define configuration
 config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
 config['connect_coro'] = conn_han
 config['clean'] = True
-config['server'] = SERVER
 
 # Set up client
 MQTTClient.DEBUG = True  # Optional

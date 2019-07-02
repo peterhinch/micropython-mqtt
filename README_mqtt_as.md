@@ -6,8 +6,8 @@ receive all packets published by any client under that topic.
 
 The protocol supports three "quality of service" (qos) levels. Level 0 offers
 no guarantees. Level 1 ensures that a packet is communicated to the recipient
-but duplication can occur. Level 2 avoids duplication; it is unsuported by the
-official driver and by this module. Duplicates can readily be handled at the
+but duplication can occur. Level 2 avoids duplication; it is not suported by
+the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
 ###### [Main README](./README.md)
@@ -66,8 +66,13 @@ supplied in the main module. Cross-project settings (e.g. WiFi credentials for
 ESP32) may be provided in `config.py` with per-project settings in the
 application itself.
 
-My attempts to test with SSL/TLS have failed, doubtless owing to my lack of
-experience. Feedback on this issue would be very welcome.
+1st April 2019
+In the light of improved ESP32 firmware and the availability of the Pyboard D
+the code has had minor changes to support these platforms. The API is
+unchanged.
+
+My attempts to test with SSL/TLS have failed. I gather TLS on nonblocking
+sockets is work in progress. Feedback on this issue would be very welcome.
 
 ## 1.4 ESP8266 limitations
 
@@ -79,24 +84,16 @@ as well as some functions that are not commonly used and all debug messages.
 
 ## 1.5 ESP32 issues
 
-When using the official port of the ESP32 this platform has issues. 
-During WiFi and broker connection and reconnection it has proved necessary 
-to issue `utime.sleep_ms(20)`. After sending data to the socket a delay 
-of 20ms also proved necessary to prevent a timeout occurring while waiting 
-for a response (without the delay, the incoming data is never recognised). 
-These delays block the scheduler. 
+Firmware should be an official build dated 25th March 2019 or later. The
+library has not been tested with the Loboris port which appears not to have had
+any recent updates.
+But it has been reported that it works correctly and is being actively used by others.
 
-It recovers from outages but this hasn't been tested as thoroughly as on the
-ESP8266. The board must be power cycled between runs of an application. Issues
-have been raised.
+## 1.6 Dependency
 
-The [loboris fork](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo)
-does not suffer from these problems as far as I can tell by short tests (more needed).
-
-Currently (5th Sept 2017) DNS lookups don't work (`usocket.getaddrinfo()`).
-Hence broker addresses must be numeric IP's.
-
-The module works without recourse to cross compilation or frozen bytecode.
+The module requires `uasyncio` which may be the official or `fast_io` version;
+the latter will provide no MQTT performance gain. It may be used if the user
+application employs its features.
 
 # 2. Getting started
 
@@ -116,33 +113,43 @@ The module works without recourse to cross compilation or frozen bytecode.
  6. `sonoff` Folder containing test files for sonoff devices
  
 
+The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
+the LAN prior to running there is no need explicitly to specify these. On other
+platforms `config.py` should be edited to provide them. A sample cross-platform
+file:
+```python
+from micropython_mqtt.mqtt_as import config
+
+config['server'] = '192.168.0.33'  # Change to suit e.g. 'iot.eclipse.org'
+
+# Not needed for ESP8266:
+config['ssid'] = 'my_WiFi_SSID'
+config['wifi_pw'] = 'my_password'
+```
+
 ## 2.2 Installation
 
 The only dependency is uasyncio from the [MicroPython library](https://github.com/micropython/micropython-lib).
-Ensure this is installed on the device.
+Many firmware builds include this by default. Otherwise ensure it is installed
+on the device.
 
 The module is too large to compile on the ESP8266. It must either be cross
 compiled or (preferably) built as frozen bytecode: copy the repo to
 `esp8266/modules` in the source tree, build and deploy. If your firmware 
-gets too big, remove all unnecessary files of just copy the ones you need.
+gets too big, remove all unnecessary files or just copy the ones you need.
 Minimal requirements:
 - directory `micropython_mqtt_as` with these files in it:
     - `__init__.py` to make it a package
     - `mqtt_as.py` or `mqtt_as_minimal.py`
     - `config.py` for convenience, optional
 
-
-On the ESP32 simply copy the above listed directory structure to the filesystem.
+On other platforms simply copy the Python source to the filesystem (listed above as minimum).
 
 ## 2.3 Example Usage
 
 The following illustrates the library's use. If a PC client publishes a message
 with the topic `foo_topic` the topic and message are printed. The code
 periodically publishes an incrementing count under the topic `result`.
-
-On ESP8266 it assumes that the board is connected to WiFi (the board remembers
-the network if it has to reconnect). The ESP32 behaves differently and requires
-WiFi config data. Edit `config.py` to suit.
 
 ```python
 from micropython_mqtt_as.mqtt_as import MQTTClient
@@ -186,10 +193,10 @@ broker).
 
 # 3. MQTTClient class
 
-The module provides a single class: `MQTTClient`. It uses the ESP8266 ability
-to automatically find, authenticate and connect to a network it has previously
-encountered: the application should ensure that the device is set up to do
-this.
+The module provides a single class: `MQTTClient`. On ESP8266 it uses the chip's
+ability to automatically find, authenticate and connect to a network it has
+previously encountered: the application should ensure that the device is set up
+to do this.
 
 ## 3.1 Constructor
 
@@ -200,10 +207,11 @@ automatically matches the contents of the dict to the keywords of the constructo
 
 Entries of config dictionary are:
 
-**WiFi Parameters**
+**WiFi Credentials**
 
-These are only required for ESP32. On the ESP8266 the device is assumed to be
-connected before the user application begins. The chip reconnects automatically.
+These are required for platforms other than ESP8266: on this the device is
+assumed to be connected before the user application begins. The chip reconnects
+automatically.
 
 'ssid' [`None`]  
 'wifi_pw' [`None`]  

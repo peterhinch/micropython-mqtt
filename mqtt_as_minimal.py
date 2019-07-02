@@ -1,6 +1,10 @@
-# mqtt_as.py Asynchronous version of umqt.robust
-# (C) Copyright Peter Hinch 2017.
+# mqtt_as.py Asynchronous version of umqtt.robust
+# (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Kevin Köck 2018-2019.
 # Released under the MIT licence.
+# Support for Sonoff removed.
+# ESP32 hacks removed to reflect improvements to firmware.
+# Pyboard D support added
 
 import gc
 import usocket as socket
@@ -11,7 +15,7 @@ from ubinascii import hexlify
 import uasyncio as asyncio
 
 gc.collect()
-from utime import ticks_ms, ticks_diff, sleep_ms
+from utime import ticks_ms, ticks_diff
 from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
@@ -430,11 +434,12 @@ class MQTTClient(MQTT_base):
         while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
             await asyncio.sleep(1)  # Other platforms are OK
 
+        if not s.isconnected():
+            raise OSError
         # Ensure connection stays up for a few secs.
-        t = ticks_ms()
-        while ticks_diff(ticks_ms(), t) < 5000:
+        for _ in range(5):
             if not s.isconnected():
-                raise OSError('WiFi connection fail.')  # in 1st 5 secs
+                raise OSError  # in 1st 5 secs
             await asyncio.sleep(1)
         # Timed out: assumed reliable
 

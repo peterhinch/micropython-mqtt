@@ -1,5 +1,5 @@
 # range.py Test of asynchronous mqtt client with clean session False.
-# (C) Copyright Peter Hinch 2017.
+# (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
@@ -13,24 +13,17 @@
 # Publishes connection statistics.
 
 from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config
+from micropython_mqtt_as.config import config, wifi_led, blue_led
 import uasyncio as asyncio
-from machine import Pin
-
-SERVER = '192.168.0.9'  # Change to suit
-# SERVER = 'iot.eclipse.org'
-wifi_led = Pin(0, Pin.OUT, value=0)  # Red LED for WiFi fail/not ready yet
-blue_led = Pin(2, Pin.OUT, value=1)  # Message received
 
 loop = asyncio.get_event_loop()
-
 outages = 0
 
 
 async def pulse():  # This demo pulses blue LED each time a subscribed msg arrives.
-    blue_led(False)
-    await asyncio.sleep(1)
     blue_led(True)
+    await asyncio.sleep(1)
+    blue_led(False)
 
 
 def sub_cb(topic, msg):
@@ -40,7 +33,7 @@ def sub_cb(topic, msg):
 
 async def wifi_han(state):
     global outages
-    wifi_led(state)  # Off == WiFi down (LED is active low)
+    wifi_led(not state)  # Light LED when WiFi down
     if state:
         print('We are connected to broker.')
     else:
@@ -67,12 +60,13 @@ async def main(client):
         await client.publish('result', '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos=1)
         n += 1
 
+
 # Define configuration
 config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
 config['will'] = ('result', 'Goodbye cruel world!', False, 0)
 config['connect_coro'] = conn_han
-config['server'] = SERVER
+# config['server'] = SERVER already in config.py
 config['keepalive'] = 120
 
 # Set up client
@@ -83,3 +77,4 @@ try:
     loop.run_until_complete(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.
     client.close()
+    blue_led(True)
