@@ -22,7 +22,7 @@ The official "robust" MQTT client has the following limitations.
  arrives; this can occur on a WiFi network if an outage occurs at this point in
  the sequence.
 
- This blocking behaviour implies limited compatibilty with asynchronous
+ This blocking behaviour implies limited compatibility with asynchronous
  applications since pending coroutines will not be scheduled for the duration.
 
  2. It is unable reliably to resume operation after a temporary WiFi outage.
@@ -62,14 +62,18 @@ modified for resilience and for asynchronous operation.
 ## 1.3 Project Status
 
 The API has changed. Configuration is now via a dictionary, with a default
-supplied in the main module. Cross-project settings (e.g. WiFi credentials for
-ESP32) may be provided in `config.py` with per-project settings in the
-application itself.
+supplied in the main module.
 
 1st April 2019
 In the light of improved ESP32 firmware and the availability of the Pyboard D
 the code has had minor changes to support these platforms. The API is
 unchanged.
+
+2nd July 2019
+Added support for the unix port of Micropython. The unique_id must be set manually
+as the unix port doesn't have the function *unique_id()* to read a chip's id.
+The library assumes that the device is correctly connected to the network as the OS
+will take care of the network connection. 
 
 My attempts to test with SSL/TLS have failed. I gather TLS on nonblocking
 sockets is work in progress. Feedback on this issue would be very welcome.
@@ -138,7 +142,7 @@ compiled or (preferably) built as frozen bytecode: copy the repo to
 `esp8266/modules` in the source tree, build and deploy. If your firmware 
 gets too big, remove all unnecessary files or just copy the ones you need.
 Minimal requirements:
-- directory `micropython_mqtt_as` with these files in it:
+- directory `micropython_mqtt` with these files in it:
     - `__init__.py` to make it a package
     - `mqtt_as.py` or `mqtt_as_minimal.py`
     - `config.py` for convenience, optional
@@ -152,9 +156,10 @@ with the topic `foo_topic` the topic and message are printed. The code
 periodically publishes an incrementing count under the topic `result`.
 
 ```python
-from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config
+from micropython_mqtt.mqtt_as import MQTTClient
+from micropython_mqtt.config import config
 import uasyncio as asyncio
+from sys import platform
 
 SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
 
@@ -177,6 +182,8 @@ async def main(client):
 config['subs_cb'] = callback
 config['connect_coro'] = conn_han
 config['server'] = SERVER
+if platform == "linux":
+    config["client_id"]="linux"
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
 client = MQTTClient(**config)

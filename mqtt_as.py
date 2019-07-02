@@ -20,8 +20,6 @@ from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
 from micropython import const
-from machine import unique_id
-import network
 
 gc.collect()
 from sys import platform
@@ -41,6 +39,14 @@ ESP8266 = platform == 'esp8266'
 ESP32 = platform == 'esp32'
 PYBOARD = platform == 'pyboard'
 LOBO = platform == 'esp32_LoBo'
+LINUX = platform == "linux"
+
+if LINUX is False:
+    import network
+    from machine import unique_id
+else:
+    def unique_id():
+        raise NotImplementedError("Linux doesn't have a unique id. Provide the argument client_id")
 
 
 # Default "do little" coro for optional user replacement
@@ -126,8 +132,11 @@ class MQTT_base:
         if self.server is None:
             raise ValueError('no server specified.')
         self._sock = None
-        self._sta_if = network.WLAN(network.STA_IF)
-        self._sta_if.active(True)
+        if LINUX is True:
+            self._sta_isconnected = True
+        else:
+            self._sta_if = network.WLAN(network.STA_IF)
+            self._sta_if.active(True)
 
         self.pid = 0
         self.rcv_pid = 0
@@ -463,7 +472,7 @@ class MQTT_base:
 # MQTTClient class. Handles issues relating to connectivity.
 
 class MQTTClient(MQTT_base):
-    def __init__(self, client_id=hexlify(unique_id()),
+    def __init__(self, client_id=None,
                  server=None,
                  port=0,
                  user='',
@@ -478,10 +487,13 @@ class MQTTClient(MQTT_base):
                  max_repubs=4,
                  will=None,
                  subs_cb=lambda *_: None,
-                 wifi_coro=eliza,
-                 connect_coro=eliza,
+                 wifi_coro=None,
+                 connect_coro=None,
                  ssid=None,
                  wifi_pw=None):
+        client_id = client_id or hexlify(unique_id())
+        wifi_coro = wifi_coro or eliza
+        connect_coro = connect_coro or eliza
         super().__init__(client_id, server, port, user, password, keepalive, ping_interval,
                          ssl, ssl_params, response_time, clean_init, clean, max_repubs, will,
                          subs_cb, wifi_coro, connect_coro, ssid, wifi_pw)
@@ -495,6 +507,9 @@ class MQTTClient(MQTT_base):
         self._has_connected = False  # Define 'Clean Session' value to use.
 
     async def wifi_connect(self):
+        if LINUX is True:  # no network control, assume connected as OS takes care of that
+            self._sta_isconnected = True
+            return
         s = self._sta_if
         if ESP8266:
             if s.isconnected():  # 1st attempt, already connected.
@@ -597,8 +612,12 @@ class MQTTClient(MQTT_base):
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
             return True
-        if self._isconnected and not self._sta_if.isconnected():  # It's going down.
-            self._reconnect()
+        if LINUX is True:
+            if self._isconnected and self._sta_isconnected is False:
+                self._reconnect()
+        else:
+            if self._isconnected and not self._sta_if.isconnected():  # It's going down.
+                self._reconnect()
         return self._isconnected
 
     def _reconnect(self):  # Schedule a reconnection if not underway.
@@ -621,7 +640,10 @@ class MQTTClient(MQTT_base):
                 await asyncio.sleep(1)
                 gc.collect()
             else:
-                self._sta_if.disconnect()
+                if LINUX is True:
+                    self._sta_isconnected = False
+                else:
+                    self._sta_if.disconnect()
                 # if PYBOARD:
                 #    self._sta_if.deinit()
                 await asyncio.sleep(1)

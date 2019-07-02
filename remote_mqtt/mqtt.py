@@ -8,8 +8,8 @@
 
 import gc
 import ubinascii
-from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config
+from micropython_mqtt.mqtt_as import MQTTClient
+from micropython_mqtt.config import config
 from machine import Pin, unique_id, freq
 import uasyncio as asyncio
 gc.collect()

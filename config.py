@@ -3,7 +3,7 @@ from sys import platform
 # Include any cross-project settings.
 
 config = {
-    'client_id':     hexlify(unique_id()),
+    'client_id':     None,  # will default to hexlify(unique_id())
     'server':        None,
     'port':          0,
     'user':          '',
@@ -18,8 +18,8 @@ config = {
     'max_repubs':    4,
     'will':          None,
     'subs_cb':       lambda *_: None,
-    'wifi_coro':     eliza,
-    'connect_coro':  eliza,
+    'wifi_coro':     None,
+    'connect_coro':  None,
     'ssid':          None,
     'wifi_pw':       None,
 }
@@ -36,6 +36,9 @@ config['server'] = '192.168.0.10'  # Change to suit
 # Not needed if you're only using ESP8266
 config['ssid'] = 'my_SSID'
 config['wifi_pw'] = 'my_WiFi_password'
+
+if platform == "linux":
+    config["client_id"] = "linux"  # change this to whatever your client_id should be
 
 # For demos ensure the same calling convention for LED's on all platforms.
 # ESP8266 Feather Huzzah reference board has active low LED's on pins 0 and 2.

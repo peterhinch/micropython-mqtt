@@ -12,8 +12,8 @@
 # blue LED pulse == message received
 # Publishes connection statistics.
 
-from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config, wifi_led, blue_led
+from micropython_mqtt.mqtt_as import MQTTClient
+from micropython_mqtt.config import config, wifi_led, blue_led
 import uasyncio as asyncio
 
 loop = asyncio.get_event_loop()

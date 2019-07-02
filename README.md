@@ -6,8 +6,8 @@ This is due to the changes in point 7 explained below.
 
 1. Sorted files and made a structure so you know which file belongs where without reading the documentation every time
 2. Made repo a module to be used like 
-*from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config*
+*from micropython_mqtt.mqtt_as import MQTTClient
+from micropython_mqtt.config import config*
 making it possible to just clone the repo and copy it to `espXXXX/modules` also reducing file clutter in this directory.
 3. Removed unnecessary workarounds of official ESP32 port for ESP32 loboris fork (Feel free to report issues).
 4. Changed MQTTClient constructor initialization from using a dictionary to using keywords with default parameters. It's still possible to use the dictionary for initialization with almost no changes to existing codebase
@@ -17,6 +17,7 @@ making it possible to just clone the repo and copy it to `espXXXX/modules` also 
 8. All other files are updated to the new changes and are usable (e.g. tests).
 9. Updated documentation to reflect all changes
 10. Fixes a reliability problem when having many subscribe/unsubscribe in a short time, resulting endless reconnects (see commit for changes and explanation)
+11. Added support for the unix port of Micropython
 
 Motivation for the changes:
 For my project I had to adapt the library to use it on the ESP32 with loboris fork but also use it on my ESP8266 that is short on RAM all the time.
@@ -31,7 +32,7 @@ Therefore I had the following motivation for each of the above mentioned changes
 8. Although I do not need any other file I felt that it is important to finish the work I started and not leave half the repo unusable.
 9. Wouldn't want issues because of wrong documentation or frustrated users. Have fun with it :D
 10. was simply needed. Sadly makes the module a little bigger
-
+11. Needed that to run my projects on a Pi
 
 # Introduction
 
