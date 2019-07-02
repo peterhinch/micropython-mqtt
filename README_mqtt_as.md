@@ -122,7 +122,7 @@ the LAN prior to running there is no need explicitly to specify these. On other
 platforms `config.py` should be edited to provide them. A sample cross-platform
 file:
 ```python
-from micropython_mqtt.mqtt_as import config
+from micropython_mqtt_as.mqtt_as import config
 
 config['server'] = '192.168.0.33'  # Change to suit e.g. 'iot.eclipse.org'
 
@@ -142,7 +142,7 @@ compiled or (preferably) built as frozen bytecode: copy the repo to
 `esp8266/modules` in the source tree, build and deploy. If your firmware 
 gets too big, remove all unnecessary files or just copy the ones you need.
 Minimal requirements:
-- directory `micropython_mqtt` with these files in it:
+- directory `micropython_mqtt_as` with these files in it:
     - `__init__.py` to make it a package
     - `mqtt_as.py` or `mqtt_as_minimal.py`
     - `config.py` for convenience, optional
@@ -156,8 +156,8 @@ with the topic `foo_topic` the topic and message are printed. The code
 periodically publishes an incrementing count under the topic `result`.
 
 ```python
-from micropython_mqtt.mqtt_as import MQTTClient
-from micropython_mqtt.config import config
+from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config
 import uasyncio as asyncio
 from sys import platform
 

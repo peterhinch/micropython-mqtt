@@ -6,8 +6,8 @@ This is due to the changes in point 7 explained below.
 
 1. Sorted files and made a structure so you know which file belongs where without reading the documentation every time
 2. Made repo a module to be used like 
-*from micropython_mqtt.mqtt_as import MQTTClient
-from micropython_mqtt.config import config*
+*from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config*
 making it possible to just clone the repo and copy it to `espXXXX/modules` also reducing file clutter in this directory.
 3. Removed unnecessary workarounds of official ESP32 port for ESP32 loboris fork (Feel free to report issues).
 4. Changed MQTTClient constructor initialization from using a dictionary to using keywords with default parameters. It's still possible to use the dictionary for initialization with almost no changes to existing codebase

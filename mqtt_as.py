@@ -15,7 +15,7 @@ from ubinascii import hexlify
 import uasyncio as asyncio
 
 gc.collect()
-from utime import ticks_ms, ticks_diff, sleep_ms
+from utime import ticks_ms, ticks_diff
 from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
