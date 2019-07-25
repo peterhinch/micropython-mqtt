@@ -550,7 +550,7 @@ class MQTTClient(MQTT_base):
                 if e.args[0] not in BUSY_ERRORS and e.args[0] != EAGAIN:
                     raise
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
-        raise OSError(-1)
+        raise OSError("mdns fail")
 
     async def getmdnsaddr(self, name):
         print("getmdnsaddr", name)
