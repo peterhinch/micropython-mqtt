@@ -20,6 +20,12 @@ from machine import unique_id
 import network
 gc.collect()
 from sys import platform
+try:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    log_mqtt = logging.getLogger("MQTT")
+except ImportError:
+    log_mqtt = None
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -94,6 +100,7 @@ class Lock():
 # Exceptions from connectivity failures are handled by MQTTClient subclass.
 class MQTT_base:
     REPUB_COUNT = 0  # TEST
+    LOGGING = False
     DEBUG = False
     def __init__(self, config):
         # MQTT config
@@ -121,7 +128,7 @@ class MQTT_base:
         self._cb = config['subs_cb']
         self._wifi_handler = config['wifi_coro']
         self._connect_handler = config['connect_coro']
-        # Network 
+        # Network
         self.port = config['port']
         if self.port == 0:
             self.port = 8883 if self._ssl else 1883
@@ -148,8 +155,11 @@ class MQTT_base:
         self._lw_retain = retain
 
     def dprint(self, *args):
-        if self.DEBUG:
-            print(*args)
+        if self.DEBUG or self.LOGGING:
+            if self.LOGGING:
+                log_mqtt.info(*args)
+            else:
+                print(*args)
 
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
@@ -506,7 +516,7 @@ class MQTTClient(MQTT_base):
 
         loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
         loop.create_task(self._keep_alive())
-        if self.DEBUG:
+        if self.DEBUG or self.LOGGING:
             loop.create_task(self._memory())
         loop.create_task(self._connect_handler(self))  # User handler.
 
@@ -548,7 +558,7 @@ class MQTTClient(MQTT_base):
             count %= 20
             if not count:
                 gc.collect()
-                print('RAM free {} alloc {}'.format(gc.mem_free(), gc.mem_alloc()))
+                self.dprint('RAM free {} alloc {}'.format(gc.mem_free(), gc.mem_alloc()))
 
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
@@ -564,7 +574,7 @@ class MQTTClient(MQTT_base):
             loop = asyncio.get_event_loop()
             loop.create_task(self._wifi_handler(False))  # User handler.
 
-    # Await broker connection. 
+    # Await broker connection.
     async def _connection(self):
         while not self._isconnected:
             await asyncio.sleep(1)
