@@ -89,6 +89,20 @@ class Lock():
         self._locked = False
         await asyncio.sleep_ms(_DEFAULT_MS)
 
+async def _g():
+    pass
+type_coro = type(_g())
+
+# If a callback is passed, run it and return.
+# If a coro is passed initiate it and return.
+# coros are passed by name i.e. not using function call syntax.
+
+def launch(function, tup_args):
+    """Lunch a function or start corotine."""
+    res = function(*tup_args)
+    if isinstance(res, type_coro):
+        loop = asyncio.get_event_loop()
+        loop.create_task(res)
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.
 # Exceptions from connectivity failures are handled by MQTTClient subclass.
@@ -121,7 +135,7 @@ class MQTT_base:
         self._cb = config['subs_cb']
         self._wifi_handler = config['wifi_coro']
         self._connect_handler = config['connect_coro']
-        # Network 
+        # Network
         self.port = config['port']
         if self.port == 0:
             self.port = 8883 if self._ssl else 1883
@@ -425,7 +439,7 @@ class MQTT_base:
             pid = pid[0] << 8 | pid[1]
             sz -= 2
         msg = await self._as_read(sz)
-        self._cb(topic, msg)
+        launch(self._cb, (topic, msg))
         if op & 6 == 2:
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
@@ -564,7 +578,7 @@ class MQTTClient(MQTT_base):
             loop = asyncio.get_event_loop()
             loop.create_task(self._wifi_handler(False))  # User handler.
 
-    # Await broker connection. 
+    # Await broker connection.
     async def _connection(self):
         while not self._isconnected:
             await asyncio.sleep(1)
