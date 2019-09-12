@@ -11,7 +11,7 @@ from micropython_mqtt_as.config import config*
 making it possible to just clone the repo and copy it to `espXXXX/modules` also reducing file clutter in this directory.
 3. Removed unnecessary workarounds of official ESP32 port for ESP32 loboris fork (Feel free to report issues).
 4. Changed MQTTClient constructor initialization from using a dictionary to using keywords with default parameters. It's still possible to use the dictionary for initialization with almost no changes to existing codebase
-5. Made a minimal version of mqtt_as for the ESP8266 to save some RAM
+~~5. Made a minimal version of mqtt_as for the ESP8266 to save some RAM~~ Removed again as the removing of workarounds in the main version only got ~150B less RAM usage which is not worth the effort.
 6. Added support for "unsubscribe"
 7. Added support for recognizing retained publications (makes change in "subs_cb" necessary as it now has to take 3 args [topic,msg,retained])
 8. All other files are updated to the new changes and are usable (e.g. tests).
@@ -26,7 +26,7 @@ Therefore I had the following motivation for each of the above mentioned changes
 2. Like all modules this should be a directory as well, making usage easier.
 3. Made it work with loboris fork but did not want to use workarounds that are not needed on this fork. (Peter Hinch made it work with loboris port as well but has the workarounds still in it to be safe)
 4. I felt that this kind of initialization is the more pythonic way of doing things but apart from that it has an important advantage on the ESP8266, removing the config dict completely uses 100-200 Bytes less, which is important on ESP8266.
-5. This version for the ESP8266 has all non related code (workarounds for ESP32) and also some not commonly functions removed, saving another 150-250 Bytes so that after all changes I get 250-450 Bytes more RAM which is about 2% of the available RAM.
+~~5. This version for the ESP8266 has all non related code (workarounds for ESP32) and also some not commonly functions removed, saving another 150-250 Bytes so that after all changes I get 250-450 Bytes more RAM which is about 2% of the available RAM.~~
 6. At first I did not need that but later it became important to me so I added it
 7. I made a huge workaround in a subclass to recognize retained messages instead of just supporting it directly
 8. Although I do not need any other file I felt that it is important to finish the work I started and not leave half the repo unusable.
