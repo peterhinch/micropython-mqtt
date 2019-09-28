@@ -18,8 +18,8 @@ import uasyncio as asyncio
 
 
 # Subscription callback
-def sub_cb(topic, msg):
-    print((topic, msg))
+def sub_cb(topic, msg, retained):
+    print((topic, msg, retained))
 
 
 # Demonstrate scheduler is operational.

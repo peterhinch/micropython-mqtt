@@ -1,4 +1,5 @@
-# range.py Test of asynchronous mqtt client with clean session False.
+# range_ex.py Test of asynchronous mqtt client with clean session False.
+# Extended version publishes SSID
 # (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
 
@@ -12,13 +13,15 @@
 # blue LED pulse == message received
 # Publishes connection statistics.
 
-from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config, wifi_led, blue_led
+from mqtt_as import MQTTClient, config
+from config import wifi_led, blue_led
 import uasyncio as asyncio
+import network
+import gc
 
 loop = asyncio.get_event_loop()
 outages = 0
-
+rssi = -199  # Effectively zero signal in dB.
 
 async def pulse():  # This demo pulses blue LED each time a subscribed msg arrives.
     blue_led(True)
@@ -29,6 +32,18 @@ def sub_cb(topic, msg, retained):
     print((topic, msg))
     loop.create_task(pulse())
 
+# The only way to measure RSSI is via scan(). Alas scan() blocks so the code
+# causes the obvious uasyncio issues.
+async def get_rssi():
+    global rssi
+    s = network.WLAN()
+    ssid = config['ssid'].encode('UTF8')
+    while True:
+        try:
+            rssi = [x[3] for x in s.scan() if x[0] == ssid][0]
+        except IndexError:  # ssid not found.
+            rssi = -199
+        await asyncio.sleep(30)
 
 async def wifi_han(state):
     global outages
@@ -40,10 +55,8 @@ async def wifi_han(state):
         print('WiFi or broker is down.')
     await asyncio.sleep(1)
 
-
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
-
 
 async def main(client):
     try:
@@ -52,13 +65,15 @@ async def main(client):
         print('Connection failed.')
         return
     n = 0
+    s = '{} repubs: {} outages: {} rssi: {}dB free: {}bytes'
     while True:
         await asyncio.sleep(5)
+        gc.collect()
+        m = gc.mem_free()
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos=1)
+        await client.publish('result', s.format(n, client.REPUB_COUNT, outages, rssi, m), qos = 1)
         n += 1
-
 
 # Define configuration
 config['subs_cb'] = sub_cb
@@ -71,6 +86,7 @@ config['keepalive'] = 120
 MQTTClient.DEBUG = True  # Optional
 client = MQTTClient(config)
 
+loop.create_task(get_rssi())
 try:
     loop.run_until_complete(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.
