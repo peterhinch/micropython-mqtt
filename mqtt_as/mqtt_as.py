@@ -4,6 +4,7 @@
 # Support for Sonoff removed.
 # ESP32 hacks removed to reflect improvements to firmware.
 # Pyboard D support added
+# Patch for retained message support supplied by Kevin Köck.
 
 import gc
 import usocket as socket
@@ -425,7 +426,8 @@ class MQTT_base:
             pid = pid[0] << 8 | pid[1]
             sz -= 2
         msg = await self._as_read(sz)
-        self._cb(topic, msg)
+        retained = op & 0x01
+        self._cb(topic, msg, bool(retained))
         if op & 6 == 2:
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
@@ -447,6 +449,9 @@ class MQTTClient(MQTT_base):
             self._ping_interval = p_i
         self._in_connect = False
         self._has_connected = False  # Define 'Clean Session' value to use.
+        if ESP8266:
+            import esp
+            esp.sleep_type(0)  # Improve connection integrity at cost of power consumption.
 
     async def wifi_connect(self):
         s = self._sta_if

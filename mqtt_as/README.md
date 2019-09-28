@@ -16,7 +16,9 @@ application level.
 
 The official "robust" MQTT client has the following limitations.
 
- 1. It uses blocking sockets which can cause execution to pause for arbitrary
+ 1. It is unable reliably to resume operation after a temporary WiFi outage.
+
+ 2. It uses blocking sockets which can cause execution to pause for arbitrary
  periods when accessing a slow broker. It can also block forever in the case of
  qos == 1 publications while it waits for a publication acknowledge which never
  arrives; this can occur on a WiFi network if an outage occurs at this point in
@@ -24,8 +26,6 @@ The official "robust" MQTT client has the following limitations.
 
  This blocking behaviour implies limited compatibilty with asynchronous
  applications since pending coroutines will not be scheduled for the duration.
-
- 2. It is unable reliably to resume operation after a temporary WiFi outage.
 
  3. Its support for qos == 1 is partial. It does not support retransmission in
  the event of a publication acknowledge being lost. This can occur on a WiFi
@@ -59,12 +59,22 @@ that use it. It uses nonblocking sockets and does not block the scheduler. The
 design is based on the official `umqtt` library but it has been substantially
 modified for resilience and for asynchronous operation.
 
+Hardware support: Pyboard D, ESP8266 and ESP32.  
+Firmware support: Official firmware. Limited support for ESP32 Loboris port.  
+Broker support: Mosquitto is preferred for its excellent MQTT compliance.
+
 ## 1.3 Project Status
+
+24th Sept 2019
+**API change:** the subscription callback requires an additional parameter for
+the retained message flag.  
+On ESP8266 the code disables automatic sleep: this reduces reconnects at cost
+of increased power consumption.  
+Patches for these changes provided by Kevin Köck.
 
 1st April 2019
 In the light of improved ESP32 firmware and the availability of the Pyboard D
-the code has had minor changes to support these platforms. The API is
-unchanged.
+the code has minor changes to support these platforms.
 
 My attempts to test with SSL/TLS have failed. I gather TLS on nonblocking
 sockets is work in progress. Feedback on this issue would be very welcome.
@@ -76,39 +86,60 @@ preferably frozen as bytecode.
 
 ## 1.5 ESP32 issues
 
-Firmware should be an official build dated 25th March 2019 or later. The
-library has not been tested with the Loboris port which appears not to have had
-any recent updates.
+Firmware should be an official build dated 25th March 2019; preferably later.
+On request from users I implemented support for the Loboris port. This appears
+not to have had recent updates. I only test against official firmware: testing
+resilience is time consuming. If using other builds I recommend performing your
+own tests.
 
-## 1.6 Dependency
+## 1.6 Pyboard D
+
+The library has been tested successfully with the Pyboard D SF2W. To auto-run
+code on power-up I found it necessary to add a short delay in main.py:
+```python
+import time
+time.sleep(5)  # Could probably be shorter
+import range  # Your application
+```
+
+## 1.7 Dependency
 
 The module requires `uasyncio` which may be the official or `fast_io` version;
 the latter will provide no MQTT performance gain. It may be used if the user
-application employs its features.
+application employs its features. The module should also run with the `pycopy`
+fork and its library, but this has not been tested.
 
 # 2. Getting started
 
 ## 2.1 Program files
 
+### Required files
+
  1. `mqtt_as.py` The main module.
  2. `config.py` Stores cross-project settings. See below.
- 3. `clean.py` Test/demo program using MQTT Clean Session.
- 4. `unclean.py` Test/demo program with MQTT Clean Session `False`.
- 5. `range.py` For WiFi range testing.
- 6. `pubtest` Bash script illustrating publication with Mosquitto.
- 7. `main.py` Example for auto-starting an application.
- 8. `ssl.py` Failed attempt to run with SSL. See note above (1.3).
+
+### Test/demo scripts
+
+ 1. `clean.py` Test/demo program using MQTT Clean Session.
+ 2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
+ 3. `range.py` For WiFi range testing.
+ 4. `range_ex.py` As above but also publishes RSSI and free RAM. See code
+ listing for limitations.
+ 5. `pubtest` Bash script illustrating publication with Mosquitto.
+ 6. `main.py` Example for auto-starting an application.
+ 7. `ssl.py` Failed attempt to run with SSL. See note in [Section 1.3](./README.md#13-project-status).
 
 The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
 the LAN prior to running there is no need explicitly to specify these. On other
-platforms `config.py` should be edited to provide them. A sample cross-platform
-file:
+platforms, or to have the capability of running on an ESP8266 which has not
+previously connected, `config.py` should be edited to provide them. This is a
+sample cross-platform file:
 ```python
 from mqtt_as import config
 
-config['server'] = '192.168.0.33'  # Change to suit e.g. 'iot.eclipse.org'
+config['server'] = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
-# Not needed for ESP8266:
+# Required on Pyboard D and ESP32. On ESP8266 these may be omitted (see above).
 config['ssid'] = 'my_WiFi_SSID'
 config['wifi_pw'] = 'my_password'
 ```
@@ -117,7 +148,7 @@ config['wifi_pw'] = 'my_password'
 
 The only dependency is uasyncio from the [MicroPython library](https://github.com/micropython/micropython-lib).
 Many firmware builds include this by default. Otherwise ensure it is installed
-on the device.
+on the device. Normally this is done using `upip`.
 
 The module is too large to compile on the ESP8266. It must either be cross
 compiled or (preferably) built as frozen bytecode: copy `mqtt_as.py` to
@@ -138,10 +169,10 @@ from mqtt_as import MQTTClient
 from config import config
 import uasyncio as asyncio
 
-SERVER = '192.168.0.9'  # Change to suit e.g. 'iot.eclipse.org'
+SERVER = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
-def callback(topic, msg):
-    print((topic, msg))
+def callback(topic, msg, retained):
+    print((topic, msg, retained))
 
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
@@ -188,9 +219,11 @@ are as follows (default values shown in []):
 
 **WiFi Credentials**
 
-These are required for platforms other than ESP8266: on this the device is
-assumed to be connected before the user application begins. The chip reconnects
-automatically.
+These are required for platforms other than ESP8266 where they are optional. If
+the ESP8266 has previously connected to the required LAN the chip can reconnect
+automatically. If credentials are provided, an ESP8266 which has no stored
+values or which has stored values which don't match any available network will
+attempt to connect to the specified LAN.
 
 'ssid' [`None`]  
 'wifi_pw' [`None`]  
@@ -217,8 +250,9 @@ below.
 **Callbacks and coros**  
 
 'subs_cb' [a null lambda function] Subscription callback. Runs when a message
-is received whose topic matches a subscription. The callback must take two
-args, `topic` and `message`. These will be `bytes` instances.  
+is received whose topic matches a subscription. The callback must take three
+args, `topic`, `message` and `retained`. The first two are `bytes` instances,
+`reatined` is a `bool`, `True` if the message is a retained message.  
 'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
 state changes. The coro receives a single `bool` arg being the network state.  
 'connect_coro' [a null coro] A coroutine. Defines a task to run when a
@@ -333,6 +367,7 @@ desirable to educe latency in subscribe-only applications. This may be achieved
 using the `ping_interval` configuration option.
 
 If the broker times out it will issue the "last will" publication (if any).
+This will be received by other clients subscribed to the topic.
 
 If the client determines that connectivity has been lost it will close the
 socket and periodically attempt to reconnect until it succeeds.
@@ -366,9 +401,8 @@ resulting in `LmacRxBlk:1` messages).
 ## 4.4 Application design
 
 The library is not designed to handle concurrent publications or registration
-of subscriptions. A single task should be exist for each of these activities.
-If a publication queue is required this should be implemented by the
-application.
+of subscriptions. A single task should exist for each of these activities. If a
+publication queue is required this should be implemented by the application.
 
 The WiFi and Connect coroutines should run to completion quickly relative to
 the time required to connect and disconnect from the network. Aim for 2 seonds
@@ -377,6 +411,24 @@ terminates if the `isconnected()` method returns `False`.
 
 The subscription callback will block publications and the reception of further
 subscribed messages and should therefore be designed for a fast return.
+
+### 4.4.1 Cancellation of publications
+
+This arose because a user (Kevin Köck) was concerned that, in the case where a
+connectivity outage occurred, a publication might be delayed to the point where
+it was excessively outdated. He wanted to implement a timeout to cancel the
+publication if an outage caused high latency.
+
+Simple cancellation of a publication task is not recommended because it can
+disrupt the MQTT protocol. There are several ways to address this:  
+ 1. Send a timestamp as part of the publication with subscribers taking
+ appropriate action in the case of delayed messages.
+ 2. Check connectivity before publishing. This is not absolutely certain as
+ connectivity might fail between the check and publication commencing.
+ 3. Subclass the `MQTTClient` and acquire the `self.lock` object before issuing
+ the cancellation. The `self.lock` object protects a protocol sequence so that
+ it cannot be disrupted by another task. This was the method successfully
+ adopted by the user.
 
 # 5. References
 

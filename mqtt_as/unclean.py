@@ -29,8 +29,8 @@ async def heartbeat():
         blue_led(s)
         s = not s
 
-def sub_cb(topic, msg):
-    print((topic, msg))
+def sub_cb(topic, msg, retained):
+    print((topic, msg, retained))
 
 async def wifi_han(state):
     global outages

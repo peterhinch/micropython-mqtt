@@ -17,8 +17,8 @@ from config import wifi_led, blue_led  # Local definitions
 import uasyncio as asyncio
 
 # Subscription callback
-def sub_cb(topic, msg):
-    print((topic, msg))
+def sub_cb(topic, msg, retained):
+    print((topic, msg, retained))
 
 # Demonstrate scheduler is operational.
 async def heartbeat():
