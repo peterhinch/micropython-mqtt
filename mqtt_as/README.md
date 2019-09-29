@@ -6,7 +6,7 @@ receive all packets published by any client under that topic.
 
 The protocol supports three "quality of service" (qos) levels. Level 0 offers
 no guarantees. Level 1 ensures that a packet is communicated to the recipient
-but duplication can occur. Level 2 avoids duplication; it is not suported by
+but duplication can occur. Level 2 avoids duplication; it is not supported by
 the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
@@ -24,7 +24,7 @@ The official "robust" MQTT client has the following limitations.
  arrives; this can occur on a WiFi network if an outage occurs at this point in
  the sequence.
 
- This blocking behaviour implies limited compatibilty with asynchronous
+ This blocking behaviour implies limited compatibility with asynchronous
  applications since pending coroutines will not be scheduled for the duration.
 
  3. Its support for qos == 1 is partial. It does not support retransmission in
@@ -252,7 +252,7 @@ below.
 'subs_cb' [a null lambda function] Subscription callback. Runs when a message
 is received whose topic matches a subscription. The callback must take three
 args, `topic`, `message` and `retained`. The first two are `bytes` instances,
-`reatined` is a `bool`, `True` if the message is a retained message.  
+`retained` is a `bool`, `True` if the message is a retained message.  
 'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
 state changes. The coro receives a single `bool` arg being the network state.  
 'connect_coro' [a null coro] A coroutine. Defines a task to run when a
@@ -360,7 +360,7 @@ to '8.8.8.8' and checks for a valid response.
 
 If `keepalive` is defined in the constructor call, the broker will assume that
 connectivity has been lost if no messages have been received in that period.
-The module attempts to keep the connection open by issuing an MQTT ping upto
+The module attempts to keep the connection open by issuing an MQTT ping up to
 four times during the keepalive interval. (It pings if the last response from
 the broker was over 1/4 of the keepalive period). More frequent pings may be
 desirable to educe latency in subscribe-only applications. This may be achieved
@@ -378,8 +378,8 @@ qos == 0 may be lost. The behaviour of qos == 1 packets is described below.
 ## 4.2 Client publications with qos == 1
 
 These behave as follows. The client waits for `response_time`. If no
-acknowledgement has been received it re-publishes it, up to `MAX_REPUBS` times.
-In the absence of acknowledgement the network is presumed to be down. The
+acknowledgment has been received it re-publishes it, up to `MAX_REPUBS` times.
+In the absence of acknowledgment the network is presumed to be down. The
 client reconnects as described above. The publication is then attempted again
 as a new message with a different PID. (The new PID proved necessary for
 Mosquitto to recognise the message).
@@ -391,7 +391,7 @@ acknowledged.
 ## 4.3 Client subscriptions with qos == 1
 
 Where the client is subscribed to a topic with qos == 1 and a publication with
-qos == 1 occurs the broker will re-publish until an acknowledgement is
+qos == 1 occurs the broker will re-publish until an acknowledgment is
 received. If the broker deems that connectivity has failed it waits for the
 client to reconnect. If the client was configured with `clean` set `True`,
 qos == 1 messages published during the outage will be lost. Otherwise they will
@@ -405,7 +405,7 @@ of subscriptions. A single task should exist for each of these activities. If a
 publication queue is required this should be implemented by the application.
 
 The WiFi and Connect coroutines should run to completion quickly relative to
-the time required to connect and disconnect from the network. Aim for 2 seonds
+the time required to connect and disconnect from the network. Aim for 2 seconds
 maximum. Alternatively the Connect coro can run indefinitely so long as it
 terminates if the `isconnected()` method returns `False`.
 
