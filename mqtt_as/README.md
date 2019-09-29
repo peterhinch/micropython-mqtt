@@ -428,7 +428,7 @@ disrupt the MQTT protocol. There are several ways to address this:
  3. Subclass the `MQTTClient` and acquire the `self.lock` object before issuing
  the cancellation. The `self.lock` object protects a protocol sequence so that
  it cannot be disrupted by another task. This was the method successfully
- adopted by the user.
+ adopted by the user and can be seen in [mqtt_as_cancel](./mqtt_as_cancel.py)
 
 # 5. References
 
