@@ -44,6 +44,7 @@ async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
 
 config = {
     'client_id' : hexlify(unique_id()),
+    'hostname' : None,
     'server' : None,
     'port' : 0,
     'user' : '',
@@ -132,6 +133,8 @@ class MQTT_base:
         self._sock = None
         self._sta_if = network.WLAN(network.STA_IF)
         self._sta_if.active(True)
+        if self.hostname:
+            self._sta_if.config(dhcp_hostname=self.hostname)
 
         self.pid = 0
         self.rcv_pid = 0
