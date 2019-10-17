@@ -439,7 +439,8 @@ The `micropower.py` script runs MQTT publications and a subscription. It
 reduces current consumption to about 6mA. It requires the following from the
 [async repo](https://github.com/peterhinch/micropython-async):  
  1. The `fast_io` version of `uasyncio` must be installed.
- 2. `rtc_time.py` and `rtc_time_cfg.py` must be on the path.
+ 2. `rtc_time.py` and `rtc_time_cfg.py` must be on the path and must be the
+ latest version (17th Oct 2019 or later).
 
 Verify that the `fast_io` version is installed by issuing the following at the
 REPL:
