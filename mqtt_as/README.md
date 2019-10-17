@@ -128,6 +128,7 @@ fork and its library, but this has not been tested.
  5. `pubtest` Bash script illustrating publication with Mosquitto.
  6. `main.py` Example for auto-starting an application.
  7. `ssl.py` Failed attempt to run with SSL. See note in [Section 1.3](./README.md#13-project-status).
+ 8. `lowpower.py` Experimental micro-power test. See [Section 5](./README.md#5-low-power-demo).
 
 The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
 the LAN prior to running there is no need explicitly to specify these. On other
@@ -430,7 +431,38 @@ disrupt the MQTT protocol. There are several ways to address this:
  it cannot be disrupted by another task. This was the method successfully
  adopted by the user and can be seen in [mqtt_as_cancel](./mqtt_as_cancel.py)
 
-# 5. References
+# 5. Low power demo
+
+This is a somewhat experimental demo and is specific to the Pyboard D.
+
+The `micropower.py` script runs MQTT publications and a subscription. It
+reduces current consumption to about 6mA. It requires the following from the
+[async repo](https://github.com/peterhinch/micropython-async):  
+ 1. The `fast_io` version of `uasyncio` must be installed.
+ 2. `rtc_time.py` and `rtc_time_cfg.py` must be on the path.
+
+Verify that the `fast_io` version is installed by issuing the following at the
+REPL:
+```python
+import uasyncio as asyncio
+asyncio.version
+```
+The official version will throw an exception; the `fast_io` version will report
+a version number (at the time of writing 0.26).
+
+To activate power saving the USB connection to the Pyboard should be unused.
+This is firstly because USB uses power, and secondly because the power saving
+mechanism would disrupt USB communications. If a USB connection is provided the
+demo will run, but the power saving feature will be disabled.
+
+It is possible to acquire a REPL in this mode using an FTDI adaptor connected
+to one of the Pyboard's UARTs. Use `pyb.repl_uart(uart)`.
+
+One means of powering the Pyboard is to link the Pyboard to a USB power source
+via a USB cable wired for power only. This will ensure that a USB connection is
+not detected.
+
+# 6. References
 
 [mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
 [mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
