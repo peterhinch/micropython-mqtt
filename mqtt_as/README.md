@@ -433,7 +433,9 @@ disrupt the MQTT protocol. There are several ways to address this:
 
 # 5. Low power demo
 
-This is a somewhat experimental demo and is specific to the Pyboard D.
+This is a somewhat experimental demo and is specific to the Pyboard D.  
+**NOTE** In my latest testing this ran but power consumption was 16mA. The
+behavior of Pyboard D firmware seems inconsistent between releases.
 
 The `micropower.py` script runs MQTT publications and a subscription. It
 reduces current consumption to about 6mA. It requires the following from the
