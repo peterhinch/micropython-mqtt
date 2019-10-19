@@ -6,7 +6,7 @@ receive all packets published by any client under that topic.
 
 The protocol supports three "quality of service" (qos) levels. Level 0 offers
 no guarantees. Level 1 ensures that a packet is communicated to the recipient
-but duplication can occur. Level 2 avoids duplication; it is not suported by
+but duplication can occur. Level 2 avoids duplication; it is not supported by
 the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
@@ -137,6 +137,7 @@ fork and its library, but this has not been tested.
  5. `pubtest` Bash script illustrating publication with Mosquitto.
  6. `main.py` Example for auto-starting an application.
  7. `ssl.py` Failed attempt to run with SSL. See note in [Section 1.3](./README.md#13-project-status).
+ 8. `lowpower.py` Experimental micro-power test. See [Section 5](./README.md#5-low-power-demo).
 
 The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
 the LAN prior to running there is no need explicitly to specify these. On other
@@ -267,7 +268,7 @@ below.
 'subs_cb' [a null lambda function] Subscription callback. Runs when a message
 is received whose topic matches a subscription. The callback must take three
 args, `topic`, `message` and `retained`. The first two are `bytes` instances,
-`reatined` is a `bool`, `True` if the message is a retained message.  
+`retained` is a `bool`, `True` if the message is a retained message.  
 'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
 state changes. The coro receives a single `bool` arg being the network state.  
 'connect_coro' [a null coro] A coroutine. Defines a task to run when a
@@ -385,7 +386,7 @@ Args:
 
 If `keepalive` is defined in the constructor call, the broker will assume that
 connectivity has been lost if no messages have been received in that period.
-The module attempts to keep the connection open by issuing an MQTT ping upto
+The module attempts to keep the connection open by issuing an MQTT ping up to
 four times during the keepalive interval. (It pings if the last response from
 the broker was over 1/4 of the keepalive period). More frequent pings may be
 desirable to reduce latency in subscribe-only applications. This may be achieved
@@ -403,8 +404,8 @@ qos == 0 may be lost. The behaviour of qos == 1 packets is described below.
 ## 4.2 Client publications with qos == 1
 
 These behave as follows. The client waits for `response_time`. If no
-acknowledgement has been received it re-publishes it, up to `MAX_REPUBS` times.
-In the absence of acknowledgement the network is presumed to be down. The
+acknowledgment has been received it re-publishes it, up to `MAX_REPUBS` times.
+In the absence of acknowledgment the network is presumed to be down. The
 client reconnects as described above. The publication is then attempted again
 as a new message with a different PID. (The new PID proved necessary for
 Mosquitto to recognise the message).
@@ -416,7 +417,7 @@ acknowledged.
 ## 4.3 Client subscriptions with qos == 1
 
 Where the client is subscribed to a topic with qos == 1 and a publication with
-qos == 1 occurs the broker will re-publish until an acknowledgement is
+qos == 1 occurs the broker will re-publish until an acknowledgment is
 received. If the broker deems that connectivity has failed it waits for the
 client to reconnect. If the client was configured with `clean` set `True`,
 qos == 1 messages published during the outage will be lost. Otherwise they will
@@ -430,7 +431,7 @@ of subscriptions. A single task should exist for each of these activities. If a
 publication queue is required this should be implemented by the application.
 
 The WiFi and Connect coroutines should run to completion quickly relative to
-the time required to connect and disconnect from the network. Aim for 2 seonds
+the time required to connect and disconnect from the network. Aim for 2 seconds
 maximum. Alternatively the Connect coro can run indefinitely so long as it
 terminates if the `isconnected()` method returns `False`.
 
@@ -453,9 +454,43 @@ disrupt the MQTT protocol. There are several ways to address this:
  3. Subclass the `MQTTClient` and acquire the `self.lock` object before issuing
  the cancellation. The `self.lock` object protects a protocol sequence so that
  it cannot be disrupted by another task. This was the method successfully
- adopted by the user.
+ adopted by the user and can be seen in [mqtt_as_cancel](./mqtt_as_cancel.py)
 
-# 5. References
+# 5. Low power demo
+
+This is a somewhat experimental demo and is specific to the Pyboard D.  
+**NOTE** In my latest testing this ran but power consumption was 16mA. The
+behavior of Pyboard D firmware seems inconsistent between releases.
+
+The `micropower.py` script runs MQTT publications and a subscription. It
+reduces current consumption to about 6mA. It requires the following from the
+[async repo](https://github.com/peterhinch/micropython-async):  
+ 1. The `fast_io` version of `uasyncio` must be installed.
+ 2. `rtc_time.py` and `rtc_time_cfg.py` must be on the path and must be the
+ latest version (17th Oct 2019 or later).
+
+Verify that the `fast_io` version is installed by issuing the following at the
+REPL:
+```python
+import uasyncio as asyncio
+asyncio.version
+```
+The official version will throw an exception; the `fast_io` version will report
+a version number (at the time of writing 0.26).
+
+To activate power saving the USB connection to the Pyboard should be unused.
+This is firstly because USB uses power, and secondly because the power saving
+mechanism would disrupt USB communications. If a USB connection is provided the
+demo will run, but the power saving feature will be disabled.
+
+It is possible to acquire a REPL in this mode using an FTDI adaptor connected
+to one of the Pyboard's UARTs. Use `pyb.repl_uart(uart)`.
+
+One means of powering the Pyboard is to link the Pyboard to a USB power source
+via a USB cable wired for power only. This will ensure that a USB connection is
+not detected.
+
+# 6. References
 
 [mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
 [mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
