@@ -1,5 +1,6 @@
 from mqtt_as import MQTTClient as _MQTTClient
 import time
+import uasyncio as asyncio
 
 class MQTTClient(_MQTTClient):
     _pub_coro = None
