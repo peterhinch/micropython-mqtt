@@ -134,7 +134,7 @@ class MQTT_base:
         self._sta_if.active(True)
 
         self.pid = 0
-        self.rcv_pid = 0
+        self.rcv_pids = set()  # PUBACK pids received pending processing
         self.suback = False
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = Lock()
@@ -320,32 +320,32 @@ class MQTT_base:
     # qos == 1: coro blocks until wait_msg gets correct PID.
     # If WiFi fails completely subclass re-publishes with new PID.
     async def publish(self, topic, msg, retain, qos):
-        if qos:
-            self.pid = newpid(self.pid)
-            self.rcv_pid = 0
+        self.pid = newpid(self.pid)  # Why did I only update self.pid if qos == 1 ??
+        pid = self.pid  # Keep local in case self.pid is updated
         async with self.lock:
-            await self._publish(topic, msg, retain, qos, 0)
+            await self._publish(topic, msg, retain, qos, 0, pid)  # ._publish adapted to use passed pid
         if qos == 0:
             return
 
         count = 0
         while 1:  # Await PUBACK, republish on timeout
             t = ticks_ms()
-            while self.pid != self.rcv_pid:
+            while pid not in self.rcv_pids:  # local copy
                 await asyncio.sleep_ms(200)
                 if self._timeout(t) or not self.isconnected():
                     break  # Must repub or bail out
             else:
+                self.rcv_pids.discard(pid)
                 return  # PID's match. All done.
             # No match
-            if count >= self._max_repubs or not self.isconnected():
+            if count >= self._max_repubs or not self.isconnected():  # **** see note below  ****
                 raise OSError(-1)  # Subclass to re-publish with new PID
             async with self.lock:
-                await self._publish(topic, msg, retain, qos, dup = 1)
+                await self._publish(topic, msg, retain, qos, dup = 1, pid = pid)  # Add pid
             count += 1
             self.REPUB_COUNT += 1
 
-    async def _publish(self, topic, msg, retain, qos, dup):
+    async def _publish(self, topic, msg, retain, qos, dup, pid):
         pkt = bytearray(b"\x30\0\0\0")
         pkt[0] |= qos << 1 | retain | dup << 3
         sz = 2 + len(topic) + len(msg)
@@ -362,7 +362,7 @@ class MQTT_base:
         await self._as_write(pkt, i + 1)
         await self._send_str(topic)
         if qos > 0:
-            struct.pack_into("!H", pkt, 0, self.pid)
+            struct.pack_into("!H", pkt, 0, pid)
             await self._as_write(pkt, 2)
         await self._as_write(msg)
 
@@ -406,7 +406,9 @@ class MQTT_base:
             if sz != b"\x02":
                 raise OSError(-1)
             rcv_pid = await self._as_read(2)
-            self.rcv_pid = rcv_pid[0] << 8 | rcv_pid[1]
+            self.rcv_pids.add(rcv_pid[0] << 8 | rcv_pid[1])
+            # Discard old pid's: can arise if a publish fails before PUBACK arrives
+            self.rcv_pids = {x for x in self.rcv_pids if  (x - self.pid) % 65536 < 50}
 
         if op == 0x90:  # SUBACK
             resp = await self._as_read(4)
