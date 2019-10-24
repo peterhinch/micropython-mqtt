@@ -146,7 +146,7 @@ class MQTT_base:
 
         self.pid = 0
         self.rcv_pids = set()  # PUBACK pids received pending processing
-        self.suback = False
+        self.sub_pids = set()  # Subscribe pids sent pending SUBACK
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = Lock()
 
@@ -388,11 +388,11 @@ class MQTT_base:
 
     # Can raise OSError if WiFi fails. Subclass traps
     async def subscribe(self, topic, qos):
-        self.suback = False
         pkt = bytearray(b"\x82\0\0\0")
-        self.pid = newpid(self.pid)
-        self.dprint("subscribe", topic, "pid", self.pid)
-        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, self.pid)
+        pid = newpid(self.pid)
+        self.sub_pids.add(pid)  # PID's awaiting suback
+        self.dprint("subscribe", topic, "pid", pid)
+        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, pid)
         self.pkt = pkt
         async with self.lock:
             await self._as_write(pkt)
@@ -400,7 +400,7 @@ class MQTT_base:
             await self._as_write(qos.to_bytes(1, "little"))
 
         t = ticks_ms()
-        while not self.suback:
+        while pid in self.sub_pids:  # Wait for SUBACK
             await asyncio.sleep_ms(200)
             if self._timeout(t):
                 self.dprint("subscribe timeout", topic)
@@ -433,17 +433,25 @@ class MQTT_base:
             self.rcv_pids.add(rcv_pid[0] << 8 | rcv_pid[1])
             self.dprint("rcv_pids:", self.rcv_pids)
             # Discard old pid's: can arise if a publish fails before PUBACK arrives
-            # self.rcv_pids = {x for x in self.rcv_pids if (x - self.pid) % 65536 < 50}
+            self.rcv_pids = {x for x in self.rcv_pids if (self.pid - x) % 65536 < 50}
             self.dprint("rcv_pids after pruning:", self.rcv_pids)
 
         if op == 0x90:  # SUBACK
             self.dprint("received suback")
             resp = await self._as_read(4)
-            if resp[1] != self.pkt[2] or resp[2] != self.pkt[3] or resp[3] == 0x80:
+            if resp[3] == 0x80:
                 self.dprint("suback oserror")
                 raise OSError(-1)
-            self.dprint("suback true")
-            self.suback = True
+            pid = resp[2] | (resp[1] << 8)
+            if pid in self.sub_pids:
+                self.dprint("suback OK: pid", pid)
+                self.sub_pids.remove(pid)  # Tell subscribe it's been received
+            else:
+                self.dprint("suback: unknown pid.")
+                raise OSError(-1)
+            # Discard old pid's. Can arise if subacks lost and no subscribe timeout.
+            self.sub_pids = {x for x in self.sub_pids if (self.pid - x) % 65536 < 50}
+            self.dprint("sub_pids after pruning:", self.rcv_pids)
 
         if op & 0xf0 != 0x30:
             return
