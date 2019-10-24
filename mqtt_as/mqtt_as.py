@@ -145,8 +145,7 @@ class MQTT_base:
         self._sta_if.active(True)
 
         self.pid = 0
-        self.rcv_pids = set()  # PUBACK pids received pending processing
-        self.sub_pids = set()  # Subscribe pids sent pending SUBACK
+        self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = Lock()
 
@@ -329,12 +328,28 @@ class MQTT_base:
         if self._sock is not None:
             self._sock.close()
 
+    async def _await_pid(self, pid):
+        t = ticks_ms()
+        self.dprint("awaiting pid", pid)
+        while pid in self.rcv_pids:  # local copy
+            if self._timeout(t) or not self.isconnected():
+                self.dprint("timeout pid", pid, "isconnected", self.isconnected())
+                break  # Must repub or bail out
+            await asyncio.sleep_ms(100)  # putting sleep at the end will solve the issue
+            # of not recognizing received pids in the event of disconnect
+        else:
+            self.dprint("pid", pid, "not in rcv_pids anymore")
+            return True  # PID received. All done.
+        return False
+
     # qos == 1: coro blocks until wait_msg gets correct PID.
     # If WiFi fails completely subclass re-publishes with new PID.
     async def publish(self, topic, msg, retain, qos):
         self.pid = newpid(self.pid)  # Why did I only update self.pid if qos == 1 ??
         pid = self.pid  # Keep local in case self.pid is updated
-        self.dprint("publish", topic, "pid", pid)
+        if qos:
+            self.rcv_pids.add(pid)
+        self.dprint("publish", topic, msg, "pid", pid)
         async with self.lock:
             self.dprint("publish lock", topic, pid)
             await self._publish(topic, msg, retain, qos, 0,
@@ -344,17 +359,8 @@ class MQTT_base:
 
         count = 0
         while 1:  # Await PUBACK, republish on timeout
-            t = ticks_ms()
-            self.dprint("awaiting pid", pid)
-            while pid not in self.rcv_pids:  # local copy
-                await asyncio.sleep_ms(200)
-                if self._timeout(t) or not self.isconnected():
-                    self.dprint("timeout publish pid", pid, "isconnected", self.isconnected())
-                    break  # Must repub or bail out
-            else:
-                self.dprint("pid", pid, "in rcv_pids")
-                self.rcv_pids.discard(pid)
-                return  # PID's match. All done.
+            if await self._await_pid(pid):
+                return
             # No match
             if count >= self._max_repubs or not self.isconnected():  # **** see note below  ****
                 self.dprint("timeout or max repubs pid", pid)
@@ -390,22 +396,17 @@ class MQTT_base:
     async def subscribe(self, topic, qos):
         pkt = bytearray(b"\x82\0\0\0")
         pid = newpid(self.pid)
-        self.sub_pids.add(pid)  # PID's awaiting suback
+        self.pid = pid  # will otherwise result in multiple operations having the same pid
+        self.rcv_pids.add(pid)
         self.dprint("subscribe", topic, "pid", pid)
         struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, pid)
-        self.pkt = pkt
         async with self.lock:
             await self._as_write(pkt)
             await self._send_str(topic)
             await self._as_write(qos.to_bytes(1, "little"))
 
-        t = ticks_ms()
-        while pid in self.sub_pids:  # Wait for SUBACK
-            await asyncio.sleep_ms(200)
-            if self._timeout(t):
-                self.dprint("subscribe timeout", topic)
-                raise OSError(-1)
-        self.dprint("subscribe done", topic)
+        if not await self._await_pid(pid):
+            raise OSError(-1)
 
     # Wait for a single incoming MQTT message and process it.
     # Subscribed messages are delivered to a callback previously
@@ -429,12 +430,18 @@ class MQTT_base:
             if sz != b"\x02":
                 raise OSError(-1)
             rcv_pid = await self._as_read(2)
-            self.dprint("received PUBACK", rcv_pid)
-            self.rcv_pids.add(rcv_pid[0] << 8 | rcv_pid[1])
+            pid = rcv_pid[0] << 8 | rcv_pid[1]
+            self.dprint("received PUBACK", pid)
+            if pid in self.rcv_pids:
+                self.rcv_pids.discard(pid)
+            else:
+                self.dprint("PUBACK unknown pid", pid)
+                raise OSError(-1)
             self.dprint("rcv_pids:", self.rcv_pids)
             # Discard old pid's: can arise if a publish fails before PUBACK arrives
-            self.rcv_pids = {x for x in self.rcv_pids if (self.pid - x) % 65536 < 50}
-            self.dprint("rcv_pids after pruning:", self.rcv_pids)
+            # self.rcv_pids = {x for x in self.rcv_pids if (self.pid - x) % 65536 < 50}
+            # not needed as reinitializing set at reconnect.
+            # self.dprint("rcv_pids after pruning:", self.rcv_pids)
 
         if op == 0x90:  # SUBACK
             self.dprint("received suback")
@@ -443,15 +450,17 @@ class MQTT_base:
                 self.dprint("suback oserror")
                 raise OSError(-1)
             pid = resp[2] | (resp[1] << 8)
-            if pid in self.sub_pids:
-                self.dprint("suback OK: pid", pid)
-                self.sub_pids.remove(pid)  # Tell subscribe it's been received
+            self.dprint("got suback pid", pid)
+            if pid in self.rcv_pids:
+                self.rcv_pids.discard(pid)
             else:
-                self.dprint("suback: unknown pid.")
+                self.dprint("SUBACK unknown pid", pid)
                 raise OSError(-1)
+            self.dprint("rcv_pids:", self.rcv_pids)
             # Discard old pid's. Can arise if subacks lost and no subscribe timeout.
-            self.sub_pids = {x for x in self.sub_pids if (self.pid - x) % 65536 < 50}
-            self.dprint("sub_pids after pruning:", self.rcv_pids)
+            # self.rcv_pids = {x for x in self.rcv_pids if (self.pid - x) % 65536 < 50}
+            # not needed as reinitializing set at reconnect
+            # self.dprint("rcv_pids after pruning:", self.rcv_pids)
 
         if op & 0xf0 != 0x30:
             return
@@ -547,6 +556,8 @@ class MQTTClient(MQTT_base):
         except Exception:
             self.close()
             raise
+        self.dprint("rcv_pids before pruning", self.rcv_pids)
+        self.rcv_pids = set()
         # If we get here without error broker/LAN must be up.
         self._isconnected = True
         self._in_connect = False  # Low level code can now check connectivity.
