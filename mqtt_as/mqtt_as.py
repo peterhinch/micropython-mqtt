@@ -322,6 +322,7 @@ class MQTT_base:
             self._sock.write(b"\xe0\0")
         except OSError:
             pass
+        self._has_connected = False
         self.close()
 
     def close(self):
@@ -635,7 +636,7 @@ class MQTTClient(MQTT_base):
     # Scheduled on 1st successful connection. Runs forever maintaining wifi and
     # broker connection. Must handle conditions at edge of WiFi range.
     async def _keep_connected(self):
-        while True:
+        while self._has_connected:
             if self.isconnected():  # Pause for 1 second
                 await asyncio.sleep(1)
                 gc.collect()
@@ -648,6 +649,9 @@ class MQTTClient(MQTT_base):
                     await self.wifi_connect()
                 except OSError:
                     continue
+                if not self._has_connected:
+                    self.dprint('Disconnected, exiting _keep_connected')
+                    break
                 try:
                     await self.connect()
                     # Now has set ._isconnected and scheduled _connect_handler().
@@ -658,6 +662,7 @@ class MQTTClient(MQTT_base):
                     self.close()  # Disconnect and try again.
                     self._in_connect = False
                     self._isconnected = False
+        self.dprint('Disconnected, exited _keep_connected')
 
     async def subscribe(self, topic, qos=0):
         qos_check(qos)
