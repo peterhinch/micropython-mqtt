@@ -509,7 +509,12 @@ class MQTTClient(MQTT_base):
                 return
             s.active(True)
             s.connect()  # ESP8266 remembers connection.
-            while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
+            for _ in range(10):
+                if s.status() != network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
+                    break
+                await asyncio.sleep(1)
+            if s.status() == network.STAT_CONNECTING:  # might hang forever awaiting dhcp lease renewal or something else
+                s.disconnect()
                 await asyncio.sleep(1)
             if not s.isconnected() and self._ssid is not None and self._wifi_pw is not None:
                 s.connect(self._ssid, self._wifi_pw)
