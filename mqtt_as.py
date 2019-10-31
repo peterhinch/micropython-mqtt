@@ -2,7 +2,7 @@
 # (C) Copyright Peter Hinch 2017-2019.
 # (C) Copyright Kevin Köck 2018-2019.
 # Released under the MIT licence.
-# Support for Sonoff removed.
+# Support for Sonoff removed. Newer Sonoff devices work reliable without any workarounds.
 # ESP32 hacks removed to reflect improvements to firmware.
 # Pyboard D support added
 # Patch for retained message support supplied by Kevin Köck.
@@ -21,8 +21,6 @@ from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
 from micropython import const
-from machine import unique_id
-import network
 
 gc.collect()
 from sys import platform
@@ -402,21 +400,18 @@ class MQTT_base:
 
     # Can raise OSError if WiFi fails. Subclass traps
     async def unsubscribe(self, topic):
-        async with self.lock_operation:
-            self.suback = False
-            pkt = bytearray(b"\xa2\0\0\0")
-            self.pid = newpid(self.pid)
-            struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), self.pid)
-            self.pkt = pkt
-            async with self.lock:
-                await self._as_write(pkt)
-                await self._send_str(topic)
+        pkt = bytearray(b"\xa2\0\0\0")
+        pid = newpid(self.pid)
+        self.pid = pid  # will otherwise result in multiple operations having the same pid
+        self.rcv_pids.add(pid)
+        self.dprint("unsubscribe", topic, "pid", pid)
+        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), pid)
+        async with self.lock:
+            await self._as_write(pkt)
+            await self._send_str(topic)
 
-            t = ticks_ms()
-            while not self.suback:
-                await asyncio.sleep_ms(200)
-                if self._timeout(t):
-                    raise OSError(-1)
+        if not await self._await_pid(pid):
+            raise OSError(-1)
 
     # Wait for a single incoming MQTT message and process it.
     # Subscribed messages are delivered to a callback previously
@@ -473,10 +468,16 @@ class MQTT_base:
             # self.dprint("rcv_pids after pruning:", self.rcv_pids)
 
         if op == 0xB0:  # UNSUBACK
+            self.dprint("received unsuback")
             resp = await self._as_read(3)
-            if resp[1] != self.pkt[2] or resp[2] != self.pkt[3]:
+            pid = resp[2] | (resp[1] << 8)
+            self.dprint("got unsuback pid", pid)
+            if pid in self.rcv_pids:
+                self.rcv_pids.discard(pid)
+            else:
+                self.dprint("UNSUBACK unknown pid", pid)
                 raise OSError(-1)
-            self.suback = True
+            self.dprint("rcv_pids:", self.rcv_pids)
 
         if op & 0xf0 != 0x30:
             return
