@@ -205,7 +205,9 @@ if platform == "linux":
     config["client_id"]="linux"
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
-client = MQTTClient(**config)
+client = MQTTClient(**config) # Using dict to stay compatible to upstream.
+# Alternatively initialize MQTTClient the pythonic way using arguments like:
+# client = MQTTClient(server=SERVER, port=1883, ...)
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
