@@ -84,6 +84,12 @@ class Lock:
         self._locked = False
         await asyncio.sleep_ms(_DEFAULT_MS)
 
+    def locked(self):
+        return self._locked
+
+    def release(self):
+        self._locked = False
+
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.
 # Exceptions from connectivity failures are handled by MQTTClient subclass.
