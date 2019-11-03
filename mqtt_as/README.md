@@ -29,7 +29,7 @@ application level.
  3. [MQTTClient class](./README.md#3-mqttclient-class)  
   3.1 [Constructor](./README.md#31-constructor)  
   3.2 [Methods](./README.md#32-methods)  
-      3.2.1 [connect](./README.md#321-connect)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.1 [connect](./README.md#321-connect)  
       3.2.2 [publish](./README.md#322-publish)  
       3.2.3 [subscribe](./README.md#323-subscribe)  
       3.2.4 [isconnected](./README.md#324-isconnected)  
