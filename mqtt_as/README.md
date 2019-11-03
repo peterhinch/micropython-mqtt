@@ -41,8 +41,8 @@ application level.
   3.4 [Module Attribute](./README.md#34-module-attribute)  
  4. [Notes](./README.md#4-notes)  
   4.1 [Connectivity](./README.md#41-connectivity)  
-  4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-==-1)  
-  4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-==-1)  
+  4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-1)  
+  4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-1)  
   4.4 [Application Design](./README.md#44-application-design)  
    4.4.1 [Cancellation of publications](./README.md#441-cancellation-of-publications)  
  5. [Low Power Demo](./README.md#5-low-power-demo) Note: Pyboard D specific and highly experimental.  
@@ -444,7 +444,7 @@ socket and periodically attempt to reconnect until it succeeds.
 In the event of failing connectivity client and server publications with
 qos == 0 may be lost. The behaviour of qos == 1 packets is described below.
 
-## 4.2 Client publications with qos == 1
+## 4.2 Client publications with qos 1
 
 These behave as follows. The client waits for `response_time`. If no
 acknowledgment has been received it re-publishes it, up to `MAX_REPUBS` times.
@@ -457,7 +457,7 @@ This effectively guarantees the reception of a qos == 1 publication, with the
 proviso that the publishing coroutine will block until reception has been
 acknowledged.
 
-## 4.3 Client subscriptions with qos == 1
+## 4.3 Client subscriptions with qos 1
 
 Where the client is subscribed to a topic with qos == 1 and a publication with
 qos == 1 occurs the broker will re-publish until an acknowledgment is
