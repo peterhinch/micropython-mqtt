@@ -16,6 +16,8 @@ from mqtt_as import MQTTClient, config
 from config import wifi_led, blue_led
 import uasyncio as asyncio
 
+TOPIC = 'shed'  # For demo publication and last will use same topic
+
 loop = asyncio.get_event_loop()
 outages = 0
 
@@ -52,18 +54,18 @@ async def main(client):
         await asyncio.sleep(5)
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos = 1)
+        await client.publish(TOPIC, '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos = 1)
         n += 1
 
 # Define configuration
 config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
-config['will'] = ('result', 'Goodbye cruel world!', False, 0)
+config['will'] = (TOPIC, 'Goodbye cruel world!', False, 0)
 config['connect_coro'] = conn_han
 config['keepalive'] = 120
 
-# Set up client
-MQTTClient.DEBUG = True  # Optional
+# Set up client. Enable optional debug statements.
+MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
 try:

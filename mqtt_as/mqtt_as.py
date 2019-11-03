@@ -4,7 +4,7 @@
 # Support for Sonoff removed.
 # ESP32 hacks removed to reflect improvements to firmware.
 # Pyboard D support added
-# Patch for retained message support supplied by Kevin Köck.
+# Various improvements contributed by Kevin Köck.
 
 import gc
 import usocket as socket
@@ -25,6 +25,8 @@ import network
 
 gc.collect()
 from sys import platform
+
+VERSION = (0, 5, 0)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -74,10 +76,11 @@ config = {
 class MQTTException(Exception):
     pass
 
-
-def newpid(pid):
-    return pid + 1 if pid < 65535 else 1
-
+def pid_gen():
+    pid = 0
+    while True:
+        pid = pid + 1 if pid < 65535 else 1
+        yield pid
 
 def qos_check(qos):
     if not (qos == 0 or qos == 1):
@@ -125,7 +128,7 @@ class MQTT_base:
         else:
             self._set_last_will(*will)
         # WiFi config
-        self._ssid = config['ssid']  # For ESP32 / Pyboard D
+        self._ssid = config['ssid']  # Required for ESP32 / Pyboard D. Optional ESP8266
         self._wifi_pw = config['wifi_pw']
         self._ssl = config['ssl']
         self._ssl_params = config['ssl_params']
@@ -144,7 +147,7 @@ class MQTT_base:
         self._sta_if = network.WLAN(network.STA_IF)
         self._sta_if.active(True)
 
-        self.pid = 0
+        self.newpid = pid_gen()
         self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = Lock()
@@ -161,6 +164,12 @@ class MQTT_base:
     def dprint(self, *args):
         if self.DEBUG:
             print(*args)
+
+    def _pid_gen(self):
+        pid = 0
+        while True:
+            pid = pid + 1 if pid < 65535 else 1
+            yield pid
 
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
@@ -179,7 +188,7 @@ class MQTT_base:
                 msg = None
                 if e.args[0] not in BUSY_ERRORS:
                     raise
-            if msg == b'':  # Connection closed by host (?)
+            if msg == b'':  # Connection closed by host
                 raise OSError(-1)
             if msg is not None:  # data received
                 data = b''.join((data, msg))
@@ -237,7 +246,7 @@ class MQTT_base:
             import ussl
             self._sock = ussl.wrap_socket(self._sock, **self._ssl_params)
         premsg = bytearray(b"\x10\0\0\0\0\0")
-        msg = bytearray(b"\x04MQTT\x04\0\0\0")
+        msg = bytearray(b"\x04MQTT\x04\0\0\0")  # Protocol 3.1.1
 
         sz = 10 + 2 + len(self._client_id)
         msg[6] = clean << 1
@@ -331,30 +340,22 @@ class MQTT_base:
 
     async def _await_pid(self, pid):
         t = ticks_ms()
-        self.dprint("awaiting pid", pid)
         while pid in self.rcv_pids:  # local copy
             if self._timeout(t) or not self.isconnected():
-                self.dprint("timeout pid", pid, "isconnected", self.isconnected())
                 break  # Must repub or bail out
-            await asyncio.sleep_ms(100)  # putting sleep at the end will solve the issue
-            # of not recognizing received pids in the event of disconnect
+            await asyncio.sleep_ms(100)
         else:
-            self.dprint("pid", pid, "not in rcv_pids anymore")
             return True  # PID received. All done.
         return False
 
     # qos == 1: coro blocks until wait_msg gets correct PID.
     # If WiFi fails completely subclass re-publishes with new PID.
     async def publish(self, topic, msg, retain, qos):
-        self.pid = newpid(self.pid)  # Why did I only update self.pid if qos == 1 ??
-        pid = self.pid  # Keep local in case self.pid is updated
+        pid = next(self.newpid)
         if qos:
             self.rcv_pids.add(pid)
-        self.dprint("publish", topic, msg, "pid", pid)
         async with self.lock:
-            self.dprint("publish lock", topic, pid)
-            await self._publish(topic, msg, retain, qos, 0,
-                                pid)  # ._publish adapted to use passed pid
+            await self._publish(topic, msg, retain, qos, 0, pid)
         if qos == 0:
             return
 
@@ -363,10 +364,8 @@ class MQTT_base:
             if await self._await_pid(pid):
                 return
             # No match
-            if count >= self._max_repubs or not self.isconnected():  # **** see note below  ****
-                self.dprint("timeout or max repubs pid", pid)
+            if count >= self._max_repubs or not self.isconnected():
                 raise OSError(-1)  # Subclass to re-publish with new PID
-            self.dprint("republish pid", pid)
             async with self.lock:
                 await self._publish(topic, msg, retain, qos, dup=1, pid=pid)  # Add pid
             count += 1
@@ -396,10 +395,8 @@ class MQTT_base:
     # Can raise OSError if WiFi fails. Subclass traps
     async def subscribe(self, topic, qos):
         pkt = bytearray(b"\x82\0\0\0")
-        pid = newpid(self.pid)
-        self.pid = pid  # will otherwise result in multiple operations having the same pid
+        pid = next(self.newpid)
         self.rcv_pids.add(pid)
-        self.dprint("subscribe", topic, "pid", pid)
         struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, pid)
         async with self.lock:
             await self._as_write(pkt)
@@ -432,36 +429,20 @@ class MQTT_base:
                 raise OSError(-1)
             rcv_pid = await self._as_read(2)
             pid = rcv_pid[0] << 8 | rcv_pid[1]
-            self.dprint("received PUBACK", pid)
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
-                self.dprint("PUBACK unknown pid", pid)
                 raise OSError(-1)
-            self.dprint("rcv_pids:", self.rcv_pids)
-            # Discard old pid's: can arise if a publish fails before PUBACK arrives
-            # self.rcv_pids = {x for x in self.rcv_pids if (self.pid - x) % 65536 < 50}
-            # not needed as reinitializing set at reconnect.
-            # self.dprint("rcv_pids after pruning:", self.rcv_pids)
 
         if op == 0x90:  # SUBACK
-            self.dprint("received suback")
             resp = await self._as_read(4)
             if resp[3] == 0x80:
-                self.dprint("suback oserror")
                 raise OSError(-1)
             pid = resp[2] | (resp[1] << 8)
-            self.dprint("got suback pid", pid)
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
-                self.dprint("SUBACK unknown pid", pid)
                 raise OSError(-1)
-            self.dprint("rcv_pids:", self.rcv_pids)
-            # Discard old pid's. Can arise if subacks lost and no subscribe timeout.
-            # self.rcv_pids = {x for x in self.rcv_pids if (self.pid - x) % 65536 < 50}
-            # not needed as reinitializing set at reconnect
-            # self.dprint("rcv_pids after pruning:", self.rcv_pids)
 
         if op & 0xf0 != 0x30:
             return
@@ -521,8 +502,6 @@ class MQTTClient(MQTT_base):
                 while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
                     await asyncio.sleep(1)
         else:
-            #            if not [x for x in s.scan() if x[0].decode() == self._ssid]:
-            #                raise OSError
             s.active(True)
             s.connect(self._ssid, self._wifi_pw)
             if PYBOARD:  # Doesn't yet have STAT_CONNECTING constant
@@ -562,8 +541,7 @@ class MQTTClient(MQTT_base):
         except Exception:
             self.close()
             raise
-        self.dprint("rcv_pids before pruning", self.rcv_pids)
-        self.rcv_pids = set()
+        self.rcv_pids.clear()
         # If we get here without error broker/LAN must be up.
         self._isconnected = True
         self._in_connect = False  # Low level code can now check connectivity.
@@ -571,7 +549,7 @@ class MQTTClient(MQTT_base):
         loop.create_task(self._wifi_handler(True))  # User handler.
         if not self._has_connected:
             self._has_connected = True  # Use normal clean flag on reconnect.
-            loop.create_task(self._keep_connected())  # Runs forever.
+            loop.create_task(self._keep_connected())  # Runs forever unless user issues .disconnect()
 
         loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
         loop.create_task(self._keep_alive())
@@ -647,14 +625,12 @@ class MQTTClient(MQTT_base):
                 gc.collect()
             else:
                 self._sta_if.disconnect()
-                #                if PYBOARD:
-                #                    self._sta_if.deinit()
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
                 except OSError:
                     continue
-                if not self._has_connected:
+                if not self._has_connected:  # User has issued the terminal .disconnect()
                     self.dprint('Disconnected, exiting _keep_connected')
                     break
                 try:

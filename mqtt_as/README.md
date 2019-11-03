@@ -327,9 +327,9 @@ schedules reconnection attempts.
 
 ### 3.2.5 disconnect (sync)
 
-No args. Disconnects from broker, closes socket. Note that disconnection
+No args. Sends a DISCONNECT packet to the broker, closes socket. Disconnection
 suppresses the Will (MQTT spec. 3.1.2.5). Should only be called on termination
-as there is no recovery mechanism.
+as the module is left in an unusable state. There is no recovery mechanism.
 
 ### 3.2.6 close (sync)
 
@@ -349,11 +349,15 @@ Returns `True` if internet connectivity is available, else `False`. It first
 checks current WiFi and broker connectivity. If present, it sends a DNS query
 to '8.8.8.8' and checks for a valid response.
 
-## 3.3 Class Attributes
+## 3.3 Class Variables
 
  1. `DEBUG` If `True` causes diagnostic messages to be printed.
  2. `REPUB_COUNT` For debug purposes. The total number of republications with
  the same PID which have occurred.
+
+## 3.4 Module Attribute
+
+ 1. `VERSION` A 3-tuple of ints (major, minor, micro) e.g. (0, 5, 0).
 
 # 4. Notes
 
