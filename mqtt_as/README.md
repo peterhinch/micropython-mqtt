@@ -1,4 +1,4 @@
-# 1. MicroPython Asynchronous MQTT
+# MicroPython Asynchronous MQTT
 
 MQTT Packets are passed between clients using a publish/subscribe model. They
 consist of a topic and a message string. Clients subscribe to a topic and will
@@ -11,6 +11,42 @@ the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
 ###### [Main README](../README.md)
+
+# 1. Contents
+
+ 1. [Contents](./README.md#1-contents)  
+  1.1 [Rationale](./README.md#11-rationale)  
+  1.2 [Overview](./README.md#12-overview)  
+  1.3 [Project Status](./README.md#13-project-status)  
+  1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)  
+  1.5 [ESP32 Issues](./README.md#15-esp32-issues)  
+  1.6 [Pyboard D](./README.md#16-pyboard-d)  
+  1.7 [Dependency](./README.md#17-dependency)  
+ 2. [Getting started](./README.md#2-getting_started)  
+  2.1 [Program files](./README.md#21-program-files)  
+  2.2 [Installation](./README.md#22-installation)  
+  2.3 [Example Usage](./README.md#23-example-usage)  
+ 3. [MQTTClient class](./README.md#3-mqttclient-class)  
+  3.1 [Constructor](./README.md#31-constructor)  
+  3.2 [Methods](./README.md#32-methods)  
+   3.2.1 [connect](./README.md#321-connect)  
+   3.2.2 [publish](./README.md#322-publish)  
+   3.2.3 [subscribe](./README.md#323-subscribe)  
+   3.2.4 [isconnected](./README.md#324-isconnected)  
+   3.2.5 [disconnect](./README.md#325-disconnect)  
+   3.2.6 [close](./README.md#326-close)  
+   3.2.7 [broker_up](./README.md#327-broker_up)  
+   3.2.8 [wan_ok](./README.md#328-wan_ok)  
+  3.3 [Class Variables](./README.md#33-class-variables)  
+  3.4 [Module Attribute](./README.md#34-module-attribute)  
+ 4. [Notes](./README.md#4-notes)  
+  4.1 [Connectivity](./README.md#41-connectivity)  
+  4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-==-1)  
+  4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-==-1)  
+  4.4 [Application Design](./README.md#44-application-design)  
+   4.4.1 [Cancellation of publications](./README.md#441-cancellation-of-publications)  
+ 5. [Low Power Demo](./README.md#5-low-power-demo) Note: Pyboard D specific and highly experimental.  
+ 6. [References](./README.md#6-references)  
 
 ## 1.1 Rationale
 
@@ -109,6 +145,8 @@ the latter will provide no MQTT performance gain. It may be used if the user
 application employs its features. The module should also run with the `pycopy`
 fork and its library, but this has not been tested.
 
+###### [Contents](./README.md#1-contents)
+
 # 2. Getting started
 
 ## 2.1 Program files
@@ -144,6 +182,8 @@ config['server'] = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 config['ssid'] = 'my_WiFi_SSID'
 config['wifi_pw'] = 'my_password'
 ```
+
+###### [Contents](./README.md#1-contents)
 
 ## 2.2 Installation
 
@@ -204,6 +244,8 @@ finally:
 The code may be tested by running `pubtest` in one terminal and, in another,
 `mosquitto_sub -h 192.168.0.9 -t result` (change the IP address to match your
 broker).
+
+###### [Contents](./README.md#1-contents)
 
 # 3. MQTTClient class
 
@@ -288,16 +330,22 @@ to restore a prior session on the first connection. This may result in a large
 backlog of qos == 1 messages being received with consequences described above.
 MQTT spec 3.1.2.4.
 
+###### [Contents](./README.md#1-contents)
+
 ## 3.2 Methods
 
-### 3.2.1 connect (async)
+### 3.2.1 connect
+
+Asynchronous.
 
 No args. Connects to the specified broker. The application should call
 `connect` once on startup. If this fails (due to WiFi or the broker being
 unavailable) an `OSError` will be raised. Subsequent reconnections after
 outages are handled automatically.
 
-### 3.2.2 publish (async)
+### 3.2.2 publish
+
+Asynchronous.
 
 If connectivity is OK the coro will complete immediately, else it will pause
 until the WiFi/broker are accessible. Section 4.2 describes qos == 1 operation.
@@ -308,7 +356,9 @@ Args:
  3. `retain=False`
  4. `qos=0`
 
-### 3.2.3 subscribe (async)
+### 3.2.3 subscribe
+
+Asynchronous.
 
 Subscriptions should be created in the connect coroutine to ensure they are
 re-established after an outage.
@@ -320,30 +370,42 @@ Args:
  1. `topic`
  2. `qos=0`
 
-### 3.2.4 isconnected (sync)
+### 3.2.4 isconnected
+
+Synchronous.
 
 No args. Returns `True` if connectivity is OK otherwise it returns `False` and
 schedules reconnection attempts.
 
-### 3.2.5 disconnect (sync)
+### 3.2.5 disconnect
+
+Synchronous.
 
 No args. Sends a DISCONNECT packet to the broker, closes socket. Disconnection
-suppresses the Will (MQTT spec. 3.1.2.5). Should only be called on termination
-as the module is left in an unusable state. There is no recovery mechanism.
+suppresses the Will (MQTT spec. 3.1.2.5). This may be done prior to a power
+down. After issuing `disconnect` it is possible to reconnect. Disconnection
+might be done to conserve power or prior to reconnecting to a different broker
+or WiFi network.
 
-### 3.2.6 close (sync)
+### 3.2.6 close
+
+Synchronous.
 
 Closes the socket. For use in development to prevent `LmacRxBlk:1` failures if
 an application raises an exception or is terminated with ctrl-C (see section
 2.3).
 
-### 3.2.7 broker_up (async)
+### 3.2.7 broker_up
+
+Asynchronous.
 
 Unless data was received in the last second it issues an MQTT ping and waits
 for a response. If it times out (`response_time` exceeded) with no response it
 returns `False` otherwise it returns `True`.
 
-### 3.2.8 wan_ok (async)
+### 3.2.8 wan_ok
+
+Asynchronous.
 
 Returns `True` if internet connectivity is available, else `False`. It first
 checks current WiFi and broker connectivity. If present, it sends a DNS query
@@ -358,6 +420,8 @@ to '8.8.8.8' and checks for a valid response.
 ## 3.4 Module Attribute
 
  1. `VERSION` A 3-tuple of ints (major, minor, micro) e.g. (0, 5, 0).
+
+###### [Contents](./README.md#1-contents)
 
 # 4. Notes
 
@@ -419,10 +483,10 @@ subscribed messages and should therefore be designed for a fast return.
 
 ### 4.4.1 Cancellation of publications
 
-This arose because a user (Kevin Köck) was concerned that, in the case where a
-connectivity outage occurred, a publication might be delayed to the point where
-it was excessively outdated. He wanted to implement a timeout to cancel the
-publication if an outage caused high latency.
+This arose because a user and contributor (Kevin Köck) was concerned that, in
+the case where a connectivity outage occurred, a publication might be delayed
+to the point where it was excessively outdated. He wanted to implement a
+timeout to cancel the publication if an outage caused high latency.
 
 Simple cancellation of a publication task is not recommended because it can
 disrupt the MQTT protocol. There are several ways to address this:  
@@ -434,6 +498,8 @@ disrupt the MQTT protocol. There are several ways to address this:
  the cancellation. The `self.lock` object protects a protocol sequence so that
  it cannot be disrupted by another task. This was the method successfully
  adopted by the user and can be seen in [mqtt_as_cancel](./mqtt_as_cancel.py)
+
+###### [Contents](./README.md#1-contents)
 
 # 5. Low power demo
 
@@ -469,12 +535,16 @@ One means of powering the Pyboard is to link the Pyboard to a USB power source
 via a USB cable wired for power only. This will ensure that a USB connection is
 not detected.
 
+###### [Contents](./README.md#1-contents)
+
 # 6. References
 
 [mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
 [mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
 [mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)  
 [mosquitto client subscribe](http://mosquitto.org/man/mosquitto_sub-1.html)  
-[MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
+[MQTT 3.1.1 spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
 [python client for PC's](https://www.eclipse.org/paho/clients/python/)  
 [Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
+
+###### [Contents](./README.md#1-contents)
