@@ -97,9 +97,16 @@ modified for resilience and for asynchronous operation.
 
 Hardware support: Pyboard D, ESP8266 and ESP32.  
 Firmware support: Official firmware. Limited support for ESP32 Loboris port.  
-Broker support: Mosquitto is preferred for its excellent MQTT compliance.
+Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
+Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
 
 ## 1.3 Project Status
+
+3rd Nov 2019 V0.5.0
+Fix bug where ESP8266 could hang attempting to connect.
+Can now reconnect after disconnect is issued.
+Improvements to PID handling. Now supports concurrent qos==1 publications and
+subscriptions.
 
 24th Sept 2019
 **API change:** the subscription callback requires an additional parameter for
@@ -130,13 +137,9 @@ own tests.
 
 ## 1.6 Pyboard D
 
-The library has been tested successfully with the Pyboard D SF2W. To auto-run
-code on power-up I found it necessary to add a short delay in main.py:
-```python
-import time
-time.sleep(5)  # Could probably be shorter
-import range  # Your application
-```
+The library has been tested successfully with the Pyboard D SF2W and SF6W. In
+long term testing it has clocked up six weeks of cumulative runtime and over
+600K messages without failure.
 
 ## 1.7 Dependency
 
@@ -244,6 +247,15 @@ finally:
 The code may be tested by running `pubtest` in one terminal and, in another,
 `mosquitto_sub -h 192.168.0.9 -t result` (change the IP address to match your
 broker).
+
+If an application is to auto-run on power-up it can be necessary to add a short
+delay in main.py:
+```python
+import time
+time.sleep(5)  # Could probably be shorter
+import range  # Your application
+```
+This is platform dependent and gives the hardware time to initialise.
 
 ###### [Contents](./README.md#1-contents)
 
