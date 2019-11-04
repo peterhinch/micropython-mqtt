@@ -105,11 +105,12 @@ providing and testing a number of bugfixes and enhancements.
 
 ## 1.3 Project Status
 
-4th Nov 2019 V0.5.0
-SSL/TLS now tested successfully on Pyboard D.
-Fix bug where ESP8266 could hang attempting to connect.
-Can now reconnect after disconnect is issued.
+4th Nov 2019 V0.5.0  
+SSL/TLS now tested successfully on Pyboard D.  
+Fix bug where ESP8266 could hang attempting to connect.  
+Can now reconnect after disconnect is issued.  
 Now supports concurrent qos==1 publications and subscriptions.
+**API change** The disconnect method is now asynchronous.
 
 24th Sept 2019
 **API change:** the subscription callback requires an additional parameter for
@@ -126,9 +127,6 @@ will take care of the network connection.
 1st April 2019
 In the light of improved ESP32 firmware and the availability of the Pyboard D
 the code has minor changes to support these platforms.
-
-My attempts to test with SSL/TLS have failed. I gather TLS on nonblocking
-sockets is work in progress. Feedback on this issue would be very welcome.
 
 ## 1.4 ESP8266 limitations
 
@@ -427,7 +425,7 @@ reconnection attempts.
 
 ### 3.2.5 disconnect
 
-Synchronous. No args.
+Asynchronous. No args.
 
 Sends a `DISCONNECT` packet to the broker, closes socket. Disconnection
 suppresses the Will (MQTT spec. 3.1.2.5). This may be done prior to a power
@@ -558,7 +556,7 @@ terminates if the `isconnected()` method returns `False`.
 The subscription callback will block publications and the reception of further
 subscribed messages and should therefore be designed for a fast return.
 
-### 4.4.1 Pblication Timeouts
+### 4.4.1 Publication Timeouts
 
 A contributor (Kevin Köck) was concerned that, in the case of a connectivity
 outage, a publication might be delayed to the point where it was excessively

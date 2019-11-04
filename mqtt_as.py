@@ -316,9 +316,10 @@ class MQTT_base:
                 return True
         return False
 
-    def disconnect(self):
+    async def disconnect(self):
         try:
-            self._sock.write(b"\xe0\0")
+            async with self.lock:
+                self._sock.write(b"\xe0\0")
         except OSError:
             pass
         self._has_connected = False
