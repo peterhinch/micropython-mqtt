@@ -12,13 +12,14 @@
 # blue LED pulse == message received
 # Publishes connection statistics.
 
-from micropython_mqtt_as.mqtt_as import MQTTClient
-from micropython_mqtt_as.config import config, wifi_led, blue_led
+from mqtt_as import MQTTClient, config
+from config import wifi_led, blue_led
 import uasyncio as asyncio
+
+TOPIC = 'shed'  # For demo publication and last will use same topic
 
 loop = asyncio.get_event_loop()
 outages = 0
-
 
 async def pulse():  # This demo pulses blue LED each time a subscribed msg arrives.
     blue_led(True)
@@ -28,7 +29,6 @@ async def pulse():  # This demo pulses blue LED each time a subscribed msg arriv
 def sub_cb(topic, msg, retained):
     print((topic, msg))
     loop.create_task(pulse())
-
 
 async def wifi_han(state):
     global outages
@@ -40,10 +40,8 @@ async def wifi_han(state):
         print('WiFi or broker is down.')
     await asyncio.sleep(1)
 
-
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
-
 
 async def main(client):
     try:
@@ -56,19 +54,18 @@ async def main(client):
         await asyncio.sleep(5)
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos=1)
+        await client.publish(TOPIC, '{} repubs: {} outages: {}'.format(n, client.REPUB_COUNT, outages), qos = 1)
         n += 1
-
 
 # Define configuration
 config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
-config['will'] = ('result', 'Goodbye cruel world!', False, 0)
+config['will'] = (TOPIC, 'Goodbye cruel world!', False, 0)
 config['connect_coro'] = conn_han
 config['keepalive'] = 120
 
-# Set up client
-MQTTClient.DEBUG = True  # Optional
+# Set up client. Enable optional debug statements.
+MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
 try:

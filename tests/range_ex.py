@@ -19,6 +19,8 @@ import uasyncio as asyncio
 import network
 import gc
 
+TOPIC = 'shed'  # For demo publication and last will use same topic
+
 loop = asyncio.get_event_loop()
 outages = 0
 rssi = -199  # Effectively zero signal in dB.
@@ -72,18 +74,18 @@ async def main(client):
         m = gc.mem_free()
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', s.format(n, client.REPUB_COUNT, outages, rssi, m), qos = 1)
+        await client.publish(TOPIC, s.format(n, client.REPUB_COUNT, outages, rssi, m), qos = 1)
         n += 1
 
 # Define configuration
 config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
-config['will'] = ('result', 'Goodbye cruel world!', False, 0)
+config['will'] = (TOPIC, 'Goodbye cruel world!', False, 0)
 config['connect_coro'] = conn_han
 config['keepalive'] = 120
 
-# Set up client
-MQTTClient.DEBUG = True  # Optional
+# Set up client. Enable optional debug statements.
+MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
 loop.create_task(get_rssi())

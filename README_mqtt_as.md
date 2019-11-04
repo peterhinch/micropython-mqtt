@@ -1,4 +1,4 @@
-# 1. MicroPython Asynchronous MQTT
+# MicroPython Asynchronous MQTT
 
 MQTT Packets are passed between clients using a publish/subscribe model. They
 consist of a topic and a message string. Clients subscribe to a topic and will
@@ -11,6 +11,42 @@ the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
 ###### [Main README](./README.md)
+
+# 1. Contents
+
+ 1. [Contents](./README.md#1-contents)
+  1.1 [Rationale](./README.md#11-rationale)
+  1.2 [Overview](./README.md#12-overview)
+  1.3 [Project Status](./README.md#13-project-status)
+  1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)
+  1.5 [ESP32 Issues](./README.md#15-esp32-issues)
+  1.6 [Pyboard D](./README.md#16-pyboard-d)
+  1.7 [Dependency](./README.md#17-dependency)
+ 2. [Getting started](./README.md#2-getting_started)
+  2.1 [Program files](./README.md#21-program-files)
+  2.2 [Installation](./README.md#22-installation)
+  2.3 [Example Usage](./README.md#23-example-usage)
+ 3. [MQTTClient class](./README.md#3-mqttclient-class)
+  3.1 [Constructor](./README.md#31-constructor)
+  3.2 [Methods](./README.md#32-methods)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.1 [connect](./README.md#321-connect)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.2 [publish](./README.md#322-publish)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.3 [subscribe](./README.md#323-subscribe)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.4 [isconnected](./README.md#324-isconnected)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.5 [disconnect](./README.md#325-disconnect)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.6 [close](./README.md#326-close)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.7 [broker_up](./README.md#327-broker_up)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.8 [wan_ok](./README.md#328-wan_ok)
+  3.3 [Class Variables](./README.md#33-class-variables)
+  3.4 [Module Attribute](./README.md#34-module-attribute)
+ 4. [Notes](./README.md#4-notes)
+  4.1 [Connectivity](./README.md#41-connectivity)
+  4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-1)
+  4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-1)
+  4.4 [Application Design](./README.md#44-application-design)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)
+ 5. [Low Power Demo](./README.md#5-low-power-demo) Note: Pyboard D specific and highly experimental.
+ 6. [References](./README.md#6-references)
 
 ## 1.1 Rationale
 
@@ -62,18 +98,24 @@ modified for resilience and for asynchronous operation.
 Hardware support: Pyboard D, ESP8266 and ESP32.  
 Firmware support: Official firmware. Limited support for ESP32 Loboris port.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.
+Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
+
+Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
+providing and testing a number of bugfixes and enhancements.
 
 ## 1.3 Project Status
 
-The API has changed. Configuration is now via a dictionary, with a default
-supplied in the main module.
+4th Nov 2019 V0.5.0
+SSL/TLS now tested successfully on Pyboard D.
+Fix bug where ESP8266 could hang attempting to connect.
+Can now reconnect after disconnect is issued.
+Now supports concurrent qos==1 publications and subscriptions.
 
 24th Sept 2019
 **API change:** the subscription callback requires an additional parameter for
 the retained message flag.  
 On ESP8266 the code disables automatic sleep: this reduces reconnects at cost
-of increased power consumption.  
-Patches for these changes provided by Kevin Köck.
+of increased power consumption.
 
 1st April 2019
 In the light of improved ESP32 firmware and the availability of the Pyboard D
@@ -83,7 +125,7 @@ the code has minor changes to support these platforms.
 Added support for the unix port of Micropython. The unique_id must be set manually
 as the unix port doesn't have the function *unique_id()* to read a chip's id.
 The library assumes that the device is correctly connected to the network as the OS
-will take care of the network connection. 
+will take care of the network connection.
 
 My attempts to test with SSL/TLS have failed. I gather TLS on nonblocking
 sockets is work in progress. Feedback on this issue would be very welcome.
@@ -91,7 +133,9 @@ sockets is work in progress. Feedback on this issue would be very welcome.
 ## 1.4 ESP8266 limitations
 
 The module is too large to compile on the ESP8266 and should be precompiled or
-preferably frozen as bytecode.
+preferably frozen as bytecode. On the reference board with `uasyncio` and
+`mqtt_as` frozen, the demo script `range_ex` reports 21.8K of free RAM while
+running.
 
 ## 1.5 ESP32 issues
 
@@ -103,13 +147,9 @@ own tests.
 
 ## 1.6 Pyboard D
 
-The library has been tested successfully with the Pyboard D SF2W. To auto-run
-code on power-up I found it necessary to add a short delay in main.py:
-```python
-import time
-time.sleep(5)  # Could probably be shorter
-import range  # Your application
-```
+The library has been tested successfully with the Pyboard D SF2W and SF6W. In
+long term testing it has clocked up six weeks of cumulative runtime and over
+600K messages without failure.
 
 ## 1.7 Dependency
 
@@ -117,6 +157,8 @@ The module requires `uasyncio` which may be the official or `fast_io` version;
 the latter will provide no MQTT performance gain. It may be used if the user
 application employs its features. The module should also run with the `pycopy`
 fork and its library, but this has not been tested.
+
+###### [Contents](./README.md#1-contents)
 
 # 2. Getting started
 
@@ -136,8 +178,26 @@ fork and its library, but this has not been tested.
  listing for limitations.
  5. `pubtest` Bash script illustrating publication with Mosquitto.
  6. `main.py` Example for auto-starting an application.
- 7. `ssl.py` Failed attempt to run with SSL. See note in [Section 1.3](./README.md#13-project-status).
- 8. `lowpower.py` Experimental micro-power test. See [Section 5](./README.md#5-low-power-demo).
+ 7. `tls.py` Demo of SSL/TLS connection to a public broker. This runs on a
+ Pyboard D. Publishes every 20s and subscribes to same topic. Connection to
+ this public broker, though encrypted, is insecure because anyone can
+ subscribe.
+
+### Experimental scripts
+
+ 1. `lowpower.py` Pybaord D micro-power test. See [Section 5](./README.md#5-low-power-demo).
+ 2. `tls8266.py` SSL/TLS connectionfor ESP8266. Fails with
+ `ssl_handshake_status: -4`.
+ 3. `tls32.py` SSL/TLS connection for ESP32. Fails with
+ `mbedtls_ssl_handshake error: -77`.
+
+Re TLS: I would greatly appreciate guidance from someone who actually knows
+this stuff. Alas I don't.
+
+### config.py
+
+This file will require editing before deploying to all nodes in a project. As
+a minimum it contains broker details but usually also holds WiFi credentials.
 
 The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
 the LAN prior to running there is no need explicitly to specify these. On other
@@ -154,11 +214,14 @@ config['ssid'] = 'my_WiFi_SSID'
 config['wifi_pw'] = 'my_password'
 ```
 
+###### [Contents](./README.md#1-contents)
+
 ## 2.2 Installation
 
 The only dependency is uasyncio from the [MicroPython library](https://github.com/micropython/micropython-lib).
 Many firmware builds include this by default. Otherwise ensure it is installed
-on the device. Normally this is done using `upip`.
+on the device. Installation is described in the tutorial in
+[this repo](https://github.com/peterhinch/micropython-async).
 
 The module is too large to compile on the ESP8266. It must either be cross
 compiled or (preferably) built as frozen bytecode: copy `mqtt_as.py` to
@@ -216,19 +279,27 @@ finally:
 ```
 
 The code may be tested by running `pubtest` in one terminal and, in another,
-`mosquitto_sub -h 192.168.0.9 -t result` (change the IP address to match your
+`mosquitto_sub -h 192.168.0.10 -t result` (change the IP address to match your
 broker).
+
+If an application is to auto-run on power-up it can be necessary to add a short
+delay in main.py:
+```python
+import time
+time.sleep(5)  # Could probably be shorter
+import range  # Your application
+```
+This is platform dependent and gives the hardware time to initialise.
+
+###### [Contents](./README.md#1-contents)
 
 # 3. MQTTClient class
 
-The module provides a single class: `MQTTClient`. On ESP8266 it uses the chip's
-ability to automatically find, authenticate and connect to a network it has
-previously encountered: the application should ensure that the device is set up
-to do this.
+The module provides a single class: `MQTTClient`.
 
 ## 3.1 Constructor
 
-This takes all keywords found in the dictionary in `config.py` as argument. 
+This takes all keywords found in the dictionary in `config.py` as argument.
 As a convenience you can also use this dictionary by importing it and changing
 the values. You then call the constructor by `MQTTClient(**config)`, this
 automatically matches the contents of the dict to the keywords of the constructor.
@@ -305,19 +376,27 @@ to restore a prior session on the first connection. This may result in a large
 backlog of qos == 1 messages being received with consequences described above.
 MQTT spec 3.1.2.4.
 
+###### [Contents](./README.md#1-contents)
+
 ## 3.2 Methods
 
-### 3.2.1 connect (async)
+### 3.2.1 connect
+
+Asynchronous.
 
 No args. Connects to the specified broker. The application should call
 `connect` once on startup. If this fails (due to WiFi or the broker being
 unavailable) an `OSError` will be raised. Subsequent reconnections after
 outages are handled automatically.
 
-### 3.2.2 publish (async)
+### 3.2.2 publish
+
+Asynchronous.
 
 If connectivity is OK the coro will complete immediately, else it will pause
-until the WiFi/broker are accessible. Section 4.2 describes qos == 1 operation.
+until the WiFi/broker are accessible.
+[Section 4.2](./README.md#42-client-publications-with-qos-1) describes qos == 1
+operation.
 
 Args:
  1. `topic`
@@ -325,7 +404,9 @@ Args:
  3. `retain=False`
  4. `qos=0`
 
-### 3.2.3 subscribe (async)
+### 3.2.3 subscribe
+
+Asynchronous.
 
 Subscriptions should be created in the connect coroutine to ensure they are
 re-established after an outage.
@@ -337,35 +418,51 @@ Args:
  1. `topic`
  2. `qos=0`
 
-### 3.2.4 isconnected (sync)
+### 3.2.4 isconnected
 
-No args. Returns `True` if connectivity is OK otherwise it returns `False` and
-schedules reconnection attempts.
+Synchronous. No args.
 
-### 3.2.5 disconnect (sync)
+Returns `True` if connectivity is OK otherwise it returns `False` and schedules
+reconnection attempts.
 
-No args. Disconnects from broker, closes socket. Note that disconnection
-suppresses the Will (MQTT spec. 3.1.2.5). Should only be called on termination
-as there is no recovery mechanism.
+### 3.2.5 disconnect
 
-### 3.2.6 close (sync)
+Synchronous. No args.
+
+Sends a `DISCONNECT` packet to the broker, closes socket. Disconnection
+suppresses the Will (MQTT spec. 3.1.2.5). This may be done prior to a power
+down. After issuing `disconnect` it is possible to reconnect. Disconnection
+might be done to conserve power or prior to reconnecting to a different broker
+or WiFi network.
+
+### 3.2.6 close
+
+Synchronous. No args.
 
 Closes the socket. For use in development to prevent `LmacRxBlk:1` failures if
-an application raises an exception or is terminated with ctrl-C (see section
-2.3).
+an application raises an exception or is terminated with ctrl-C (see
+[Example Usage](./README.md#23-example-usage).
 
-### 3.2.7 broker_up (async)
+### 3.2.7 broker_up
+
+Asynchronous. No args.
 
 Unless data was received in the last second it issues an MQTT ping and waits
 for a response. If it times out (`response_time` exceeded) with no response it
 returns `False` otherwise it returns `True`.
 
-### 3.2.8 wan_ok (async)
+### 3.2.8 wan_ok
+
+Asynchronous.
 
 Returns `True` if internet connectivity is available, else `False`. It first
 checks current WiFi and broker connectivity. If present, it sends a DNS query
 to '8.8.8.8' and checks for a valid response.
 
+There is a single arg `packet` which is a bytes object being the DNS query. The
+default object queries the Google DNS server.
+
+## 3.3 Class Variables
 ### 3.2.9 unsubscribe (async)
 
 Unsubscribes a topic, so no messages will be received anymore.
@@ -379,8 +476,14 @@ Args:
 ## 3.3 Class Attributes
 
  1. `DEBUG` If `True` causes diagnostic messages to be printed.
- 2. `REPUB_COUNT` For debug purposes. The total number of republications with
- the same PID which have occurred.
+ 2. `REPUB_COUNT` For debug purposes. Logs the total number of republications
+ with the same PID which have occurred since startup.
+
+## 3.4 Module Attribute
+
+ 1. `VERSION` A 3-tuple of ints (major, minor, micro) e.g. (0, 5, 0).
+
+###### [Contents](./README.md#1-contents)
 
 # 4. Notes
 
@@ -391,7 +494,7 @@ connectivity has been lost if no messages have been received in that period.
 The module attempts to keep the connection open by issuing an MQTT ping up to
 four times during the keepalive interval. (It pings if the last response from
 the broker was over 1/4 of the keepalive period). More frequent pings may be
-desirable to reduce latency in subscribe-only applications. This may be achieved
+desirable to reduce latency in subscribe-only applications. This may be done
 using the `ping_interval` configuration option.
 
 If the broker times out it will issue the "last will" publication (if any).
@@ -403,20 +506,24 @@ socket and periodically attempt to reconnect until it succeeds.
 In the event of failing connectivity client and server publications with
 qos == 0 may be lost. The behaviour of qos == 1 packets is described below.
 
-## 4.2 Client publications with qos == 1
+## 4.2 Client publications with qos 1
 
 These behave as follows. The client waits for `response_time`. If no
 acknowledgment has been received it re-publishes it, up to `MAX_REPUBS` times.
-In the absence of acknowledgment the network is presumed to be down. The
-client reconnects as described above. The publication is then attempted again
-as a new message with a different PID. (The new PID proved necessary for
-Mosquitto to recognise the message).
+In the absence of acknowledgment the network is presumed to be down. The client
+reconnects as described above. The publication is then attempted again as a new
+message with a different PID. (The new PID proved necessary for Mosquitto to
+recognise the message).
 
 This effectively guarantees the reception of a qos == 1 publication, with the
 proviso that the publishing coroutine will block until reception has been
 acknowledged.
 
-## 4.3 Client subscriptions with qos == 1
+It is permissible for qos == 1 publications to run concurrently with each
+paused pending acknowledgement, however this has implications for resource
+constrained devices. See [Section 4.4](./README.md#44-application-design).
+
+## 4.3 Client subscriptions with qos 1
 
 Where the client is subscribed to a topic with qos == 1 and a publication with
 qos == 1 occurs the broker will re-publish until an acknowledgment is
@@ -428,9 +535,21 @@ resulting in `LmacRxBlk:1` messages).
 
 ## 4.4 Application design
 
-The library is not designed to handle concurrent publications or registration
-of subscriptions. A single task should exist for each of these activities. If a
-publication queue is required this should be implemented by the application.
+The module allows concurrent publications and registration of subscriptions.
+
+When using qos == 1 publications on hardware with limited resources such as
+ESP8266 it is wise to avoid concurrency by implementing a single publication
+task. In such cases if a publication queue is required it should be implemented
+by the application.
+
+On capable hardware it is valid to have multiple coroutines performing qos == 1
+publications asynchronously, but it may be necessary to increase the default
+`uasyncio` queue sizes:
+
+```python
+import uasyncio as asyncio
+loop = asyncio.get_event_loop(runq_len=40, waitq_len=40)
+```
 
 The WiFi and Connect coroutines should run to completion quickly relative to
 the time required to connect and disconnect from the network. Aim for 2 seconds
@@ -440,12 +559,12 @@ terminates if the `isconnected()` method returns `False`.
 The subscription callback will block publications and the reception of further
 subscribed messages and should therefore be designed for a fast return.
 
-### 4.4.1 Cancellation of publications
+### 4.4.1 Pblication Timeouts
 
-This arose because a user (Kevin Köck) was concerned that, in the case where a
-connectivity outage occurred, a publication might be delayed to the point where
-it was excessively outdated. He wanted to implement a timeout to cancel the
-publication if an outage caused high latency.
+A contributor (Kevin Köck) was concerned that, in the case of a connectivity
+outage, a publication might be delayed to the point where it was excessively
+outdated. He wanted to implement a timeout to cancel the publication if an
+outage caused high latency.
 
 Simple cancellation of a publication task is not recommended because it can
 disrupt the MQTT protocol. There are several ways to address this:  
@@ -456,7 +575,12 @@ disrupt the MQTT protocol. There are several ways to address this:
  3. Subclass the `MQTTClient` and acquire the `self.lock` object before issuing
  the cancellation. The `self.lock` object protects a protocol sequence so that
  it cannot be disrupted by another task. This was the method successfully
- adopted by the user and can be seen in [mqtt_as_cancel](./mqtt_as_cancel.py)
+ adopted and can be seen in [mqtt_as_timeout.pyl](./mqtt_as_timeout.py).
+
+This was not included in the library mainly because most use cases are covered
+by use of a timestamp. Other reasons are documented in the code comments.
+
+###### [Contents](./README.md#1-contents)
 
 # 5. Low power demo
 
@@ -492,12 +616,16 @@ One means of powering the Pyboard is to link the Pyboard to a USB power source
 via a USB cable wired for power only. This will ensure that a USB connection is
 not detected.
 
+###### [Contents](./README.md#1-contents)
+
 # 6. References
 
 [mqtt introduction](http://mosquitto.org/man/mqtt-7.html)  
 [mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
 [mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)  
 [mosquitto client subscribe](http://mosquitto.org/man/mosquitto_sub-1.html)  
-[MQTT spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
+[MQTT 3.1.1 spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)
 [python client for PC's](https://www.eclipse.org/paho/clients/python/)  
 [Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
+
+###### [Contents](./README.md#1-contents)
