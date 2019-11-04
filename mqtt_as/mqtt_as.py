@@ -1,4 +1,4 @@
-# mqtt_as.py Asynchronous version of umqt.robust
+# mqtt_as.py Asynchronous version of umqtt.robust
 # (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
 
@@ -319,9 +319,10 @@ class MQTT_base:
                 return True
         return False
 
-    def disconnect(self):
+    async def disconnect(self):
         try:
-            self._sock.write(b"\xe0\0")
+            async with self.lock:
+                self._sock.write(b"\xe0\0")
         except OSError:
             pass
         self._has_connected = False
