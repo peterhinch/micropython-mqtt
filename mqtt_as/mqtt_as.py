@@ -165,12 +165,6 @@ class MQTT_base:
         if self.DEBUG:
             print(*args)
 
-    def _pid_gen(self):
-        pid = 0
-        while True:
-            pid = pid + 1 if pid < 65535 else 1
-            yield pid
-
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
 
