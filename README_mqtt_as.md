@@ -117,15 +117,15 @@ the retained message flag.
 On ESP8266 the code disables automatic sleep: this reduces reconnects at cost
 of increased power consumption.
 
-1st April 2019
-In the light of improved ESP32 firmware and the availability of the Pyboard D
-the code has minor changes to support these platforms.
-
 2nd July 2019
 Added support for the unix port of Micropython. The unique_id must be set manually
 as the unix port doesn't have the function *unique_id()* to read a chip's id.
 The library assumes that the device is correctly connected to the network as the OS
 will take care of the network connection.
+
+1st April 2019
+In the light of improved ESP32 firmware and the availability of the Pyboard D
+the code has minor changes to support these platforms.
 
 My attempts to test with SSL/TLS have failed. I gather TLS on nonblocking
 sockets is work in progress. Feedback on this issue would be very welcome.
@@ -462,7 +462,6 @@ to '8.8.8.8' and checks for a valid response.
 There is a single arg `packet` which is a bytes object being the DNS query. The
 default object queries the Google DNS server.
 
-## 3.3 Class Variables
 ### 3.2.9 unsubscribe (async)
 
 Unsubscribes a topic, so no messages will be received anymore.
@@ -473,7 +472,7 @@ necessary reconnecting to a failed network.
 Args:
  1. `topic`
 
-## 3.3 Class Attributes
+## 3.3 Class Variables
 
  1. `DEBUG` If `True` causes diagnostic messages to be printed.
  2. `REPUB_COUNT` For debug purposes. Logs the total number of republications

@@ -1,6 +1,12 @@
 # Author: Kevin Köck
 # Copyright Kevin Köck 2019 Released under the MIT license
-# Created on 2019-10-28 
+# Created on 2019-10-28
+
+# This is basically just a paranoid change protecting the device from crashing
+# with a memory allocation error if it receives a message not fitting in RAM.
+# It will still receive and process the message but the arguments "topic" or "msg"
+# of the callback might be None depending on which values couldn't be received
+# because of the memory allocation error.
 
 __updated__ = "2019-10-28"
 __version__ = "0.1"
@@ -33,7 +39,7 @@ class MQTTClient(_MQTTClient):
                 # received later and lead to buffer overflows and keepalive timeout anyway
                 # so best to terminate the connection
                 raise OSError
-            if msg == b'':  # Connection closed by host (?)
+            if msg == b'':  # Connection closed by host
                 raise OSError(-1)
             if msg is not None and data is not None:  # data received
                 try:

@@ -59,11 +59,13 @@ async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
 class MQTTException(Exception):
     pass
 
+
 def pid_gen():
     pid = 0
     while True:
         pid = pid + 1 if pid < 65535 else 1
         yield pid
+
 
 def qos_check(qos):
     if not (qos == 0 or qos == 1):
@@ -119,7 +121,7 @@ class MQTT_base:
         else:
             self._set_last_will(*will)
         # WiFi config
-        self._ssid = ssid  # For ESP32 / Pyboard D
+        self._ssid = ssid  # Required ESP32 / Pyboard D
         self._wifi_pw = wifi_pw
         self._ssl = ssl
         self._ssl_params = ssl_params
@@ -397,10 +399,8 @@ class MQTT_base:
     # Can raise OSError if WiFi fails. Subclass traps
     async def unsubscribe(self, topic):
         pkt = bytearray(b"\xa2\0\0\0")
-        pid = newpid(self.pid)
-        self.pid = pid  # will otherwise result in multiple operations having the same pid
+        pid = next(self.newpid)
         self.rcv_pids.add(pid)
-        self.dprint("unsubscribe", topic, "pid", pid)
         struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), pid)
         async with self.lock:
             await self._as_write(pkt)
@@ -448,16 +448,12 @@ class MQTT_base:
                 raise OSError(-1)
 
         if op == 0xB0:  # UNSUBACK
-            self.dprint("received unsuback")
             resp = await self._as_read(3)
             pid = resp[2] | (resp[1] << 8)
-            self.dprint("got unsuback pid", pid)
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
-                self.dprint("UNSUBACK unknown pid", pid)
                 raise OSError(-1)
-            self.dprint("rcv_pids:", self.rcv_pids)
 
         if op & 0xf0 != 0x30:
             return
@@ -590,7 +586,8 @@ class MQTTClient(MQTT_base):
         loop.create_task(self._wifi_handler(True))  # User handler.
         if not self._has_connected:
             self._has_connected = True  # Use normal clean flag on reconnect.
-            loop.create_task(self._keep_connected())  # Runs forever unless user issues .disconnect()
+            loop.create_task(
+                self._keep_connected())  # Runs forever unless user issues .disconnect()
 
         loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
         loop.create_task(self._keep_alive())
@@ -673,8 +670,6 @@ class MQTTClient(MQTT_base):
                     self._sta_isconnected = False
                 else:
                     self._sta_if.disconnect()
-                # if PYBOARD:
-                #    self._sta_if.deinit()
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
