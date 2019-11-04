@@ -3,7 +3,7 @@
 # Created on 2019-11-04
 
 __updated__ = "2019-11-04"
-__version__ = "0.1"
+__version__ = "0.2"
 
 from .mqtt_as import MQTTClient as _MQTTClient
 import uasyncio as asyncio
@@ -11,7 +11,7 @@ import time
 
 
 class MQTTClient(_MQTTClient):
-    _ops_coros = [None] * 10
+    _ops_coros = set()
 
     async def publish(self, topic, msg, retain=False, qos=0, timeout=None, await_connection=True):
         return await self._preprocessor(super().publish, topic, msg, retain, qos,
@@ -35,41 +35,48 @@ class MQTTClient(_MQTTClient):
         try:
             await coro(*args)
         finally:
-            self._ops_coros[slot] = None
+            for obj in self._ops_coros:
+                if obj[0] == slot:
+                    self._ops_coros.discard(obj)
+                    return
 
     async def _preprocessor(self, coroutine, *args, timeout=None, await_connection=True):
         start = time.ticks_ms()
-        slot = None
         coro = None
         try:
             while timeout is None or time.ticks_diff(time.ticks_ms(), start) < timeout * 1000:
                 if not await_connection and not self._isconnected:
                     return False
-                if slot is None:
-                    # wait for slot in queue
-                    for i, c in enumerate(self._ops_coros):
-                        if c is None:
-                            slot = i
+                elif coro is None:
+                    # search for unused identifier
+                    found = False
+                    identifier = None
+                    for i in range(1024):
+                        for obj in self._ops_coros:
+                            if obj[0] == i:
+                                found = True
+                                break
+                        if not found:  # id unique
+                            identifier = i
                             break
-                elif slot and self._ops_coros[slot] is coro is None:
                     # create task
-                    coro = self._operationTimeout(coroutine, *args, slot=slot)
-                    asyncio.get_event_loop().create_task(coro)
-                    self._ops_coros[slot] = coro
-                elif self._ops_coros[slot] != coro:
-                    # Slot either None or already new coro assigned.
-                    # Means the operation finished successfully.
+                    task = self._operationTimeout(coroutine, *args, slot=identifier)
+                    asyncio.get_event_loop().create_task(task)
+                    coro = (identifier, task)
+                    self._ops_coros.add(coro)
+                elif coro not in self._ops_coros:
+                    # coro removed, so operation was successful
                     return True
                 await asyncio.sleep_ms(20)
             self.dprint("timeout on", args)
         except asyncio.CancelledError:
             raise  # the caller of this coro should be cancelled too
         finally:
-            if coro and self._ops_coros[slot] == coro:
+            if coro and coro in self._ops_coros:
                 # coro still active, cancel it
                 async with self.lock:
-                    asyncio.cancel(coro)
-                # self._ops_coros[slot] = None  is done by finally in _operationTimeout
+                    asyncio.cancel(coro[1])
+                # self._ops_coros.discard(coro)  is done by finally in _operationTimeout
                 return False
-            # else: returns return value during process
+            # else: returns return value during process, which is True in case it was successful
         return False
