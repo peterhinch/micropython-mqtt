@@ -1,8 +1,7 @@
 # mqtt_as.py Asynchronous version of umqt.robust
 # (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
-# Support for Sonoff removed.
-# ESP32 hacks removed to reflect improvements to firmware.
+
 # Pyboard D support added
 # Various improvements contributed by Kevin Köck.
 
