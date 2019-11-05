@@ -649,7 +649,22 @@ class MQTTClient(MQTT_base):
                 pass
             self._reconnect()  # Broker or WiFi fail.
 
-    async def publish(self, topic, msg, retain=False, qos=0):
+    async def pub_timeout(self, coro, to):
+        await asyncio.sleep(to)
+        asyncio.cancel(coro)
+
+    async def publish(self, topic, msg, retain=False, qos=0, timeout=0):
+        pub = self.publish_to(topic, msg, retain, qos)
+        if timeout > 0:
+            loop = asyncio.get_event_loop()
+            loop.create_task(self.pub_timeout(pub, timeout))
+        try:
+            await pub
+        except asyncio.CancelledError:
+            return False
+        return True
+
+    async def publish_to(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
         while 1:
             await self._connection()
