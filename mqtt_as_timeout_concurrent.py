@@ -5,7 +5,7 @@
 __updated__ = "2019-11-04"
 __version__ = "0.2"
 
-from .mqtt_as import MQTTClient as _MQTTClient
+from micropython_mqtt_as.mqtt_as import MQTTClient as _MQTTClient
 import uasyncio as asyncio
 import time
 
@@ -49,9 +49,9 @@ class MQTTClient(_MQTTClient):
                     return False
                 elif coro is None:
                     # search for unused identifier
-                    found = False
                     identifier = None
                     for i in range(1024):
+                        found = False
                         for obj in self._ops_coros:
                             if obj[0] == i:
                                 found = True
@@ -66,6 +66,7 @@ class MQTTClient(_MQTTClient):
                     self._ops_coros.add(coro)
                 elif coro not in self._ops_coros:
                     # coro removed, so operation was successful
+                    self.dprint("Success on", args)
                     return True
                 await asyncio.sleep_ms(20)
             self.dprint("timeout on", args)
