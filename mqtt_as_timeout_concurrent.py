@@ -24,7 +24,7 @@ class MQTTClient(_MQTTClient):
     async def unsubscribe(self, topic, timeout=None, await_connection=False):
         # with clean sessions a connection loss is basically a successful unsubscribe
         return await self._preprocessor(super().unsubscribe, topic, timeout=timeout,
-                                        await_connection=False)
+                                        await_connection=await_connection)
 
     # Await broker connection. Subclassed to reduce canceling time from 1s to 50ms
     async def _connection(self):
@@ -59,7 +59,9 @@ class MQTTClient(_MQTTClient):
                         if not found:  # id unique
                             identifier = i
                             break
-                    # create task
+                    # create task (if task was created outside loop, a return would cancel the
+                    # not-started generator and prevent it from removing itself from
+                    # self._ops_coros)
                     task = self._operationTimeout(coroutine, *args, slot=identifier)
                     asyncio.get_event_loop().create_task(task)
                     coro = (identifier, task)
