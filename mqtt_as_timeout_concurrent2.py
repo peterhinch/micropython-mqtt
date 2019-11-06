@@ -81,6 +81,7 @@ class MQTTClient(_MQTTClient):
         res = None  # since mqtt_as doesn't return on success, None is success
 
         async def op():
+            nonlocal res
             try:
                 res = await coro
             finally:
