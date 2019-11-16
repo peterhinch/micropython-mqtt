@@ -336,7 +336,7 @@ def cancellable(f):
             args = (args[0],) + args[2:]
             g = f(*args, **kwargs)
         try:
-            res = await g
+            res = yield g
             return res
         finally:
             NamedTask._stopped(task_id)

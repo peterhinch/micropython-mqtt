@@ -1,5 +1,6 @@
 # mqtt_as.py Asynchronous version of umqtt.robust
 # (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Kevin Köck 2018-2019.
 # Released under the MIT licence.
 
 # Pyboard D support added
@@ -14,13 +15,11 @@ from ubinascii import hexlify
 import uasyncio as asyncio
 
 gc.collect()
-from utime import ticks_ms, ticks_diff, sleep_ms
+from utime import ticks_ms, ticks_diff
 from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
 from micropython import const
-from machine import unique_id
-import network
 
 gc.collect()
 from sys import platform
@@ -42,6 +41,14 @@ ESP8266 = platform == 'esp8266'
 ESP32 = platform == 'esp32'
 PYBOARD = platform == 'pyboard'
 LOBO = platform == 'esp32_LoBo'
+LINUX = platform == "linux"
+
+if LINUX is False:
+    import network
+    from machine import unique_id
+else:
+    def unique_id():
+        raise NotImplementedError("Linux doesn't have a unique id. Provide the argument client_id")
 
 
 # Default "do little" coro for optional user replacement
@@ -49,31 +56,9 @@ async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
     await asyncio.sleep_ms(_DEFAULT_MS)
 
 
-config = {
-    'client_id':     hexlify(unique_id()),
-    'server':        None,
-    'port':          0,
-    'user':          '',
-    'password':      '',
-    'keepalive':     60,
-    'ping_interval': 0,
-    'ssl':           False,
-    'ssl_params':    {},
-    'response_time': 10,
-    'clean_init':    True,
-    'clean':         True,
-    'max_repubs':    4,
-    'will':          None,
-    'subs_cb':       lambda *_: None,
-    'wifi_coro':     eliza,
-    'connect_coro':  eliza,
-    'ssid':          None,
-    'wifi_pw':       None,
-}
-
-
 class MQTTException(Exception):
     pass
+
 
 def pid_gen():
     pid = 0
@@ -81,12 +66,13 @@ def pid_gen():
         pid = pid + 1 if pid < 65535 else 1
         yield pid
 
+
 def qos_check(qos):
     if not (qos == 0 or qos == 1):
         raise ValueError('Only qos 0 and 1 are supported.')
 
 
-class Lock():
+class Lock:
     def __init__(self):
         self._locked = False
 
@@ -102,6 +88,12 @@ class Lock():
         self._locked = False
         await asyncio.sleep_ms(_DEFAULT_MS)
 
+    def locked(self):
+        return self._locked
+
+    def release(self):
+        self._locked = False
+
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.
 # Exceptions from connectivity failures are handled by MQTTClient subclass.
@@ -109,42 +101,47 @@ class MQTT_base:
     REPUB_COUNT = 0  # TEST
     DEBUG = False
 
-    def __init__(self, config):
+    def __init__(self, client_id, server, port, user, password, keepalive, ping_interval,
+                 ssl, ssl_params, response_time, clean_init, clean, max_repubs, will,
+                 subs_cb, wifi_coro, connect_coro, ssid, wifi_pw):
         # MQTT config
-        self._client_id = config['client_id']
-        self._user = config['user']
-        self._pswd = config['password']
-        self._keepalive = config['keepalive']
+        self.ping_interval = ping_interval
+        self._client_id = client_id
+        self._user = user
+        self._pswd = password
+        self._keepalive = keepalive
         if self._keepalive >= 65536:
             raise ValueError('invalid keepalive time')
-        self._response_time = config['response_time'] * 1000  # Repub if no PUBACK received (ms).
-        self._max_repubs = config['max_repubs']
-        self._clean_init = config['clean_init']  # clean_session state on first connection
-        self._clean = config['clean']  # clean_session state on reconnect
-        will = config['will']
+        self._response_time = response_time * 1000  # Repub if no PUBACK received (ms).
+        self._max_repubs = max_repubs
+        self._clean_init = clean_init  # clean_session state on first connection
+        self._clean = clean  # clean_session state on reconnect
         if will is None:
             self._lw_topic = False
         else:
             self._set_last_will(*will)
         # WiFi config
-        self._ssid = config['ssid']  # Required for ESP32 / Pyboard D. Optional ESP8266
-        self._wifi_pw = config['wifi_pw']
-        self._ssl = config['ssl']
-        self._ssl_params = config['ssl_params']
+        self._ssid = ssid  # Required ESP32 / Pyboard D
+        self._wifi_pw = wifi_pw
+        self._ssl = ssl
+        self._ssl_params = ssl_params
         # Callbacks and coros
-        self._cb = config['subs_cb']
-        self._wifi_handler = config['wifi_coro']
-        self._connect_handler = config['connect_coro']
+        self._cb = subs_cb
+        self._wifi_handler = wifi_coro
+        self._connect_handler = connect_coro
         # Network
-        self.port = config['port']
+        self.port = port
         if self.port == 0:
             self.port = 8883 if self._ssl else 1883
-        self.server = config['server']
+        self.server = server
         if self.server is None:
             raise ValueError('no server specified.')
         self._sock = None
-        self._sta_if = network.WLAN(network.STA_IF)
-        self._sta_if.active(True)
+        if LINUX is True:
+            self._sta_isconnected = True
+        else:
+            self._sta_if = network.WLAN(network.STA_IF)
+            self._sta_if.active(True)
 
         self.newpid = pid_gen()
         self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
@@ -400,6 +397,19 @@ class MQTT_base:
         if not await self._await_pid(pid):
             raise OSError(-1)
 
+    # Can raise OSError if WiFi fails. Subclass traps
+    async def unsubscribe(self, topic):
+        pkt = bytearray(b"\xa2\0\0\0")
+        pid = next(self.newpid)
+        self.rcv_pids.add(pid)
+        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), pid)
+        async with self.lock:
+            await self._as_write(pkt)
+            await self._send_str(topic)
+
+        if not await self._await_pid(pid):
+            raise OSError(-1)
+
     # Wait for a single incoming MQTT message and process it.
     # Subscribed messages are delivered to a callback previously
     # set by .setup() method. Other (internal) MQTT
@@ -438,6 +448,14 @@ class MQTT_base:
             else:
                 raise OSError(-1)
 
+        if op == 0xB0:  # UNSUBACK
+            resp = await self._as_read(3)
+            pid = resp[2] | (resp[1] << 8)
+            if pid in self.rcv_pids:
+                self.rcv_pids.discard(pid)
+            else:
+                raise OSError(-1)
+
         if op & 0xf0 != 0x30:
             return
         sz = await self._recv_len()
@@ -452,23 +470,46 @@ class MQTT_base:
         msg = await self._as_read(sz)
         retained = op & 0x01
         self._cb(topic, msg, bool(retained))
-        if op & 6 == 2:
+        if op & 6 == 2:  # qos 1
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
             await self._as_write(pkt)
-        elif op & 6 == 4:
+        elif op & 6 == 4:  # qos 2 not supported
             raise OSError(-1)
 
 
 # MQTTClient class. Handles issues relating to connectivity.
 
 class MQTTClient(MQTT_base):
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, client_id=None,
+                 server=None,
+                 port=0,
+                 user='',
+                 password='',
+                 keepalive=60,
+                 ping_interval=0,
+                 ssl=False,
+                 ssl_params={},
+                 response_time=10,
+                 clean_init=True,
+                 clean=True,
+                 max_repubs=4,
+                 will=None,
+                 subs_cb=lambda *_: None,
+                 wifi_coro=None,
+                 connect_coro=None,
+                 ssid=None,
+                 wifi_pw=None):
+        client_id = client_id or hexlify(unique_id())
+        wifi_coro = wifi_coro or eliza
+        connect_coro = connect_coro or eliza
+        super().__init__(client_id, server, port, user, password, keepalive, ping_interval,
+                         ssl, ssl_params, response_time, clean_init, clean, max_repubs, will,
+                         subs_cb, wifi_coro, connect_coro, ssid, wifi_pw)
         self._isconnected = False  # Current connection state
         keepalive = 1000 * self._keepalive  # ms
         self._ping_interval = keepalive // 4 if keepalive else 20000
-        p_i = config['ping_interval'] * 1000  # Can specify shorter e.g. for subscribe-only
+        p_i = self.ping_interval * 1000  # Can specify shorter e.g. for subscribe-only
         if p_i and p_i < self._ping_interval:
             self._ping_interval = p_i
         self._in_connect = False
@@ -478,6 +519,9 @@ class MQTTClient(MQTT_base):
             esp.sleep_type(0)  # Improve connection integrity at cost of power consumption.
 
     async def wifi_connect(self):
+        if LINUX is True:  # no network control, assume connected as OS takes care of that
+            self._sta_isconnected = True
+            return
         s = self._sta_if
         if ESP8266:
             if s.isconnected():  # 1st attempt, already connected.
@@ -543,7 +587,8 @@ class MQTTClient(MQTT_base):
         loop.create_task(self._wifi_handler(True))  # User handler.
         if not self._has_connected:
             self._has_connected = True  # Use normal clean flag on reconnect.
-            loop.create_task(self._keep_connected())  # Runs forever unless user issues .disconnect()
+            loop.create_task(
+                self._keep_connected())  # Runs forever unless user issues .disconnect()
 
         loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
         loop.create_task(self._keep_alive())
@@ -594,8 +639,12 @@ class MQTTClient(MQTT_base):
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
             return True
-        if self._isconnected and not self._sta_if.isconnected():  # It's going down.
-            self._reconnect()
+        if LINUX is True:
+            if self._isconnected and self._sta_isconnected is False:
+                self._reconnect()
+        else:
+            if self._isconnected and not self._sta_if.isconnected():  # It's going down.
+                self._reconnect()
         return self._isconnected
 
     def _reconnect(self):  # Schedule a reconnection if not underway.
@@ -618,7 +667,10 @@ class MQTTClient(MQTT_base):
                 await asyncio.sleep(1)
                 gc.collect()
             else:
-                self._sta_if.disconnect()
+                if LINUX is True:
+                    self._sta_isconnected = False
+                else:
+                    self._sta_if.disconnect()
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
@@ -645,6 +697,15 @@ class MQTTClient(MQTT_base):
             await self._connection()
             try:
                 return await super().subscribe(topic, qos)
+            except OSError:
+                pass
+            self._reconnect()  # Broker or WiFi fail.
+
+    async def unsubscribe(self, topic):
+        while 1:
+            await self._connection()
+            try:
+                return await super().unsubscribe(topic)
             except OSError:
                 pass
             self._reconnect()  # Broker or WiFi fail.

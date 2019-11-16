@@ -10,43 +10,43 @@ but duplication can occur. Level 2 avoids duplication; it is not supported by
 the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
-###### [Main README](../README.md)
+###### [Main README](./README.md)
 
 # 1. Contents
 
- 1. [Contents](./README.md#1-contents)  
-  1.1 [Rationale](./README.md#11-rationale)  
-  1.2 [Overview](./README.md#12-overview)  
-  1.3 [Project Status](./README.md#13-project-status)  
-  1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)  
-  1.5 [ESP32 Issues](./README.md#15-esp32-issues)  
-  1.6 [Pyboard D](./README.md#16-pyboard-d)  
-  1.7 [Dependency](./README.md#17-dependency)  
- 2. [Getting started](./README.md#2-getting_started)  
-  2.1 [Program files](./README.md#21-program-files)  
-  2.2 [Installation](./README.md#22-installation)  
-  2.3 [Example Usage](./README.md#23-example-usage)  
- 3. [MQTTClient class](./README.md#3-mqttclient-class)  
-  3.1 [Constructor](./README.md#31-constructor)  
-  3.2 [Methods](./README.md#32-methods)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.1 [connect](./README.md#321-connect)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.2 [publish](./README.md#322-publish)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.3 [subscribe](./README.md#323-subscribe)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.4 [isconnected](./README.md#324-isconnected)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.5 [disconnect](./README.md#325-disconnect)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.6 [close](./README.md#326-close)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.7 [broker_up](./README.md#327-broker_up)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.8 [wan_ok](./README.md#328-wan_ok)  
-  3.3 [Class Variables](./README.md#33-class-variables)  
-  3.4 [Module Attribute](./README.md#34-module-attribute)  
- 4. [Notes](./README.md#4-notes)  
-  4.1 [Connectivity](./README.md#41-connectivity)  
-  4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-1)  
-  4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-1)  
-  4.4 [Application Design](./README.md#44-application-design)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)  
- 5. [Low Power Demo](./README.md#5-low-power-demo) Note: Pyboard D specific and highly experimental.  
- 6. [References](./README.md#6-references)  
+ 1. [Contents](./README.md#1-contents)
+  1.1 [Rationale](./README.md#11-rationale)
+  1.2 [Overview](./README.md#12-overview)
+  1.3 [Project Status](./README.md#13-project-status)
+  1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)
+  1.5 [ESP32 Issues](./README.md#15-esp32-issues)
+  1.6 [Pyboard D](./README.md#16-pyboard-d)
+  1.7 [Dependency](./README.md#17-dependency)
+ 2. [Getting started](./README.md#2-getting_started)
+  2.1 [Program files](./README.md#21-program-files)
+  2.2 [Installation](./README.md#22-installation)
+  2.3 [Example Usage](./README.md#23-example-usage)
+ 3. [MQTTClient class](./README.md#3-mqttclient-class)
+  3.1 [Constructor](./README.md#31-constructor)
+  3.2 [Methods](./README.md#32-methods)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.1 [connect](./README.md#321-connect)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.2 [publish](./README.md#322-publish)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.3 [subscribe](./README.md#323-subscribe)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.4 [isconnected](./README.md#324-isconnected)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.5 [disconnect](./README.md#325-disconnect)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.6 [close](./README.md#326-close)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.7 [broker_up](./README.md#327-broker_up)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.8 [wan_ok](./README.md#328-wan_ok)
+  3.3 [Class Variables](./README.md#33-class-variables)
+  3.4 [Module Attribute](./README.md#34-module-attribute)
+ 4. [Notes](./README.md#4-notes)
+  4.1 [Connectivity](./README.md#41-connectivity)
+  4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-1)
+  4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-1)
+  4.4 [Application Design](./README.md#44-application-design)
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)
+ 5. [Low Power Demo](./README.md#5-low-power-demo) Note: Pyboard D specific and highly experimental.
+ 6. [References](./README.md#6-references)
 
 ## 1.1 Rationale
 
@@ -97,7 +97,7 @@ modified for resilience and for asynchronous operation.
 
 Hardware support: Pyboard D, ESP8266 and ESP32.  
 Firmware support: Official firmware. Limited support for ESP32 Loboris port.  
-Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
+Broker support: Mosquitto is preferred for its excellent MQTT compliance.
 Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
 
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
@@ -109,16 +109,22 @@ providing and testing a number of bugfixes and enhancements.
 SSL/TLS now tested successfully on Pyboard D.  
 Fix bug where ESP8266 could hang attempting to connect.  
 Can now reconnect after disconnect is issued.  
-Now supports concurrent qos==1 publications and subscriptions.  
+Now supports concurrent qos==1 publications and subscriptions.
 **API change** The disconnect method is now asynchronous.
 
-24th Sept 2019  
+24th Sept 2019
 **API change:** the subscription callback requires an additional parameter for
 the retained message flag.  
 On ESP8266 the code disables automatic sleep: this reduces reconnects at cost
-of increased power consumption.  
+of increased power consumption.
 
-1st April 2019  
+2nd July 2019
+Added support for the unix port of Micropython. The unique_id must be set manually
+as the unix port doesn't have the function *unique_id()* to read a chip's id.
+The library assumes that the device is correctly connected to the network as the OS
+will take care of the network connection.
+
+1st April 2019
 In the light of improved ESP32 firmware and the availability of the Pyboard D
 the code has minor changes to support these platforms.
 
@@ -178,7 +184,7 @@ fork and its library, but this has not been tested.
 ### Experimental scripts
 
  1. `lowpower.py` Pybaord D micro-power test. See [Section 5](./README.md#5-low-power-demo).
- 2. `tls8266.py` SSL/TLS connectionfor ESP8266. Fails with 
+ 2. `tls8266.py` SSL/TLS connectionfor ESP8266. Fails with
  `ssl_handshake_status: -4`.
  3. `tls32.py` SSL/TLS connection for ESP32. Fails with
  `mbedtls_ssl_handshake error: -77`.
@@ -197,7 +203,7 @@ platforms, or to have the capability of running on an ESP8266 which has not
 previously connected, `config.py` should be edited to provide them. This is a
 sample cross-platform file:
 ```python
-from mqtt_as import config
+from micropython_mqtt_as.mqtt_as import config
 
 config['server'] = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
@@ -230,9 +236,10 @@ with the topic `foo_topic` the topic and message are printed. The code
 periodically publishes an incrementing count under the topic `result`.
 
 ```python
-from mqtt_as import MQTTClient
-from config import config
+from micropython_mqtt_as.mqtt_as import MQTTClient
+from micropython_mqtt_as.config import config
 import uasyncio as asyncio
+from sys import platform
 
 SERVER = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
@@ -255,9 +262,13 @@ async def main(client):
 config['subs_cb'] = callback
 config['connect_coro'] = conn_han
 config['server'] = SERVER
+if platform == "linux":
+    config["client_id"]="linux"
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
-client = MQTTClient(config)
+client = MQTTClient(**config) # Using dict to stay compatible to upstream.
+# Alternatively initialize MQTTClient the pythonic way using arguments like:
+# client = MQTTClient(server=SERVER, port=1883, ...)
 loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(client))
@@ -286,9 +297,12 @@ The module provides a single class: `MQTTClient`.
 
 ## 3.1 Constructor
 
-This takes a dictionary as argument. The default is `mqtt_as.config`. Normally
-an application imports this and modifies selected entries as required. Entries
-are as follows (default values shown in []):
+This takes all keywords found in the dictionary in `config.py` as argument.
+As a convenience you can also use this dictionary by importing it and changing
+the values. You then call the constructor by `MQTTClient(**config)`, this
+automatically matches the contents of the dict to the keywords of the constructor.
+
+Entries of config dictionary are:
 
 **WiFi Credentials**
 
@@ -446,6 +460,16 @@ to '8.8.8.8' and checks for a valid response.
 There is a single arg `packet` which is a bytes object being the DNS query. The
 default object queries the Google DNS server.
 
+### 3.2.9 unsubscribe (async)
+
+Unsubscribes a topic, so no messages will be received anymore.
+
+The coro will pause until a `UNSUBACK` has been received from the broker, if
+necessary reconnecting to a failed network.
+
+Args:
+ 1. `topic`
+
 ## 3.3 Class Variables
 
  1. `DEBUG` If `True` causes diagnostic messages to be printed.
@@ -597,7 +621,7 @@ not detected.
 [mosquitto server](http://mosquitto.org/man/mosquitto-8.html)  
 [mosquitto client publish](http://mosquitto.org/man/mosquitto_pub-1.html)  
 [mosquitto client subscribe](http://mosquitto.org/man/mosquitto_sub-1.html)  
-[MQTT 3.1.1 spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
+[MQTT 3.1.1 spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)
 [python client for PC's](https://www.eclipse.org/paho/clients/python/)  
 [Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
 

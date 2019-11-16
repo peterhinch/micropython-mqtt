@@ -12,13 +12,15 @@
 # red LED: ON == WiFi fail
 # blue LED heartbeat: demonstrates scheduler is running.
 
-from mqtt_as import MQTTClient, config
+from micropython_mqtt_as.mqtt_as import MQTTClient, config
 from config import wifi_led, blue_led  # Local definitions
 import uasyncio as asyncio
+
 
 # Subscription callback
 def sub_cb(topic, msg, retained):
     print((topic, msg, retained))
+
 
 # Demonstrate scheduler is operational.
 async def heartbeat():
@@ -28,14 +30,17 @@ async def heartbeat():
         blue_led(s)
         s = not s
 
+
 async def wifi_han(state):
     wifi_led(not state)
     print('Wifi is ', 'up' if state else 'down')
     await asyncio.sleep(1)
 
+
 # If you connect with clean_session True, must re-subscribe (MQTT spec 3.1.2.4)
 async def conn_han(client):
     await client.subscribe('foo_topic', 1)
+
 
 async def main(client):
     try:
@@ -48,8 +53,9 @@ async def main(client):
         await asyncio.sleep(5)
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish('result', '{} {}'.format(n, client.REPUB_COUNT), qos = 1)
+        await client.publish('result', '{} {}'.format(n, client.REPUB_COUNT), qos=1)
         n += 1
+
 
 # Define configuration
 config['subs_cb'] = sub_cb
