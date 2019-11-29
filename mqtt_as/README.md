@@ -129,6 +129,8 @@ preferably frozen as bytecode. On the reference board with `uasyncio` and
 `mqtt_as` frozen, the demo script `range_ex` reports 21.8K of free RAM while
 running.
 
+Notes on the Sonoff Basic R3 may be found [here](../sonoff/SONOFF.md).
+
 ## 1.5 ESP32 issues
 
 Firmware should be an official build dated 25th March 2019; preferably later.
@@ -140,8 +142,8 @@ own tests.
 ## 1.6 Pyboard D
 
 The library has been tested successfully with the Pyboard D SF2W and SF6W. In
-long term testing it has clocked up six weeks of cumulative runtime and over
-600K messages without failure.
+testing it has clocked up eight weeks of continuous runtime and nearly 1M
+messages without failure or data loss.
 
 ## 1.7 Dependency
 
@@ -177,7 +179,7 @@ fork and its library, but this has not been tested.
 
 ### Experimental scripts
 
- 1. `lowpower.py` Pybaord D micro-power test. See [Section 5](./README.md#5-low-power-demo).
+ 1. `lowpower.py` Pyboard D micro-power test. See [Section 5](./README.md#5-low-power-demo).
  2. `tls8266.py` SSL/TLS connectionfor ESP8266. Fails with 
  `ssl_handshake_status: -4`.
  3. `tls32.py` SSL/TLS connection for ESP32. Fails with
@@ -548,7 +550,7 @@ disrupt the MQTT protocol. There are several ways to address this:
  3. Subclass the `MQTTClient` and acquire the `self.lock` object before issuing
  the cancellation. The `self.lock` object protects a protocol sequence so that
  it cannot be disrupted by another task. This was the method successfully
- adopted and can be seen in [mqtt_as_timeout.pyl](./mqtt_as_timeout.py).
+ adopted and can be seen in [mqtt_as_timeout.py](./mqtt_as_timeout.py).
 
 This was not included in the library mainly because most use cases are covered
 by use of a timestamp. Other reasons are documented in the code comments.
