@@ -13,7 +13,7 @@ Words of warning:
  electrical layout. Further, they really don't work very well.
 
 All development should be done with the mains supply disconnected. The
-electronics is powered 3.3V supplied by an FTDI adaptor.
+electronics requires 3.3V which may be supplied by an FTDI adaptor.
 
 ![Image](./internal.jpg)
 
@@ -56,12 +56,20 @@ via the USB interface.
 
 # I/O Map
 
-| GPIO | I/O | Active | Signal |
-|:----:|:---:|:------:|:------:|
-|   0  |  I  |   L    | Pushbutton |
-|  12  |  O  |   H    | Relay and red LED |
-|  13  |  O  |   L    | Blue LED |
-|  16  |  O  |   X    | User |
+| GPIO | I/O | Active | Pullup | Signal |
+|:----:|:---:|:------:|:------:|:------:|
+|   0  |  I  |   L    |   Y    | Pushbutton |
+|  12  |  O  |   H    |   N/A  | Relay and red LED |
+|  13  |  O  |   L    |   N/A  | Blue LED |
+|  16  |  X  |   X    |   Y    | User |
+
+GPIO 16 may be configured as an input or output.
 
 According to the picture above GPIO 9 and 10 are also accessible. I haven't
 tested this.
+
+# Test results
+
+I tested using asynchronous MQTT, running `range_ex.py` in various locations.
+While I haven't yet done a long running test, initial results are positive with
+RSSI values comparable to the ESP8266 reference board.
