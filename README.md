@@ -1,3 +1,5 @@
+# Update: This library can now only be used with the new uasyncio version that got merged into the main micropython repository!
+
 # NOTE:
 With the latest commits in the original repository by Peter Hinch, this module is now <b>USEABLE AS A DROP-IN REPLACEMENT!</b> Only change needed is how the MQTTClient is created. Look [here](./README_mqtt_as.md#23-example-usage) for an example, it is simple, the pythonic way.
 
