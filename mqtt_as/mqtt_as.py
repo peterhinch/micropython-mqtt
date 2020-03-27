@@ -1,5 +1,5 @@
 # mqtt_as.py Asynchronous version of umqtt.robust
-# (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Peter Hinch 2017-2020.
 # Released under the MIT licence.
 
 # Pyboard D support added
@@ -14,7 +14,7 @@ from ubinascii import hexlify
 import uasyncio as asyncio
 
 gc.collect()
-from utime import ticks_ms, ticks_diff, sleep_ms
+from utime import ticks_ms, ticks_diff
 from uerrno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
@@ -25,7 +25,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 5, 0)
+VERSION = (0, 6, 0)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -75,32 +75,17 @@ config = {
 class MQTTException(Exception):
     pass
 
+
 def pid_gen():
     pid = 0
     while True:
         pid = pid + 1 if pid < 65535 else 1
         yield pid
 
+
 def qos_check(qos):
     if not (qos == 0 or qos == 1):
         raise ValueError('Only qos 0 and 1 are supported.')
-
-
-class Lock():
-    def __init__(self):
-        self._locked = False
-
-    async def __aenter__(self):
-        while True:
-            if self._locked:
-                await asyncio.sleep_ms(_DEFAULT_MS)
-            else:
-                self._locked = True
-                break
-
-    async def __aexit__(self, *args):
-        self._locked = False
-        await asyncio.sleep_ms(_DEFAULT_MS)
 
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.
@@ -149,7 +134,7 @@ class MQTT_base:
         self.newpid = pid_gen()
         self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.last_rx = ticks_ms()  # Time of last communication from broker
-        self.lock = Lock()
+        self.lock = asyncio.Lock()
 
     def _set_last_will(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
@@ -452,11 +437,11 @@ class MQTT_base:
         msg = await self._as_read(sz)
         retained = op & 0x01
         self._cb(topic, msg, bool(retained))
-        if op & 6 == 2:
+        if op & 6 == 2:  # qos 1
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
             await self._as_write(pkt)
-        elif op & 6 == 4:
+        elif op & 6 == 4:  # qos 2 not supported
             raise OSError(-1)
 
 
@@ -543,7 +528,8 @@ class MQTTClient(MQTT_base):
         loop.create_task(self._wifi_handler(True))  # User handler.
         if not self._has_connected:
             self._has_connected = True  # Use normal clean flag on reconnect.
-            loop.create_task(self._keep_connected())  # Runs forever unless user issues .disconnect()
+            loop.create_task(
+                self._keep_connected())  # Runs forever unless user issues .disconnect()
 
         loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
         loop.create_task(self._keep_alive())
