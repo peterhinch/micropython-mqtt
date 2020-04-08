@@ -96,14 +96,23 @@ design is based on the official `umqtt` library but it has been substantially
 modified for resilience and for asynchronous operation.
 
 Hardware support: Pyboard D, ESP8266 and ESP32.  
-Firmware support: Official firmware. Limited support for ESP32 Loboris port.  
+Firmware support: Official firmware, but see below.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
 Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
+
+#### Firmware
+
+Until the release of V1.13 a daily build must be used. This is because
+`uasyncio` has been rewritten and the module has been adapted to require this
+version.
 
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements.
 
 ## 1.3 Project Status
+
+8th April 2020
+Adapted for new `uasyncio`.
 
 4th Nov 2019 V0.5.0  
 SSL/TLS now tested successfully on Pyboard D.  
@@ -133,11 +142,8 @@ Notes on the Sonoff Basic R3 may be found [here](../sonoff/SONOFF.md).
 
 ## 1.5 ESP32 issues
 
-Firmware should be an official build dated 25th March 2019; preferably later.
-On request from users I implemented support for the Loboris port. This appears
-not to have had recent updates. I only test against official firmware: testing
-resilience is time consuming. If using other builds I recommend performing your
-own tests.
+Firmware must now be official firmware as described above. The Loboris port
+seems to have been abandoned by its author and is no longer supported.
 
 ## 1.6 Pyboard D
 
@@ -147,10 +153,8 @@ messages without failure or data loss.
 
 ## 1.7 Dependency
 
-The module requires `uasyncio` which may be the official or `fast_io` version;
-the latter will provide no MQTT performance gain. It may be used if the user
-application employs its features. The module should also run with the `pycopy`
-fork and its library, but this has not been tested.
+The module requires `uasyncio`. This is now included by default in official
+firmware as described above.
 
 ###### [Contents](./README.md#1-contents)
 

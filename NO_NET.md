@@ -34,7 +34,7 @@ ESP8266 in the event of fatal errors or crashes.
 
 # Project status
 
-V0.22 Jan 2018
+V0.22 Jan 2018/April 2020
 
 Now uses the `resilient` MQTT library. The ESP8266 is now rebooted only in the
 event of ESP8266 failure such as a fatal input buffer overflow. The `resilient`
@@ -42,8 +42,9 @@ library has some significant bugfixes.
 
 Allows custom args to `subscribe` and `wifi_handler` callbacks.
 
-The Pyboard cient requires `uasyncio` V1.7.1 or newer with firmware build dated
-7th Jan 2018 or later.
+The Pyboard cient requires `uasyncio` V2 with firmware V1.12. Later firmware
+uses a new version of `uasyncio`. This application has not been ported to the
+new version.
 
 **API Changes**
 
