@@ -558,12 +558,11 @@ class MQTTClient(MQTT_base):
             if pings_due >= 4:
                 self.dprint('Reconnect: broker fail.')
                 break
-            elif pings_due >= 1:
-                try:
-                    await self._ping()
-                except OSError:
-                    break
-            await asyncio.sleep(1)
+            await asyncio.sleep_ms(self._ping_interval)
+            try:
+                await self._ping()
+            except OSError:
+                break
         self._reconnect()  # Broker or WiFi fail.
 
     # DEBUG: show RAM messages.
