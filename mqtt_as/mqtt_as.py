@@ -24,6 +24,12 @@ import network
 
 gc.collect()
 from sys import platform
+try:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    log_mqtt = logging.getLogger("MQTT")
+except ImportError:
+    log_mqtt = None
 
 VERSION = (0, 6, 0)
 
@@ -92,6 +98,7 @@ def qos_check(qos):
 # Exceptions from connectivity failures are handled by MQTTClient subclass.
 class MQTT_base:
     REPUB_COUNT = 0  # TEST
+    LOGGING = False
     DEBUG = False
 
     def __init__(self, config):
@@ -146,8 +153,11 @@ class MQTT_base:
         self._lw_retain = retain
 
     def dprint(self, *args):
-        if self.DEBUG:
-            print(*args)
+        if self.DEBUG or self.LOGGING:
+            if self.LOGGING:
+                log_mqtt.info(*args)
+            else:
+                print(*args)
 
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
@@ -533,7 +543,7 @@ class MQTTClient(MQTT_base):
 
         loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
         loop.create_task(self._keep_alive())
-        if self.DEBUG:
+        if self.DEBUG or self.LOGGING:
             loop.create_task(self._memory())
         loop.create_task(self._connect_handler(self))  # User handler.
 
@@ -574,7 +584,7 @@ class MQTTClient(MQTT_base):
             count %= 20
             if not count:
                 gc.collect()
-                print('RAM free {} alloc {}'.format(gc.mem_free(), gc.mem_alloc()))
+                self.dprint('RAM free {} alloc {}'.format(gc.mem_free(), gc.mem_alloc()))
 
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
