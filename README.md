@@ -31,23 +31,30 @@ following platforms.
 The principal features of this driver are:  
  1. Non-blocking operation for applications using uasyncio.
  2. Automatic recovery from WiFi and broker outages.
- 3. True qos == 1 operation with retransmission.
+ 3. True `qos == 1` operation with retransmission.
  4. Improved WiFi range because of its tolerance of poor connectivity.
 
 It has the drawback of increased code size which is an issue on the ESP8266.
 Run as frozen bytecode it uses about 50% of the RAM on the ESP8266. On ESP32
 and Pyboard D it may be run as a standard Python module.
 
-It is documented [here](./mqtt_as/README.md).
+#### [mqtt_as documentation](./mqtt_as/README.md).
 
 ## 2. MQTT for generic MicroPython targets
 
 This comprises an ESP8266 firmware image and a MicroPython driver. The target
 hardware is linked to an ESP8266 running the firmware image using a 5-wire
 interface. The driver runs on the target which can then access MQTT. The driver
-and hardware interface are designed to be platform agnostic: any hardware with
-five GPIO pins accessible via the `machine` library should suffice.
+is non-blocking and is designed for applications using `uasyncio`.
 
-The driver is non-blocking and is designed for applications using uasyncio.
+In its current form this project is obsolete and unmaintained, primarily
+because of its dependence on the obsolete `uasyncio` V2. The project has been
+archived to the `pb_link` directory.
 
-It is documented [here](./NO_NET.md).
+#### [Project archive](./pb_link/NO_NET.md).
+
+I intend to issue a replacement of this library in the near future. Objectives
+are:
+ 1. Compatibility with `uasyncio` V3.
+ 2. Improved API facilitating easy porting between platforms. In particular:
+ 3. Tested compatibility with the Raspberry Pi Pico.
