@@ -30,9 +30,14 @@ to the broker open continuously, enabling applications which seldom or never
 publish to receive messages. The host implements a watchdog to reboot the
 ESP8266 in the event of fatal errors or crashes.
 
-###### [Main README](./README.md)
+###### [Main README](../README.md)
 
-# Project status
+# Project status (not maintained)
+
+This project is no longer maintained and has been archived prior to development
+of a replacement. The Pyboard cient requires `uasyncio` V2 with firmware V1.12.
+This is obsolete. A new version will be released to use `uasyncio` V3 and with
+a view to improving the API and easing portability.
 
 V0.22 Jan 2018/April 2020
 
@@ -41,10 +46,6 @@ event of ESP8266 failure such as a fatal input buffer overflow. The `resilient`
 library has some significant bugfixes.
 
 Allows custom args to `subscribe` and `wifi_handler` callbacks.
-
-The Pyboard cient requires `uasyncio` V2 with firmware V1.12. Later firmware
-uses a new version of `uasyncio`. This application has not been ported to the
-new version.
 
 **API Changes**
 
@@ -66,59 +67,33 @@ including to report a positive outcome :).
 
 # Contents
 
- 1 [Wiring](./NO_NET.md#1-wiring) Connections between host and ESP8266.
- 
- 2 [The Host](./NO_NET.md#2-the-host) Software on the host.
-
-  2.1 [Files](./NO_NET.md#21-files)
-
-   2.1.1 [Dependencies](./NO_NET.md#211-dependencies)
-
-   2.1.2 [Test programs](./NO_NET.md#212-test-programs)
-
-  2.2 [Quick start guide](./NO_NET.md#22-quick-start-guide)
-
-  2.3 [The MQTTlink class](./NO_NET.md#23-the-mqttlink-class) The host API.
-
-   2.3.1 [Constructor](./NO_NET.md#231-constructor)
-
-   2.3.2 [Methods](./NO_NET.md#232-methods)
-
-   2.3.3 [Class Method](./NO_NET.md#233-class-method)
-
-   2.3.4 [The user_start callback](./NO_NET.md#234-the-user_start-callback)
-
-   2.3.5 [Intercepting status values](./NO_NET.md#235-intercepting-status-values)
-
-   2.4 [Application design](./NO_NET.md#24-application-design)
-
-   2.4.1 [User coroutines](./NO_NET.md#241-user-coroutines)
-
-   2.4.2 [WiFi Link Behaviour](./NO_NET.md#242-wifi-link-behaviour)
-
- 3 [The ESP8266](./NO_NET.md#3-the-esp8266) Installing and modifying the ESP8266 build.
- 
-  3.1 [Installing the precompiled build](./NO_NET.md#31-installing-the-precompiled-build) Quickstart.
-
-  3.2 [Files](./NO_NET.md#32-files) For users wishing to modify the ESP8266 code.
-
-  3.3 [Pinout](./NO_NET.md#33-pinout)
- 
- 4 [Mode of operation](./NO_NET.md#4-mode-of-operation) How it works under the hood.
-
-  4.2 [Protocol](./NO_NET.md#42-protocol)
-
-  4.2.1 [Initialisation](./NO_NET.md#421-initialisation)
-
-  4.2.2 [Running](./NO_NET.md#422-running)
-
- 5 [Limitations](./NO_NET.md#5-limitations)
-
-  5.1 [Speed](./NO_NET.md#51-speed)
-
-  5.2 [Reliability](./NO_NET.md#52-reliability)
-
- 6 [References](./NO_NET.md#6-references)
+ 1 [Wiring](./NO_NET.md#1-wiring) Connections between host and ESP8266.  
+ 2 [The Host](./NO_NET.md#2-the-host) Software on the host.  
+  2.1 [Files](./NO_NET.md#21-files)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.1.1 [Dependencies](./NO_NET.md#211-dependencies)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.1.2 [Test programs](./NO_NET.md#212-test-programs)  
+  2.2 [Quick start guide](./NO_NET.md#22-quick-start-guide)  
+  2.3 [The MQTTlink class](./NO_NET.md#23-the-mqttlink-class) The host API.  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.1 [Constructor](./NO_NET.md#231-constructor)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.2 [Methods](./NO_NET.md#232-methods)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.3 [Class Method](./NO_NET.md#233-class-method)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.4 [The user_start callback](./NO_NET.md#234-the-user_start-callback)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.5 [Intercepting status values](./NO_NET.md#235-intercepting-status-values)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.4 [Application design](./NO_NET.md#24-application-design)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.4.1 [User coroutines](./NO_NET.md#241-user-coroutines)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.4.2 [WiFi Link Behaviour](./NO_NET.md#242-wifi-link-behaviour)  
+ 3 [The ESP8266](./NO_NET.md#3-the-esp8266) Installing and modifying the ESP8266 build.  
+  3.1 [Installing the precompiled build](./NO_NET.md#31-installing-the-precompiled-build) Quickstart.  
+  3.2 [Files](./NO_NET.md#32-files) For users wishing to modify the ESP8266 code.  
+  3.3 [Pinout](./NO_NET.md#33-pinout)  
+ 4 [Mode of operation](./NO_NET.md#4-mode-of-operation) How it works under the hood.  
+  4.2 [Protocol](./NO_NET.md#42-protocol)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.2.1 [Initialisation](./NO_NET.md#421-initialisation)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.2.2 [Running](./NO_NET.md#422-running)  
+ 5 [Limitations](./NO_NET.md#5-limitations)  
+  5.1 [Speed](./NO_NET.md#51-speed)  
+  5.2 [Reliability](./NO_NET.md#52-reliability)  
+ 6 [References](./NO_NET.md#6-references)  
 
 # 1. Wiring
 
@@ -399,7 +374,7 @@ reboots again.
 
 The behaviour in response to status messages may be modified by replacing the
 default handler with a user supplied coroutine as described in 2.3.2 above;
-the test program `pbrange.py` illustrates this.
+the test program `pb_status.py` illustrates this.
 
 The driver waits for the handler to terminate, then responds in a way dependent
 on the status value. If it was a fatal error the ESP8266 will be rebooted. For

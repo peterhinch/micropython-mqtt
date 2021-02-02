@@ -1,0 +1,7 @@
+#! /bin/bash
+# mosquitto_sub -h 192.168.0.9 -t result
+while :
+do
+    mosquitto_pub -h 192.168.0.9 -t green -m "owt" -q 1
+    sleep 20
+done

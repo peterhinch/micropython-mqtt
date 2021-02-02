@@ -1,0 +1,9 @@
+#! /bin/bash
+
+while :
+do
+    mosquitto_pub -h 192.168.0.9 -t green -m on
+    sleep 5
+    mosquitto_pub -h 192.168.0.9 -t green -m off
+    sleep 5
+done
