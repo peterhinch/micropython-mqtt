@@ -69,10 +69,10 @@ including to report a positive outcome :).
 
  1. [Wiring](./NO_NET.md#1-wiring) Connections between host and ESP8266.  
  2. [The Host](./NO_NET.md#2-the-host) Software on the host.  
-  2.1. [Files](./NO_NET.md#21-files)  
-   2.1.1 [Dependencies](./NO_NET.md#211-dependencies)  
-   2.1.2 [Test programs](./NO_NET.md#212-test-programs)  
-  2.2. [Quick start guide](./NO_NET.md#22-quick-start-guide)  
+  2.1 [Files](./NO_NET.md#21-files)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.1.1 [Dependencies](./NO_NET.md#211-dependencies)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.1.2 [Test programs](./NO_NET.md#212-test-programs)  
+  2.2 [Quick start guide](./NO_NET.md#22-quick-start-guide)  
   2.3 [The MQTTlink class](./NO_NET.md#23-the-mqttlink-class) The host API.  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.1 [Constructor](./NO_NET.md#231-constructor)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.3.2 [Methods](./NO_NET.md#232-methods)  
