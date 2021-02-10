@@ -16,10 +16,10 @@ code emitters or machine code. Nor does it make assumptions about processor
 speed. It should be compatible with any hardware running MicroPython and having
 five free GPIO lines.
 
-The driver is event driven using uasyncio for asynchronous programming.
+The driver is event driven using `uasyncio` V3 for asynchronous programming.
 Applications can run unaffected by delays experienced on the ESP8266.
 
-This document assumes familiarity with the umqtt and uasyncio libraries.
+This document assumes familiarity with the umqtt and `uasyncio` libraries.
 Unofficial guides may be found via these links:  
 [umqtt FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239&p=12694).  
 [uasyncio tutorial](https://github.com/peterhinch/micropython-async/blob/master/v3/docs/TUTORIAL.md).
@@ -34,44 +34,23 @@ ESP8266 in the event of fatal errors or crashes.
 
 # Project status
 
-V0.3 Feb 2021
+V0.1 Feb 2021
 
-Updated for `uasyncio` V3 with additional changes aimed at ensuring cross
-platform operation, in particular supporting the Rasberry Pi Pico.  
-**API Changes**
-
-The new `uasyncio` supports task cancellation; support in V2 was problematic.
-The code used workrounds in the form of the `@asyn.cancellable` decorator. The
-`asyn` module is redundant and no longer used. A new `MQTTlink.register` method
-allows user coroutines to be registered for cancellation and restarting in the
-event of a failure.
-
-A new flexible `MQTTlink` constructor provides various ways of setting up the
-configuration parameters.
-
-Subscription callbacks must now take an additional arg: the `retained message`
-flag (MQTT V3 para 3.3.1.3).
-
-V0.22 Jan 2018/April 2020
-
-Now uses the `resilient` MQTT library. The ESP8266 is now rebooted only in the
-event of ESP8266 failure such as a fatal input buffer overflow. The `resilient`
-library has some significant bugfixes.
-
-Allows custom args to `subscribe` and `wifi_handler` callbacks.
-
+This should be regarded as a new module rather than as an update of the old
+`pb_link`. The client module `pbmqtt.py` is a substantial rewrite with a number
+of API changes. Users of `pb_link` will need to update the ESP8266 firmware.
 
 **Test status**
 
-Testing was performed using a Pyboard V1.0 as the host. The following boards
-have run as ESP8266 targets: Adafruit Feather Huzzah, Adafruit Huzzah and WeMos
-D1 Mini.
+Testing was performed using a Pyboard V1.0 as the host, also with a Raspberry
+Pi Pico. The following boards have run as ESP8266 targets: Adafruit Feather
+Huzzah, Adafruit Huzzah and WeMos D1 Mini.
 
 Testing was performed using a local broker and a public one.
 
-I have had no success with SSL/TLS. This may be down to inexperience on my part
-so if anyone can test this I would welcome a report. Please raise an issue -
-including to report a positive outcome :).
+I have had no success with SSL/TLS. This is because of continuing ESP8266
+firmware issues with TLS on nonblocking sockets. I haven't yet re-tried this
+with current ESP8266 firmware.
 
 # Contents
 
@@ -136,7 +115,9 @@ For the Pi Pico these pins are used by the test scripts. See `hw_pico.py`.
 | 5V      |   USB   |  5V  |   VBUS  | 5V      |
 
 Host and target must share a common ground. They need not share a common power
-source - the order in which they are powered up is not critical.
+source - the order in which they are powered up is not critical. The 5V link
+enables a USB connection on the host to power the ESP8266. If the ESP8266 is
+powered independently the 5V link should be omitted.
 
 Note on the reset connection. The `hardware.py` and `hw_pico.py` files
 instantiate the pin with `Pin.OPEN_DRAIN` because some boards have a capacitor
@@ -260,9 +241,11 @@ an ESP8266 crash. Received args are the link instance followed by any user
 args. Its use is covered in detail
 [below](./BRIDGE.md#234-the-user_start-callback).  
 `wifi_handler=(cb, ())` Callback runs whenever WiFi status changes. Receives as
-two first args a `bool` of new WiFi state followed by the link instance.
+two first args a `bool` being the new WiFi state followed by the link instance.
 See `pb_simple.py`.  
-`status_handler=(cb, ())` A coroutine. Launched when the ESP8266 reports
+`crash_handler=(cb, ())` Callback runs if ESP8266 crashes. Typically used to
+cancel tasks started by `user_start`.
+`status_handler=(coro, ())` A coroutine. Launched when the ESP8266 reports
 changed status. Received args are the link instance and the numeric status
 value from the ESP8266 followed by any user args. It should normally await the
 `default_status_handler` coroutine in `pbmqtt.py`. See `pb_status.py`.
@@ -303,56 +286,50 @@ case of applications which publish rarely or never, pinging more frequently
 speeds the detection of outages. The `ping_interval` parameter enables this to
 be accomplished. The default value of 0 results in standard behaviour.
 
-**Optional RTC synchronisation:**  
-Currently this is disabled on non-Pyboard hosts.  
-`rtc_resync` (secs). (-1)  
-0 == disable.  
--1 == Synchronise once only at startup.  
-If interval > 0 the ESP8266 will periodically retrieve the time from an NTP
-server and send the result to the host, which will adjust its RTC. The local
-time offset specified below will be applied.  
-`local_time_offset` If the host's RTC is to be synchronised to an NTP
-server, this allows an offset to be added. Unit is hours. (0)
-
 **Broker/network response**  
 `response_time` Max expected time in secs for the broker to respond to a
 qos == 1 publication. If this is exceeded the message is republished with the
 dup flag set.
 
+**Time server**
+
+`'timeserver` Default 'pool.ntp.org'.
+
 **Verbosity:**  
 `verbose` Pyboard prints diagnostic messages. (`False`)  
-`debug` ESP8266 prints diagnostic messages. (`False`)  
+`debug` ESP8266 prints diagnostic messages to its serial output. (`False`)  
 
 ###### [Contents](./BRIDGE.md#contents)
 
 ### 2.3.2 Methods
 
 Principal methods. Required in most applications:
- 1. `publish` Args: topic (str), message (str), retain (bool), qos (0/1). Puts
- publication on a queue and returns immediately. Defaults: retain `False`,
- qos 0. `publish` can be called at any time, even if an ESP8266 reboot is in
- progress.
- 2. `subscribe` Mandatory args: topic (str), qos (0/1), callback. Further
+ 1. `ready` A coroutine. `await mqttlink.ready()` returns when the link is up.
+ Publications and subscriptions may be started at this point.
+ 2. `publish` A coroutine. Args: topic (str), message (str), retain (bool),
+ qos (0/1). Pauses until WiFi is up and a response has been received from the
+ ESP8266. Defaults: `retain=False`, `qos=0`. The `publish` task can be launched
+ at any time, even if an ESP8266 reboot is in progress. In the case of `qos==1`
+ return will be delayed until the ESP8266 has received a `PUBACK` from the
+ broker.
+ 3. `subscribe` Mandatory args: topic (str), qos (0/1), callback. Further
  positional args may be supplied.  
  Subscribes to the topic. The callback will run when a publication to the topic
  is received. The callback args are the topic, message, the `retained message`
  flag followed by any optional args supplied.  
- Subscriptions should be performed in the `user_start` callback to re-subscribe
- after an ESP8266 reboot. Multiple subscriptions may have separate callbacks.
- 3. `ready` A coroutine. `await mqttlink.ready()` returns when the link is up.
- Publications and subscriptions may be started at this point.
-
-Other methods:
+ Subscriptions should be performed after waiting for initial `ready` status.
+ Multiple subscriptions may have separate callbacks. In the event of an outage
+ re-subscription is automatic.
+ 
+ Other methods:
  1. `wifi` No args. Returns `True` if WiFi and broker are up. See note below.
- 2. `rtc_syn` No args. Returns `True` if the RTC has been synchronised to
- an NTP time server.
- 3. `register` Arg: a coroutine. This enables the creation of tasks which are
- cancelled if the ESP8266 fails. Typically these will be started by the user
- start routine. Usage is as follows:
-
-```python
-mqttlink.register(asyncio.create_task(my_coro(arg1, arg2)))
-```
+ 2. `get_time` Arg `timeout=60`. A coroutine. This pauses for upto `timeout`
+ seconds while attempting to retrieve time from an NTP server. Returns a time
+ value in seconds since the epoch (1970), or 0 on failure. If the ESP8266
+ acquires a valid time value return is "as soon as possible". A call to
+ `get_time` causes the ESP8266 to issue `socket.getaddrinfo()` which
+ unfortunately is currently a blocking call. This can delay overall
+ responsiveness for the duration. Typical usage is to set the RTC.
 
 Detection of outages can be slow depending on application code. The client
 pings the broker, but infrequently. Detection will occur if a publication
@@ -387,21 +364,14 @@ subsequently run again.
 Its purpose is to launch coros which use the API or which need to respond to
 ESP8266 recovery.
 
-If a coroutine launched by it communicates with the ESP8266 and runs forever it
-should have provision to be cancelled if connectivity with the ESP8266 is lost.
-This can occur if the ESP8266 crashes. This is done using the
-`MQTTlink.register` method as below:
-
 ```python
-# This coro will be cancelled if the ESP8266 goes down and will be re launched
-# when it recovers.
 async def foo(mqtt_link, tim):
     while True:
         # Do something involving ESP8266
         await asyncio.sleep(tim)
 
 def start(mqtt_link):
-    mqtt_link.register(asyncio.create_task(foo(mqtt_link, 10)))
+    asyncio.create_task(foo(mqtt_link, 10))
 
 mqtt_link = MQTTlink(hardware.d, net_local.d, user_start=(start, ()))
 ```

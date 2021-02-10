@@ -13,14 +13,10 @@
 
 import uasyncio as asyncio
 from utime import localtime, time
-import sys
 from syncom import SynCom
 from status_values import *  # Numeric status values shared with user code.
-if sys.platform == 'pyboard':
-    import pyb
-    pyboard = True
-else:
-    pyboard = False
+
+__version__ = (0, 1, 0)
 
 defaults = {
     'user_start' : (lambda *_ : None, ()),
@@ -34,15 +30,15 @@ defaults = {
     'keepalive' : 60,
     'ping_interval' : 0,
     'clean_session' : True,
-    'rtc_resync' : -1,  # Once only
-    'local_time_offset' : 0,
     'debug' : False,  # ESP8266 verbose
     'verbose' : False,  # Host
     'timeout' : 10,
     'max_repubs' : 4,
     'response_time' : 10,
     'wifi_handler' : (lambda *_ : None, ()),
+    'crash_handler' : (lambda *_ : None, ()),
     'status_handler' : None,
+    'timeserver' : 'pool.ntp.org',
 }
 
 
@@ -50,7 +46,8 @@ def buildinit(d):
     ituple = ('init', d['ssid'], d['password'], d['broker'], d['mqtt_user'],
     d['mqtt_pw'], d['ssl_params'], int(d['use_default_net']), d['port'], int(d['ssl']),
     int(d['fast']), d['keepalive'], int(d['debug']),
-    int(d['clean_session']), d['max_repubs'], d['response_time'], d['ping_interval'])
+    int(d['clean_session']), d['max_repubs'], d['response_time'], d['ping_interval'],
+    d['timeserver'])
     return argformat(*ituple)
 
 # _WIFI_DOWN is bad during initialisation
@@ -94,64 +91,6 @@ async def default_status_handler(mqtt_link, status):
         asyncio.sleep(30)  # Pause before reboot.
         return 0
 
-# Optionally sync the Pyboard's RTC to an NTP timeserver. When instantiated
-# is idle bar reporting synch status. _start runs _do_rtc coro if required.
-class RTCsynchroniser():
-    def __init__(self, mqtt_link, interval, local_time_offset):
-        self._rtc_interval = interval if pyboard else 0  # Disable on non-Pyboard hosts
-        self._local_time_offset = local_time_offset
-        self._rtc_last_syn = 0  # Time when last synchronised (0 == never)
-        self._time_valid = False
-        self._lnk = mqtt_link
-
-    def _start(self, mqtt_link):
-        i = self._rtc_interval  # 0 == no synch. -1 == once only. > 1 = secs
-        if i and (i > 0 or self._rtc_last_syn == 0):
-            mqtt_link.register(asyncio.create_task(self._do_rtc()))
-
-    async def _do_rtc(self):
-        lnk = self._lnk
-        lnk.verbose and print('Start RTC synchroniser')
-        self._time_valid = not self._rtc_last_syn == 0  # Valid on restart
-        while True:
-            while not self._time_valid:
-                lnk.channel.send(TIME)
-                # Give 5s time for response
-                await asyncio.sleep(5)
-                if not self._time_valid:
-                    # WiFi may be down. Delay 1 min before retry.
-                    await asyncio.sleep(60)
-            else:  # Valid time received or restart
-                if self._rtc_interval < 0:
-                    break  # One resync only: done
-                tend = self._rtc_last_syn + self._rtc_interval
-                twait = max(tend - time(), 5)  # Prolonged outage
-                await asyncio.sleep(twait)
-                self._time_valid = False
-
-    def _do_time(self, action):  # TIME received from ESP8266
-        lnk = self._lnk
-        try:
-            t = int(action[0])
-        except ValueError:  # Gibberish.
-            lnk.quit('Invalid data from ESP8266')
-            return
-        self._time_valid = t > 0
-        if self._time_valid:
-            rtc = pyb.RTC()
-            tm = localtime(t)
-            hours = (tm[3] + self._local_time_offset) % 24
-            tm = tm[0:3] + (tm[6] + 1,) + (hours,) + tm[4:6] + (0,)
-            rtc.datetime(tm)
-            self._rtc_last_syn = time()
-            lnk.verbose and print('time', localtime())
-        else:
-            lnk.verbose and print('Bad time received.')
-
-    # Is Pyboard RTC synchronised?
-    def _rtc_syn(self):
-        return self._rtc_last_syn > 0
-
 # Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
 def validate(s, item):
     s = s.encode('UTF8')
@@ -184,10 +123,9 @@ class MQTTlink:
         self.user_start = d['user_start']
         shan = d['status_handler']
         self.s_han = (default_status_handler, ()) if shan is None else shan  # coro
+        self.crash_han = d['crash_handler']
         self.wifi_han = d['wifi_handler']
         self.init_str = buildinit(d)
-        # Synchroniser idle until started.
-        self.rtc_synchroniser = RTCsynchroniser(self, d['rtc_resync'], d['local_time_offset'])
         self.keepalive = d['keepalive']
         self._running = False
         self.verbose = d['verbose']
@@ -207,19 +145,18 @@ class MQTTlink:
         self.subs = {} # Callbacks indexed by topic
         self.publock = asyncio.Lock()
         self.puback = asyncio.Event()
+        self.evttim = asyncio.Event()
         self._wifi_up = False
         # Only specify network on first run
         self.first_run = True
-        self._tasks = []
+        self._time = 0  # NTP time. Invalid.
 
 # API
-    def register(self, t):
-        self._tasks.append(t)
-
     async def publish(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
         validate(topic, 'topic')  # Raise ValueError if invalid.
         validate(msg, 'message')
+        await self.ready()
         async with self.publock:
             self.channel.send(argformat(PUBLISH, topic, msg, int(retain), qos))
             # Wait for ESP8266 to complete. Quick if qos==0. May be very slow
@@ -237,10 +174,6 @@ class MQTTlink:
     def command(self, *argsend):
         self.channel.send(argformat(*argsend))
 
-    # Is Pyboard RTC synchronised?
-    def rtc_syn(self):
-        return self.rtc_synchroniser._rtc_syn()
-
     def running(self):
         return self._running
 
@@ -250,12 +183,30 @@ class MQTTlink:
 
     def wifi(self):
         return self._wifi_up
-# API END
 
-    async def _die(self):  # Cancel all registered tasks
-        for t in self._tasks:
-            t.cancel()
-        self._tasks.clear()
+    # Attempt to retrieve NTP time in secs since 1970
+    async def get_time(self, timeout=60):
+        await self.ready()
+        self.evttim.clear()  # Defensive
+        self.channel.send(TIME)
+        try:
+            await asyncio.wait_for(self.evttim.wait(), timeout)
+        except asyncio.TimeoutError:
+            self._time = 0
+        return self._time
+        
+# API END
+    def _do_time(self, action):  # TIME received from ESP8266
+        try:
+            self._time = int(action[0])
+        except ValueError:  # Gibberish.
+            self._time = 0  # May be 0 if ESP has signalled failure
+        self.evttim.set()
+        self.evttim.clear()
+
+    async def _die(self):  # ESP has crashed. Run user callback if provided.
+        cb, args = self.crash_han
+        cb(self, *args)
         await asyncio.sleep_ms(0)
 
 # Convenience method allows return self.quit() on error
@@ -284,7 +235,10 @@ class MQTTlink:
             self.puback.clear()
         elif iact == RUNNING:
             self._running = True
-        self._wifi_up = iact == WIFI_UP
+        if iact == WIFI_UP:
+            self._wifi_up = True
+        elif iact == WIFI_DOWN:
+            self._wifi_up = False
         # Detect WiFi status changes. Ignore initialisation and repeats
         if last_status != -1 and iact != last_status and iact in (WIFI_UP, WIFI_DOWN):
             cb, args = self.wifi_han
@@ -308,7 +262,10 @@ class MQTTlink:
 # (See SynCom.start() method). After acquiring sync, start() gets rescheduled.
     async def start(self, channel):
         self.verbose and print('Starting...')
-        self.puback.clear()  # No publication in progress
+        self.puback.set()  # If a crash occurred while a pub was pending
+        self.puback.clear()  # let it terminate and release the lock
+        self.evttim.set()  # Likewise for get_time: let it return fail status.
+        self.evttim.clear()
         await asyncio.sleep_ms(0)
         self._running = False
         s_han, s_args = self.s_han
@@ -354,7 +311,6 @@ class MQTTlink:
         self.verbose and print('About to run user program.')
         if self.user_start[0] is not None:
             self.user_start[0](self, *self.user_start[1])  # User start function
-        self.rtc_synchroniser._start(self)  # Run coro if synchronisation is required.
         cb, args = self.wifi_han
         cb(True, self, *args)
 
@@ -379,7 +335,7 @@ class MQTTlink:
                     if iact in _DIRE_STATUS:
                         return self.quit('Fatal status. Resetting.')
                 elif command == TIME:
-                    self.rtc_synchroniser._do_time(action)
+                    self._do_time(action)
                 elif command == MEM:  # Wouldn't ask for this if we didn't want a printout
                     print('ESP8266 RAM free: {} allocated: {}'.format(action[0], action[1]))
                 else:

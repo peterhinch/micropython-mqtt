@@ -40,7 +40,7 @@ and Pyboard D it may be run as a standard Python module.
 
 #### [mqtt_as documentation](./mqtt_as/README.md).
 
-## 2. MQTT for generic MicroPython targets
+## 2. MQTT bridge for generic MicroPython targets
 
 This comprises an ESP8266 firmware image and a MicroPython driver. The target
 hardware is linked to an ESP8266 running the firmware image using a 5-wire
@@ -50,15 +50,25 @@ is non-blocking and is designed for applications using `uasyncio`.
 The current version of this library is in the `bridge` directory and is
 documented  
 ### [here](./bridge/BRIDGE.md  
-It has been updated for the new version of `uasyncio`.
+It uses the new version of `uasyncio`.
 
-The old version is archived to the `pb_link` directory, although I plan to
+An old version is archived to the `pb_link` directory, although I plan to
 delete this.
 
 #### [Project archive](./pb_link/NO_NET.md).
 
-I intend to issue a replacement of this library in the near future. Objectives
-are:
+The MQTT Bridge replaces this library. It was written a long time ago when the
+issues around portability were less clear. The client code is substantially
+revised with API changes. Objectives:
  1. Compatibility with `uasyncio` V3.
- 2. Improved API facilitating easy porting between platforms. In particular:
+ 2. True portability between platforms. In particular:
  3. Tested compatibility with the Raspberry Pi Pico.
+ 4. A more consistent API with significant simplifications.
+ 5. Replace the non-portable RTC code with a means of retrieving NTP time.
+ 6. Enable a choice of time server.
+ 7. Bugs fixed!
+
+There seems little hope of a portable `machine.RTC` class, so setting the RTC
+is now the responsibility of the application (if required).
+
+The ESP8266 code has only minor changes.
