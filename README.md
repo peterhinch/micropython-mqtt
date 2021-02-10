@@ -47,9 +47,13 @@ hardware is linked to an ESP8266 running the firmware image using a 5-wire
 interface. The driver runs on the target which can then access MQTT. The driver
 is non-blocking and is designed for applications using `uasyncio`.
 
-In its current form this project is obsolete and unmaintained, primarily
-because of its dependence on the obsolete `uasyncio` V2. The project has been
-archived to the `pb_link` directory.
+The current version of this library is in the `bridge` directory and is
+documented  
+### [here](./bridge/BRIDGE.md  
+It has been updated for the new version of `uasyncio`.
+
+The old version is archived to the `pb_link` directory, although I plan to
+delete this.
 
 #### [Project archive](./pb_link/NO_NET.md).
 

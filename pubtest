@@ -2,8 +2,8 @@
 
 while :
 do
-    mosquitto_pub -h 192.168.0.9 -t green -m on
+    mosquitto_pub -h 192.168.0.10 -t green -m on
     sleep 5
-    mosquitto_pub -h 192.168.0.9 -t green -m off
+    mosquitto_pub -h 192.168.0.10 -t green -m off
     sleep 5
 done
