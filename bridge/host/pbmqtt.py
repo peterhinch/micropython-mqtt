@@ -78,9 +78,6 @@ async def heartbeat(led):
 # tries specified LAN (if default LAN fails) on first run only to limit
 # flash wear.
 # BROKER_FAIL Pause for server fix? Return (and so reboot) after delay?
-# Pauses must be implemented with the following to ensure task quits on fail
-#     if not await self.exit_gate.sleep(delay_in_secs):
-#         return
 
 async def default_status_handler(mqtt_link, status):
     await asyncio.sleep_ms(0)
@@ -89,7 +86,7 @@ async def default_status_handler(mqtt_link, status):
             mqtt_link.first_run = False
             return 1  # By default try specified network on 1st run only
         asyncio.sleep(30)  # Pause before reboot.
-        return 0
+        return 0  # Return values are for user handlers: see pb_status.py
 
 # Pub topics and messages restricted to 7 bits, 0 and 127 disallowed.
 def validate(s, item):
@@ -127,7 +124,7 @@ class MQTTlink:
         self.wifi_han = d['wifi_handler']
         self.init_str = buildinit(d)
         self.keepalive = d['keepalive']
-        self._running = False
+        self._evtrun = asyncio.Event()
         self.verbose = d['verbose']
         # Watchdog timeout for ESP8266 (ms).
         wdog = d['timeout'] * 1000
@@ -137,16 +134,15 @@ class MQTTlink:
         if 'led' in d:
             asyncio.create_task(heartbeat(d['led']))
         # Start the SynCom instance. This will run self.start(). If an error
-        # occurs self.quit() is called which cancels all NamedTask instances
-        # and returns to Syncom's start() method. This waits on Cancellable.cancel_all()
-        # before forcing a failure on the ESP8266 and re-running self.start()
-        # to perform a clean restart.
+        # occurs self.quit() is called which returns to Syncom's start() method.
+        # This waits on ._die before forcing a failure on the ESP8266 and re-running
+        # self.start() to perform a clean restart.
         asyncio.create_task(self.channel.start(self.start, self._die))
-        self.subs = {} # Callbacks indexed by topic
+        self.subs = {}  # (callback, qos, args) indexed by topic
         self.publock = asyncio.Lock()
         self.puback = asyncio.Event()
         self.evttim = asyncio.Event()
-        self._wifi_up = False
+        self.evtwifi = asyncio.Event()
         # Only specify network on first run
         self.first_run = True
         self._time = 0  # NTP time. Invalid.
@@ -175,14 +171,14 @@ class MQTTlink:
         self.channel.send(argformat(*argsend))
 
     def running(self):
-        return self._running
+        return self._evtrun.is_set()
 
     async def ready(self):
-        while (not self._running) or (not self._wifi_up):
-            await asyncio.sleep_ms(100)
+        await self._evtrun.wait()
+        await self.evtwifi.wait()
 
     def wifi(self):
-        return self._wifi_up
+        return self.evtwifi.is_set()
 
     # Attempt to retrieve NTP time in secs since 1970
     async def get_time(self, timeout=60):
@@ -209,14 +205,14 @@ class MQTTlink:
         cb(self, *args)
         await asyncio.sleep_ms(0)
 
-# Convenience method allows return self.quit() on error
+# Convenience method allows this error code:
+# return self.quit(message)
+# This method is called from self.start. Note that return is to SynCom's
+# .start method which will launch ._die
     def quit(self, *args):
         if args is not ():
             self.verbose and print(*args)
-        self._running = False
-        # Note that if this method is called from self.start return is to
-        # SynCom's start method which will wait on the Killer instance to
-        # cancel all Cancellable tasks
+        self._evtrun.clear()
 
     def get_cmd(self, istr):
         ilst = istr.split(SEP)
@@ -234,15 +230,15 @@ class MQTTlink:
             self.puback.set()
             self.puback.clear()
         elif iact == RUNNING:
-            self._running = True
+            self._evtrun.set()
         if iact == WIFI_UP:
-            self._wifi_up = True
+            self.evtwifi.set()
         elif iact == WIFI_DOWN:
-            self._wifi_up = False
+            self.evtwifi.clear()
         # Detect WiFi status changes. Ignore initialisation and repeats
         if last_status != -1 and iact != last_status and iact in (WIFI_UP, WIFI_DOWN):
             cb, args = self.wifi_han
-            cb(self._wifi_up, self, *args)
+            cb(self.evtwifi.is_set(), self, *args)
         if self.verbose:
             if iact != UNKNOWN:
                 if iact != last_status:  # Ignore repeats
@@ -256,10 +252,10 @@ class MQTTlink:
 # start() is run each time the channel acquires sync i.e. on startup and also
 # after an ESP8266 crash and reset.
 # Behaviour after fatal error with ESP8266:
-# It sets _running False to cause local tasks to terminate, then returns.
-# A return causes the local channel instance to wait on the exit_gate to cause
-# tasks in this program terminate, then issues a hardware reset to the ESP8266.
-# (See SynCom.start() method). After acquiring sync, start() gets rescheduled.
+# It clears ._evtrun to cause local tasks to terminate, then returns.
+# A return causes the local channel instance to launch .die then issues
+# a hardware reset to the ESP8266 (See SynCom.start() and .run() methods).
+# After acquiring sync, start() gets rescheduled.
     async def start(self, channel):
         self.verbose and print('Starting...')
         self.puback.set()  # If a crash occurred while a pub was pending
@@ -267,32 +263,32 @@ class MQTTlink:
         self.evttim.set()  # Likewise for get_time: let it return fail status.
         self.evttim.clear()
         await asyncio.sleep_ms(0)
-        self._running = False
-        s_han, s_args = self.s_han
+        self._evtrun.clear()  # Set by .do_status
+        s_task, s_args = self.s_han
         if self.lw_topic is not None:
             channel.send(argformat(WILL, self.lw_topic, self.lw_msg, self.lw_retain, self.lw_qos))
             res = await channel.await_obj()
             if res is None:  # SynCom timeout
-                await s_han(self, ESP_FAIL, *s_args)
+                await s_task(self, ESP_FAIL, *s_args)
                 return self.quit('ESP8266 fail 1. Resetting.')
             command, action = self.get_cmd(res)
             if command == STATUS:
                 iact = self.do_status(action, -1)
-                await s_han(self, iact, *s_args)
+                await s_task(self, iact, *s_args)
                 if iact in _BAD_STATUS:
                     return self.quit('Bad status: {}. Resetting.'.format(iact))
             else:
                 self.verbose and print('Expected will OK got: ', command, action)
         channel.send(self.init_str)
-        while not self._running:  # Until RUNNING status received
+        while not self._evtrun.is_set():  # Until RUNNING status received
             res = await channel.await_obj()
             if res is None:
-                await s_han(self, ESP_FAIL, *s_args)
+                await s_task(self, ESP_FAIL, *s_args)
                 return self.quit('ESP8266 fail 2. Resetting.')
             command, action = self.get_cmd(res)
             if command == STATUS:
                 iact = self.do_status(action, -1)
-                result = await s_han(self, iact, *s_args)
+                result = await s_task(self, iact, *s_args)
                 if iact == SPECNET:
                     if result == 1:
                         channel.send('1')  # Any string will do
@@ -303,7 +299,7 @@ class MQTTlink:
             else:
                 self.verbose and print('Init got: ', command, action)
         # On power up this will do nothing because user awaits .ready
-        # before subscribing.
+        # before subscribing, so self.subs will be empty.
         for topic in self.subs:
             qos = self.subs[topic][1]
             self.channel.send(argformat(SUBSCRIBE, topic, qos))
@@ -319,7 +315,7 @@ class MQTTlink:
         while True:  # print incoming messages, handle subscriptions
             chan_state = channel.any()
             if chan_state is None:  # SynCom Timeout
-                self._running = False
+                self._evtrun.clear()
             elif chan_state > 0:
                 res = await channel.await_obj()
                 command, action = self.get_cmd(res)
@@ -331,7 +327,7 @@ class MQTTlink:
                         cb(*action)  # Run the callback
                 elif command == STATUS:  # 1st arg of status is an integer
                     iact = self.do_status(action, iact) # Update pub q and wifi status
-                    await s_han(self, iact, *s_args)
+                    await s_task(self, iact, *s_args)
                     if iact in _DIRE_STATUS:
                         return self.quit('Fatal status. Resetting.')
                 elif command == TIME:
@@ -339,10 +335,10 @@ class MQTTlink:
                 elif command == MEM:  # Wouldn't ask for this if we didn't want a printout
                     print('ESP8266 RAM free: {} allocated: {}'.format(action[0], action[1]))
                 else:
-                    await s_han(self, UNKNOWN, *s_args)
+                    await s_task(self, UNKNOWN, *s_args)
                     return self.quit('Got unhandled command, resetting ESP8266:', command, action)  # ESP8266 has failed
 
             await asyncio.sleep_ms(20)
-            if not self._running:  # self.quit() has been called.
-                await s_han(self, NO_NET, *s_args)
+            if not self._evtrun.is_set():  # self.quit() has been called.
+                await s_task(self, NO_NET, *s_args)
                 return self.quit('Not running, resetting ESP8266')

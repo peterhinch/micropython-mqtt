@@ -329,7 +329,9 @@ Principal methods. Required in most applications:
  acquires a valid time value return is "as soon as possible". A call to
  `get_time` causes the ESP8266 to issue `socket.getaddrinfo()` which
  unfortunately is currently a blocking call. This can delay overall
- responsiveness for the duration. Typical usage is to set the RTC.
+ responsiveness for the duration. Typical usage is to set the RTC. The
+ timeout applies on the assumption that WiFi is up. Otherwise the timeout
+ begins when connectivity is restored.
 
 Detection of outages can be slow depending on application code. The client
 pings the broker, but infrequently. Detection will occur if a publication
@@ -703,7 +705,10 @@ Under good conditions latency can be reduced to around 250ms.
 The ESP8266 is prone to unexplained crashes. In trials of extended running
 these occurred about once every 24 hours. The ESP8266 UART produced repeated
 `LmacRxBlk:1` messages, locking the scheduler and provoking the Pyboard to
-reboot it. Such a reboot normally occurs without data loss.
+reboot it.
+
+ESP8266 reboots normally occur without data loss, but this is not guaranteed.
+Even `qos==1` transmissions may occasionally be lost in these circumstances.
 
 The system can fail to recover from a crash in the following circumstances. If
 the broker sends qos==1 messages at a high enough rate, during the ESP8266
