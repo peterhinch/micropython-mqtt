@@ -8,10 +8,8 @@
 
 d = {
     # Customisations: mandatory
-    'ssid' : 'misspiggy',
-    'password' : '6163VMiqSTyx',
+    'ssid' : 'my_ssid',
+    'password' : 'my_password',
     'broker' : '192.168.0.10',
-
-    # Optional
-    'local_time_offset' : 1,
     }
+# or e.g. 'broker' : 'test.mosquitto.org'

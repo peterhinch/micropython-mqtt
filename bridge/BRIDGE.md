@@ -2,22 +2,31 @@
 
 This project brings the MQTT protocol via WiFi to generic host devices running
 MicroPython but lacking a WiFi interface. A cheap ESP8266 board running
-firmware from this repository supplies WiFi connectivity.
+firmware from this repository supplies WiFi connectivity. Tested hosts are
+Pyboard 1.x and Raspberry Pi Pico. Key attributes:
 
-It is designed to be resilient coping with WiFi or broker outages and ESP8266
-failures in as near a transparent fashion as possible.
+ 1. It is resilient coping with WiFi or broker outages and ESP8266 failures in
+ a virtually transparent fashion.
+ 2. It is portable to other host devices by changing one simple module.
+ 3. Uses only `machine.Pin` instances. This avoids special functionality which
+ may be absent on some ports. No RTC, timers, interrupts or special code
+ emitters. Just basic Python.
+ 4. Five pins are used. Pin numbers may be chosen at will.
+ 5. Asynchronous coding is used based on `uasyncio` V3. There is no blocking on
+ the host. Applications are unaffected by delays experienced on the ESP8266.
+ 6. The driver is event driven using callbacks.
+ 7. No assumptions are made about processor speed. The hardware interface
+ between the ESP8266 and the host is synchronous and timing independent.
+ 8. The host implements a watchdog to reboot the ESP8266 in the event of fatal
+ errors or crashes. This is transparent to the application.
 
-Connection between the host and the ESP8266 is via five GPIO lines.The means of
-communication, and justification for it, is documented
-[here](https://github.com/peterhinch/micropython-async/blob/master/v2/syncom_as/README.md).
-It is designed to be hardware independent requiring three output lines and two
-inputs. It uses no hardware-specific features like timers, interrupts, special
-code emitters or machine code. Nor does it make assumptions about processor
-speed. It should be compatible with any hardware running MicroPython and having
-five free GPIO lines.
+The means of communication, and justification for it, is documented
+[here](https://github.com/peterhinch/micropython-async/blob/master/v3/docs/SYNCOM.md).
 
-The driver is event driven using `uasyncio` V3 for asynchronous programming.
-Applications can run unaffected by delays experienced on the ESP8266.
+It should be noted that, for a variety of reasons, it is not particularly fast.
+Latency may be on the order of 250ms - see [Speed](./BRIDGE.md#51-speed). But
+if using public brokers with `qos==1` latency may be significant regardless of
+client.
 
 This document assumes familiarity with the umqtt and `uasyncio` libraries.
 Unofficial guides may be found via these links:  
@@ -27,8 +36,7 @@ Unofficial guides may be found via these links:
 The ESP8266 operates in station mode. The host interface supports the MQTT
 functionality provided in the official umqtt library. It aims to keep the link
 to the broker open continuously, enabling applications which seldom or never
-publish to receive messages. The host implements a watchdog to reboot the
-ESP8266 in the event of fatal errors or crashes.
+publish to receive messages.
 
 ###### [Main README](../README.md)
 
@@ -44,13 +52,14 @@ of API changes. Users of `pb_link` will need to update the ESP8266 firmware.
 
 Testing was performed using a Pyboard V1.0 as the host, also with a Raspberry
 Pi Pico. The following boards have run as ESP8266 targets: Adafruit Feather
-Huzzah, Adafruit Huzzah and WeMos D1 Mini.
+Huzzah, Adafruit Huzzah and WeMos D1 Mini. I have no experience of the minimal
+ESP8266 boards with small amounts of flash: I would expect it to work subject
+to rebuilding for the device.
 
 Testing was performed using a local broker and a public one.
 
 I have had no success with SSL/TLS. This is because of continuing ESP8266
-firmware issues with TLS on nonblocking sockets. I haven't yet re-tried this
-with current ESP8266 firmware.
+firmware issues with TLS on nonblocking sockets.
 
 # Contents
 
@@ -77,6 +86,7 @@ with current ESP8266 firmware.
   4.2 [Protocol](./BRIDGE.md#42-protocol)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.2.1 [Initialisation](./BRIDGE.md#421-initialisation)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.2.2 [Running](./BRIDGE.md#422-running)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.2.3 [Debug methods](./BRIDGE.md#423-debug-methods)  
  5. [Limitations](./BRIDGE.md#5-limitations)  
   5.1 [Speed](./BRIDGE.md#51-speed)  
   5.2 [Reliability](./BRIDGE.md#52-reliability)  
@@ -146,18 +156,32 @@ or for different pin selections.
 
 ### 2.1.2 Test programs
 
+These are located in `pyboard` and `generic` directories. The `pyboard` demos
+are Pyboard-specific and use the Pyboard 1.x LED's. Those in `generic` are
+similar in purpose but use serial output on the assumption that the hardware
+may have no LED's available.
+
+#### Pyboard demos
+
+`hardware.py` Pyboard hardware configuration.  
 `pb_simple.py` Minimal publish/subscribe test. A remote client can turn the
 Pyboard green LED on and off and can display regular publications from the
 host.  
-`pbmqtt_test.py` Demonstrates the ramcheck facility.  
 `pbrange.py` Tests WiFi range and demos operation near the limit of range using
-the Pyboard LED's for feedback.
-`pb_status.py` Demonstrates the interception of status messages.
+the Pyboard LED's for feedback.  
+`pb_status.py` Demonstrates the interception of status messages.  
 
-Bash scripts to periodically publish to the above test programs. These may be
-found in the root irectory. Adapt to your broker address.  
-`pubtest` For `pb_simple.py` and `pbmqtt_test.py`.
-`pubtest_range` For `pbrange.py`.
+#### Generic demos
+
+Tested on the Pi Pico but should be portable simply by changing `hw_pico.py`.
+`hw_pico.py` Hardware config for Pi Pico  
+`pico_simple.py`  
+`pico_range.py`  
+
+Bash scripts to periodically publish to the above test programs may be found in
+the root directory. Adapt to your broker address.  
+`pubtest` For "simple" demos.
+`pubtest_range` For "range" demos.
 
 ###### [Contents](./BRIDGE.md#contents)
 
@@ -303,16 +327,13 @@ dup flag set.
 
 ### 2.3.2 Methods
 
-Principal methods. Required in most applications:
- 1. `ready` A coroutine. `await mqttlink.ready()` returns when the link is up.
- Publications and subscriptions may be started at this point.
- 2. `publish` A coroutine. Args: topic (str), message (str), retain (bool),
- qos (0/1). Pauses until WiFi is up and a response has been received from the
- ESP8266. Defaults: `retain=False`, `qos=0`. The `publish` task can be launched
- at any time, even if an ESP8266 reboot is in progress. In the case of `qos==1`
- return will be delayed until the ESP8266 has received a `PUBACK` from the
- broker.
- 3. `subscribe` Mandatory args: topic (str), qos (0/1), callback. Further
+Bound coroutines. Required in most applications:
+ 1. `publish` Args: topic (str), message (str), retain (bool), qos (0/1).  
+ Pauses until WiFi is up and a response has been received from the ESP8266.
+ Defaults: `retain=False`, `qos=0`. The `publish` task can be launched at any
+ time, even if an ESP8266 reboot is in progress. In the case of `qos==1` return
+ will be delayed until the ESP8266 has received a `PUBACK` from the broker.
+ 2. `subscribe` Mandatory args: topic (str), qos (0/1), callback. Further
  positional args may be supplied.  
  Subscribes to the topic. The callback will run when a publication to the topic
  is received. The callback args are the topic, message, the `retained message`
@@ -320,34 +341,24 @@ Principal methods. Required in most applications:
  Subscriptions should be performed after waiting for initial `ready` status.
  Multiple subscriptions may have separate callbacks. In the event of an outage
  re-subscription is automatic.
- 
- Other methods:
- 1. `wifi` No args. Returns `True` if WiFi and broker are up. See note below.
- 2. `get_time` Arg `timeout=60`. A coroutine. This pauses for upto `timeout`
- seconds while attempting to retrieve time from an NTP server. Returns a time
- value in seconds since the epoch (1970), or 0 on failure. If the ESP8266
- acquires a valid time value return is "as soon as possible". A call to
- `get_time` causes the ESP8266 to issue `socket.getaddrinfo()` which
- unfortunately is currently a blocking call. This can delay overall
- responsiveness for the duration. Typical usage is to set the RTC. The
- timeout applies on the assumption that WiFi is up. Otherwise the timeout
- begins when connectivity is restored.
+ 3. `get_time` Arg `timeout=60`. This pauses for upto `timeout` seconds while
+ attempting to retrieve time from an NTP server. Returns a time value in
+ seconds since the epoch, or 0 on failure. Typical usage is to set the RTC. It
+ should be noted that failures seem fairly common.  
+ If the ESP8266 acquires a valid time return is "as soon as possible". A call
+ to `get_time` causes the ESP8266 to issue `socket.getaddrinfo()` which
+ unfortunately is currently a blocking call: the ESP8266 blocks for a period
+ but the host does not. This can delay overall responsiveness for the duration.
+ The timeout applies on the assumption that WiFi is up. Otherwise the timeout
+ begins once connectivity is restored.
+ 4. `ready` No arg. `await mqttlink.ready()` returns when the link is up.
 
-Detection of outages can be slow depending on application code. The client
-pings the broker, but infrequently. Detection will occur if a publication
-fails provoking automatic reconnection attempts. The `ping_interval` config
-value may be used to speed detection.
-
-Methods intended for debug/test:
-
- 1. `running` No args. Returns `True` if WiFi and broker are up and system
- is running normally.
- 2. `command` Takes an arbitrary number of positional args, formats them and
- sends them to the ESP8266. Currently the only supported command is `MEM` with
- no args. This causes the ESP8266 to return its memory usage, which the host
- driver will print. This was to check for memory leaks. None have been
- observed. Another way is to connect a terminal to the ESP8266 which reports
- its RAM use periodically.
+ Synchronous methods:
+ 1. `wifi` No args. Returns `True` if WiFi and broker are up.  
+ Detection of outages can be slow depending on application code. The client
+ pings the broker, but infrequently. Detection will occur if a publication
+ fails provoking automatic reconnection attempts. The `ping_interval` config
+ value may be used to speed detection.
 
 ### 2.3.3 Class Method
 
@@ -461,7 +472,7 @@ while running.
 Since the Pyboard and the ESP8266 communicate via GPIO pins the UART/USB
 interface is available for checking status messages and debugging.
 
-# 3.1 Installing the precompiled build
+## 3.1 Installing the precompiled build
 
 You will need the esptool utility which runs on a PC. It may be found
 [here](https://github.com/espressif/esptool). Under Linux after installation
@@ -475,7 +486,7 @@ Then, from the bridge directory, issue
 `esptool.py --port /dev/ttyUSB0 --baud 115200 write_flash --verify --flash_size=detect -fm qio 0 firmware-combined.bin`  
 These args for the reference board may need amending for other hardware.
 
-# 3.2 Files
+## 3.2 Files
 
 If you want to build this yourself the first step is to acquire the ESP8266
 toolchain and verify that you can create a working standard ESP8266 build.
@@ -540,7 +551,7 @@ cd -
 
 ###### [Contents](./BRIDGE.md#contents)
 
-# 3.3 Pinout
+## 3.3 Pinout
 
 ESP8266 pinout is defined by the `Channel` constructor in `mqtt.py`. Pin 15 is
 used for `mckout` because this has an on-board pull down resistor. This ensures
@@ -560,7 +571,7 @@ subscribed message is received it informs the host which runs the callback.
 In the event of an outage the publication response message from the target will
 be delayed until the outage has ended and reconnection has occurred.
 
-# 4.1 Communication
+## 4.1 Communication
 
 The host and target communicate by a symmetrical bidirectional serial protocol.
 At the hardware level it is full-duplex, synchronous and independent of
@@ -591,14 +602,16 @@ reset.
 
 ###### [Contents](./BRIDGE.md#contents)
 
-# 4.2 Protocol
+## 4.2 Protocol
 
-## 4.2.1 Initialisation
+These details are provided for those wishing to modify the ESP8266 code.
+
+### 4.2.1 Initialisation
 
 The host instantiates an `MQTTlink` object which creates a `channel` being
 a `SynCom` instance. This issues the `start` method with its own `start`
 method as the coro argument. This will run every time the ESP8266 starts. If it
-returns it will cause an ESP8266 reset once user coros have aborted.
+returns it will cause an ESP8266 reset after running any user crash handler.
 
 The host can send commands to the ESP8266 which replies with a status response.
 The ESP8266 can also send unsolicited status messages. When a command is sent
@@ -635,9 +648,18 @@ to handle publications: the `_publish` asynchronous method. It triggers the
 wifi callback to indicate readiness; the initialisation phase is now complete
 and it enters the running phase.
 
+Subscriptions are handled as follows. The user may issue
+```python
+asyncio.create_task(mqtt_link.subscribe('green', qos, cbgreen))
+```
+at any time. If the link is not yet initialised this task will pause until it
+is, and then send a subscription message to the ESP8266. The task will also
+store the details of the subscription in a dict. If the ESP8266 has to be
+re-booted, the dict will be used to re-create the subscriptions.
+
 ###### [Contents](./BRIDGE.md#contents)
 
-## 4.2.2 Running
+### 4.2.2 Running
 
 This continuously running loop exits only on error when the ESP8266 is to be
 rebooted. It waits on incoming messages from the ESP8266 (terminating on
@@ -676,6 +698,18 @@ during an outage. The `_publish` coro pauses after completion of a publication
 before sending another. It also implements a timeout where no response arrives
 from the ESP8266 when the network is available; in this case the ESP8266 is
 assumed to have failed and is reset.
+
+### 4.2.3 Debug methods
+
+The MQTTlink class has these methods intended for debug/test:  
+ 1. `running` Synchronous. No args. Returns `True` if ESP8266 is running
+ normally.
+ 2. `command` Asynchronous. Takes an arbitrary number of positional args,
+ formats them and sends them to the ESP8266. Currently the only supported
+ command is `MEM` with no args. This causes the ESP8266 to return its memory
+ usage, which the host driver will print. This was to check for memory leaks.
+ None have been observed. A simpler way is to connect a terminal to the ESP8266
+ which reports its RAM use periodically.
 
 ###### [Contents](./BRIDGE.md#contents)
 

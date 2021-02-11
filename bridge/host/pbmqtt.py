@@ -12,7 +12,7 @@
 
 
 import uasyncio as asyncio
-from utime import localtime, time
+from utime import localtime, gmtime, time
 from syncom import SynCom
 from status_values import *  # Numeric status values shared with user code.
 
@@ -108,7 +108,7 @@ class MQTTlink:
         cls.lw_qos = qos
     status_msgs = ('connected to broker', 'awaiting broker',
                 'awaiting default network', 'awaiting specified network',
-                'publish OK', 'running', 'unk', 'Will registered', 'Fail to connect to broker',
+                'publish OK', 'running', 'unknown', 'Will registered', 'Fail to connect to broker',
                 'WiFi up', 'WiFi down')
 
     def __init__(self, *args, **kwargs):
@@ -146,6 +146,12 @@ class MQTTlink:
         # Only specify network on first run
         self.first_run = True
         self._time = 0  # NTP time. Invalid.
+        # ESP8266 returns seconds from 2000 because I believed the docs.
+        # Maintainers change the epoch on a whim.
+        # Calculate ofsets in CPython using datetime.date:
+        # (date(2000, 1, 1) - date(1970, 1, 1)).days * 24*60*60
+        epoch = {2000 : 0, 1970 : 946684800}  # Offset to add.
+        self._epoch_fix = epoch[gmtime(0)[0]]  # Find offset on current platform
 
 # API
     async def publish(self, topic, msg, retain=False, qos=0):
@@ -159,15 +165,17 @@ class MQTTlink:
             # in an outage
             await self.puback.wait()
 
-    def subscribe(self, topic, qos, callback, *args):
+    async def subscribe(self, topic, qos, callback, *args):
         qos_check(qos)
         # Save subscription to resubscribe after outage
         self.subs[topic] = (callback, qos, args)
         # Subscribe
+        await self.ready()
         self.channel.send(argformat(SUBSCRIBE, topic, qos))
 
     # Command handled directly by mqtt.py on ESP8266 e.g. MEM
-    def command(self, *argsend):
+    async def command(self, *argsend):
+        await self.ready()
         self.channel.send(argformat(*argsend))
 
     def running(self):
@@ -180,7 +188,7 @@ class MQTTlink:
     def wifi(self):
         return self.evtwifi.is_set()
 
-    # Attempt to retrieve NTP time in secs since 1970
+    # Attempt to retrieve NTP time in secs since 2000
     async def get_time(self, timeout=60):
         await self.ready()
         self.evttim.clear()  # Defensive
@@ -189,7 +197,7 @@ class MQTTlink:
             await asyncio.wait_for(self.evttim.wait(), timeout)
         except asyncio.TimeoutError:
             self._time = 0
-        return self._time
+        return self._time + self._epoch_fix  # Convert to device epoch
         
 # API END
     def _do_time(self, action):  # TIME received from ESP8266

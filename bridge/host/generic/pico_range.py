@@ -65,8 +65,7 @@ def start(mqtt_link):
     reset_count += 1
 
 async def main():
-    await mqtt_link.ready()
-    mqtt_link.subscribe('green', qos, cbgreen)    # LED control qos 1
+    asyncio.create_task(mqtt_link.subscribe('green', qos, cbgreen))   # LED control qos 1
     asyncio.create_task(publish(mqtt_link, 10))
     asyncio.create_task(report_time(mqtt_link, 90))
     while True:

@@ -38,8 +38,7 @@ def cbnet(state, _):  # Show WiFi state. Discard mqtt_link arg.
     amber.on() if state else amber.off()
 
 async def main(mqtt_link):
-    await mqtt_link.ready()
-    mqtt_link.subscribe('green', qos, cbgreen)  # LED control qos 1
+    asyncio.create_task(mqtt_link.subscribe('green', qos, cbgreen))  # LED control qos 1
     asyncio.create_task(publish(mqtt_link, 10))
     while True:
         await asyncio.sleep(10)
