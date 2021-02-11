@@ -145,7 +145,7 @@ The MQTT API is via the `MQTTlink` class described below.
 
 ### 2.1.1 Dependencies
 
-These are all supplied in the `host` directory.
+These are all supplied in the `host` directory.  
 `syncom.py` Bitbanged communication library.  
 `pbmqtt.py` Python MQTT interface.  
 `status_values.py` Numeric constants shared between user code, the ESP8266

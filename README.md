@@ -49,7 +49,8 @@ is non-blocking and is designed for applications using `uasyncio`.
 
 The current version of this library is in the `bridge` directory and is
 documented  
-### [here](./bridge/BRIDGE.md  
+### [here](./bridge/BRIDGE.md)
+
 It uses the new version of `uasyncio`.
 
 An old version is archived to the `pb_link` directory, although I plan to
