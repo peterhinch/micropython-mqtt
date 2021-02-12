@@ -49,14 +49,9 @@ def cbgreen(command, text, retained):
 def cbcrash(mqtt_link):
     print('ESP8266 crash')
 
-async def report_time(mqtt_link, period):
-    while True:
-        await asyncio.sleep(period)
-        t = await mqtt_link.get_time(30)
-        if t == 0:
-            print('Bad time received')
-        else:
-            print('Time', localtime(t))
+async def report_time(mqtt_link):
+    t = await mqtt_link.get_time()
+    print('Time', localtime(t))  # When an API is available we might set the RTC here
 
 # The user_start callback. See docs 2.3.5.
 def start(mqtt_link):
@@ -67,7 +62,7 @@ def start(mqtt_link):
 async def main():
     asyncio.create_task(mqtt_link.subscribe('green', qos, cbgreen))   # LED control qos 1
     asyncio.create_task(publish(mqtt_link, 10))
-    asyncio.create_task(report_time(mqtt_link, 90))
+    asyncio.create_task(report_time(mqtt_link))
     while True:
         await asyncio.sleep(10)
 

@@ -188,16 +188,21 @@ class MQTTlink:
     def wifi(self):
         return self.evtwifi.is_set()
 
-    # Attempt to retrieve NTP time in secs since 2000
-    async def get_time(self, timeout=60):
-        await self.ready()
+    # Attempt to retrieve NTP time in secs since 2000 or device epoch
+    async def get_time(self, pause=120, y2k=False):
+        delta = 0 if y2k else self._epoch_fix
         self.evttim.clear()  # Defensive
-        self.channel.send(TIME)
-        try:
-            await asyncio.wait_for(self.evttim.wait(), timeout)
-        except asyncio.TimeoutError:
-            self._time = 0
-        return self._time + self._epoch_fix  # Convert to device epoch
+        self._time = 0  # Invalidate
+        while True:
+            await self.ready()
+            self.channel.send(TIME)
+            try:
+                await asyncio.wait_for(self.evttim.wait(), pause // 2)
+            except asyncio.TimeoutError:
+                pass
+            if self._time:
+                return self._time + delta  # Fix epoch
+            await asyncio.sleep(pause)
         
 # API END
     def _do_time(self, action):  # TIME received from ESP8266

@@ -341,16 +341,18 @@ Bound coroutines. Required in most applications:
  Subscriptions should be performed after waiting for initial `ready` status.
  Multiple subscriptions may have separate callbacks. In the event of an outage
  re-subscription is automatic.
- 3. `get_time` Arg `timeout=60`. This pauses for upto `timeout` seconds while
- attempting to retrieve time from an NTP server. Returns a time value in
- seconds since the epoch, or 0 on failure. Typical usage is to set the RTC. It
- should be noted that failures seem fairly common.  
- If the ESP8266 acquires a valid time return is "as soon as possible". A call
- to `get_time` causes the ESP8266 to issue `socket.getaddrinfo()` which
+ 3. `get_time` Args `pause=120, y2k=False`. This attempts to retrieve time from
+ an NTP server. Returns a time value in seconds since the epoch. If `y2k` is
+ `True` the epoch is 2000-01-01 00:00:00 UTC, otherwise it is the epoch as
+ defined on the host device. A host epoch ensures that `time.localtime()` will
+ produce a valid result.  
+ In the event of failure it will pause for `pause` seconds before again
+ querying a timeserver. In the event of communication problems the task can
+ therefore pause for some time until a valid time is acquired. When this occurs
+ return is fast. Typical usage is to set the RTC.  
+ A call to `get_time` causes the ESP8266 to issue `socket.getaddrinfo()` which
  unfortunately is currently a blocking call: the ESP8266 blocks for a period
  but the host does not. This can delay overall responsiveness for the duration.
- The timeout applies on the assumption that WiFi is up. Otherwise the timeout
- begins once connectivity is restored.
  4. `ready` No arg. `await mqttlink.ready()` returns when the link is up.
 
  Synchronous methods:
