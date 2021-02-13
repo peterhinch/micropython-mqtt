@@ -264,9 +264,8 @@ config['server'] = SERVER
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
 client = MQTTClient(config)
-loop = asyncio.get_event_loop()
 try:
-    loop.run_until_complete(main(client))
+    asyncio.run(main(client))
 finally:
     client.close()  # Prevent LmacRxBlk:1 errors
 ```
@@ -522,13 +521,9 @@ task. In such cases if a publication queue is required it should be implemented
 by the application.
 
 On capable hardware it is valid to have multiple coroutines performing qos == 1
-publications asynchronously, but it may be necessary to increase the default
-`uasyncio` queue sizes:
-
-```python
-import uasyncio as asyncio
-loop = asyncio.get_event_loop(runq_len=40, waitq_len=40)
-```
+publications asynchronously, but there are implications where connectivity with
+the broker is slow: an accumulation of tasks waiting on PUBACK packets implies
+consumption of resources.
 
 The WiFi and Connect coroutines should run to completion quickly relative to
 the time required to connect and disconnect from the network. Aim for 2 seconds
