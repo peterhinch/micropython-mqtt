@@ -18,7 +18,6 @@ import uasyncio as asyncio
 
 TOPIC = 'shed'  # For demo publication and last will use same topic
 
-loop = asyncio.get_event_loop()
 outages = 0
 
 async def pulse():  # This demo pulses blue LED each time a subscribed msg arrives.
@@ -28,7 +27,7 @@ async def pulse():  # This demo pulses blue LED each time a subscribed msg arriv
 
 def sub_cb(topic, msg, retained):
     print((topic, msg))
-    loop.create_task(pulse())
+    asyncio.create_task(pulse())
 
 async def wifi_han(state):
     global outages
@@ -69,7 +68,9 @@ MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
 try:
-    loop.run_until_complete(main(client))
+    asyncio.run(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.
     client.close()
     blue_led(True)
+    asyncio.new_event_loop()
+

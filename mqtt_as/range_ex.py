@@ -21,7 +21,6 @@ import gc
 
 TOPIC = 'shed'  # For demo publication and last will use same topic
 
-loop = asyncio.get_event_loop()
 outages = 0
 rssi = -199  # Effectively zero signal in dB.
 
@@ -32,7 +31,7 @@ async def pulse():  # This demo pulses blue LED each time a subscribed msg arriv
 
 def sub_cb(topic, msg, retained):
     print((topic, msg))
-    loop.create_task(pulse())
+    asyncio.create_task(pulse())
 
 # The only way to measure RSSI is via scan(). Alas scan() blocks so the code
 # causes the obvious uasyncio issues.
@@ -88,9 +87,11 @@ config['keepalive'] = 120
 MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
-loop.create_task(get_rssi())
+asyncio.create_task(get_rssi())
 try:
-    loop.run_until_complete(main(client))
+    asyncio.run(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.
     client.close()
     blue_led(True)
+    asyncio.new_event_loop()
+

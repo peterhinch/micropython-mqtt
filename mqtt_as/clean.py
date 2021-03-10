@@ -61,9 +61,9 @@ config['clean'] = True
 MQTTClient.DEBUG = True  # Optional
 client = MQTTClient(config)
 
-loop = asyncio.get_event_loop()
-loop.create_task(heartbeat())
+asyncio.create_task(heartbeat())
 try:
-    loop.run_until_complete(main(client))
+    asyncio.run(main(client))
 finally:
     client.close()  # Prevent LmacRxBlk:1 errors
+    asyncio.new_event_loop()

@@ -22,8 +22,6 @@ import uasyncio as asyncio
 
 SERVER = 'test.mosquitto.org'
 
-loop = asyncio.get_event_loop()
-
 def sub_cb(topic, msg, retained):
     c, r = [int(x) for x in msg.decode().split(' ')]
     print('Topic = {} Count = {} Retransmissions = {} Retained = {}'.format(topic.decode(), c, r, retained))
@@ -58,6 +56,7 @@ config['ssl'] = True
 MQTTClient.DEBUG = True  # Optional
 client = MQTTClient(config)
 try:
-    loop.run_until_complete(main(client))
+    asyncio.run(main(client))
 finally:
     client.close()
+    asyncio.new_event_loop()

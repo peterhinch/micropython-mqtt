@@ -1,5 +1,5 @@
 # mqtt_as.py Asynchronous version of umqtt.robust
-# (C) Copyright Peter Hinch 2017-2020.
+# (C) Copyright Peter Hinch 2017-2021.
 # Released under the MIT licence.
 
 # Pyboard D support added
@@ -25,7 +25,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 6, 0)
+VERSION = (0, 6, 1)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -524,18 +524,17 @@ class MQTTClient(MQTT_base):
         # If we get here without error broker/LAN must be up.
         self._isconnected = True
         self._in_connect = False  # Low level code can now check connectivity.
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._wifi_handler(True))  # User handler.
+        asyncio.create_task(self._wifi_handler(True))  # User handler.
         if not self._has_connected:
             self._has_connected = True  # Use normal clean flag on reconnect.
-            loop.create_task(
+            asyncio.create_task(
                 self._keep_connected())  # Runs forever unless user issues .disconnect()
 
-        loop.create_task(self._handle_msg())  # Tasks quit on connection fail.
-        loop.create_task(self._keep_alive())
+        asyncio.create_task(self._handle_msg())  # Tasks quit on connection fail.
+        asyncio.create_task(self._keep_alive())
         if self.DEBUG:
-            loop.create_task(self._memory())
-        loop.create_task(self._connect_handler(self))  # User handler.
+            asyncio.create_task(self._memory())
+        asyncio.create_task(self._connect_handler(self))  # User handler.
 
     # Launched by .connect(). Runs until connectivity fails. Checks for and
     # handles incoming messages.
@@ -587,8 +586,7 @@ class MQTTClient(MQTT_base):
         if self._isconnected:
             self._isconnected = False
             self.close()
-            loop = asyncio.get_event_loop()
-            loop.create_task(self._wifi_handler(False))  # User handler.
+            asyncio.create_task(self._wifi_handler(False))  # User handler.
 
     # Await broker connection.
     async def _connection(self):

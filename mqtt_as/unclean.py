@@ -17,8 +17,6 @@ from mqtt_as import MQTTClient, config
 from config import wifi_led, blue_led
 import uasyncio as asyncio
 
-loop = asyncio.get_event_loop()
-
 outages = 0
 
 # Demonstrate scheduler is operational.
@@ -67,12 +65,13 @@ config['clean'] = False
 config['will'] = ('result', 'Goodbye cruel world!', False, 0)
 config['keepalive'] = 120
 
-loop.create_task(heartbeat())
+asyncio.create_task(heartbeat())
 # Set up client
 MQTTClient.DEBUG = True  # Optional
 client = MQTTClient(config)
 
 try:
-    loop.run_until_complete(main(client))
+    asyncio.run(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.
     client.close()
+    asyncio.new_event_loop()
