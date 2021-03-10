@@ -111,7 +111,7 @@ providing and testing a number of bugfixes and enhancements.
 
 ## 1.3 Project Status
 
-8th April 2020
+8th April 2020-10th March 2021
 Adapted for new `uasyncio`.
 
 4th Nov 2019 V0.5.0  
@@ -189,8 +189,9 @@ firmware as described above.
  3. `tls32.py` SSL/TLS connection for ESP32. Fails with
  `mbedtls_ssl_handshake error: -77`.
 
-Re TLS: I would greatly appreciate guidance from someone who actually knows
-this stuff. Alas I don't.
+Re TLS: It seems that the problem is due to lack of firmware support for TLS
+on nonblocking sockets. This was scheduled to be fixed for V1.14 but seems not
+to have happened.
 
 ### config.py
 
