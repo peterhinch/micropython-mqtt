@@ -21,7 +21,6 @@ application level.
   1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)  
   1.5 [ESP32 Issues](./README.md#15-esp32-issues)  
   1.6 [Pyboard D](./README.md#16-pyboard-d)  
-  1.7 [Dependency](./README.md#17-dependency)  
  2. [Getting started](./README.md#2-getting_started)  
   2.1 [Program files](./README.md#21-program-files)  
   2.2 [Installation](./README.md#22-installation)  
@@ -102,14 +101,17 @@ Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
 
 #### Firmware
 
-Until the release of V1.13 a daily build must be used. This is because
-`uasyncio` has been rewritten and the module has been adapted to require this
-version.
+A release later than V1.13 must be used.
+
+## 1.3 Project Status
 
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements.
 
-## 1.3 Project Status
+SSL/TLS on ESP8266 is
+[not supported](https://github.com/micropython/micropython/issues/7473#issuecomment-871074210),
+and it looks as if this isn't going to be fixed in the near future. ESP32
+support was promised for firmware V1.14 but hasn't materialised as of V1.16.
 
 8th April 2020-10th March 2021
 Adapted for new `uasyncio`.
@@ -127,10 +129,6 @@ the retained message flag.
 On ESP8266 the code disables automatic sleep: this reduces reconnects at cost
 of increased power consumption.  
 
-1st April 2019  
-In the light of improved ESP32 firmware and the availability of the Pyboard D
-the code has minor changes to support these platforms.
-
 ## 1.4 ESP8266 limitations
 
 The module is too large to compile on the ESP8266 and should be precompiled or
@@ -143,18 +141,13 @@ Notes on the Sonoff Basic R3 may be found [here](../sonoff/SONOFF.md).
 ## 1.5 ESP32 issues
 
 Firmware must now be official firmware as described above. The Loboris port
-seems to have been abandoned by its author and is no longer supported.
+has been abandoned by its author and is no longer supported.
 
 ## 1.6 Pyboard D
 
 The library has been tested successfully with the Pyboard D SF2W and SF6W. In
 testing it has clocked up eight weeks of continuous runtime and nearly 1M
 messages without failure or data loss.
-
-## 1.7 Dependency
-
-The module requires `uasyncio`. This is now included by default in official
-firmware as described above.
 
 ###### [Contents](./README.md#1-contents)
 
