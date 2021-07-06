@@ -78,13 +78,12 @@ class BaseInterface:
         on connection state changes
         """
         st = self._state
-        if state and not st:
-            # triggers if state is False or None
-            self._state = True
-        elif not state and st:
-            # triggers if state is True
-            self._state = False
         if st != state:
+            self._state = state
+            if st is None and state is False:
+                # not triggering disconnect cbs when interface state was unknown
+                # (probably disconnected on startup)
+                return
             for cb in self._subs:
                 launch(cb, (state,))
 
