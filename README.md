@@ -15,10 +15,11 @@ An effective PC client and server is [mosquitto](https://mosquitto.org/).
 
 # This repository
 
-This contains two separate projects:  
+This contains three separate projects:  
  1. A "resilient" asynchronous non-blocking MQTT driver.
  2. A means of using a cheap ESP8266 module to bring MQTT to MicroPython
  platforms which lack a WiFi interface.
+ 3. A basic network hardware controller (WLAN) which the mqtt client uses
 
 ## 1. The "resilient" driver
 
