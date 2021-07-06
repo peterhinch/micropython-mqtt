@@ -3,16 +3,12 @@ from sys import platform
 import network
 import uasyncio as asyncio
 
-ESP8266 = platform == 'esp8266'
-ESP32 = platform == 'esp32'
-PYBOARD = platform == 'pyboard'
-
 
 class WLAN(BaseInterface):
     def __init__(self, ssid=None, wifi_pw=None):
         super().__init__()
         self.DEBUG = False
-        if platform == 'esp32' or platform == 'esp32_LoBo':
+        if platform == 'esp32':
             # https://forum.micropython.org/viewtopic.php?f=16&t=3608&p=20942#p20942
             self.BUSY_ERRORS += [118, 119]  # Add in weird ESP32 errors
         self._ssid = ssid
@@ -26,7 +22,7 @@ class WLAN(BaseInterface):
 
     async def _connect(self):
         s = self._sta_if
-        if ESP8266:
+        if platform == 'esp8266':
             if s.isconnected():  # 1st attempt, already connected.
                 return True
             s.active(True)
@@ -45,7 +41,7 @@ class WLAN(BaseInterface):
         else:
             s.active(True)
             s.connect(self._ssid, self._wifi_pw)
-            if PYBOARD:  # Doesn't yet have STAT_CONNECTING constant
+            if platform == 'pyboard':  # Doesn't yet have STAT_CONNECTING constant
                 while s.status() in (1, 2):
                     await asyncio.sleep(1)
             else:
