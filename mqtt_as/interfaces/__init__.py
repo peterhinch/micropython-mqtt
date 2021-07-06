@@ -29,8 +29,14 @@ class BaseInterface:
         self._state = None
 
     async def connect(self):
-        """Serve connect request"""
-        return await self._connect()
+        """Serve connect request. Triggers callbacks if state changes"""
+        if await self._connect():
+            if not self._state:
+                # triggers if state is False or None
+                self._state = True
+                self._launch_subs(True)
+            return True
+        return False
 
     async def _connect(self):
         """Hardware specific connect method"""
@@ -38,8 +44,14 @@ class BaseInterface:
         raise NotImplementedError()
 
     async def disconnect(self):
-        """Serve disconnect request"""
-        return await self._disconnect()
+        """Serve disconnect request. Triggers callbacks if state changes"""
+        if await self._disconnect():
+            if self._state:
+                # triggers if state is True
+                self._state = False
+                self._launch_subs(False)
+            return True
+        return False
 
     async def _disconnect(self):
         """Hardware specific disconnect method"""
