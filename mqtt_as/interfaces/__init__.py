@@ -7,7 +7,7 @@ async def _g():
     pass
 
 
-type_coro = type(_g())
+_type_coro = type(_g())
 
 
 # If a callback is passed, run it and return.
@@ -15,7 +15,7 @@ type_coro = type(_g())
 # coros are passed by name i.e. not using function call syntax.
 def launch(func, tup_args):
     res = func(*tup_args)
-    if isinstance(res, type_coro):
+    if isinstance(res, _type_coro):
         res = asyncio.create_task(res)
     return res
 
@@ -73,19 +73,18 @@ class BaseInterface:
         raise NotImplementedError()
 
     def _change_state(self, state):
-        """Private method executing all callbacks or creating asyncio tasks"""
-        trig = False
-        if state:
-            if not self._state:
-                # triggers if state is False or None
-                self._state = True
-                trig = True
-        else:
-            if self._state:
-                # triggers if state is True
-                self._state = False
-                trig = True
-        if trig:
+        """
+        Private method executing all callbacks or creating asyncio tasks
+        on connection state changes
+        """
+        st = self._state
+        if state and not st:
+            # triggers if state is False or None
+            self._state = True
+        elif not state and st:
+            # triggers if state is True
+            self._state = False
+        if st != state:
             for cb in self._subs:
                 launch(cb, (state,))
 
