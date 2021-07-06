@@ -31,10 +31,7 @@ class BaseInterface:
     async def connect(self):
         """Serve connect request. Triggers callbacks if state changes"""
         if await self._connect():
-            if not self._state:
-                # triggers if state is False or None
-                self._state = True
-                self._launch_subs(True)
+            self._change_state(True)
             return True
         return False
 
@@ -46,16 +43,13 @@ class BaseInterface:
     async def disconnect(self):
         """Serve disconnect request. Triggers callbacks if state changes"""
         if await self._disconnect():
-            if self._state:
-                # triggers if state is True
-                self._state = False
-                self._launch_subs(False)
+            self._change_state(False)
             return True
         return False
 
     async def _disconnect(self):
         """Hardware specific disconnect method"""
-        # return True  # if connection is successful, otherwise False
+        # return True  # if disconnect is successful, otherwise False
         raise NotImplementedError()
 
     async def reconnect(self):
@@ -63,32 +57,37 @@ class BaseInterface:
         return await self._reconnect()
 
     async def _reconnect(self):
-        """Hardware specific disconnect method"""
+        """Hardware specific reconnect method"""
         if await self._disconnect():
             return await self._connect()
         return False
 
     def isconnected(self):
         """"Checks if the interface is connected. Triggers callbacks if state changes"""
-        if self._isconnected():
-            if not self._state:
-                # triggers if state is False or None
-                self._state = True
-                self._launch_subs(True)
-        else:
-            if self._state:
-                # triggers if state is True
-                self._state = False
-                self._launch_subs(False)
+        st = self._isconnected()
+        self._change_state(st)
+        return st
 
     def _isconnected(self):
         """Hardware specific isconnected method"""
         raise NotImplementedError()
 
-    def _launch_subs(self, state):
+    def _change_state(self, state):
         """Private method executing all callbacks or creating asyncio tasks"""
-        for cb in self._subs:
-            launch(cb, (state,))
+        trig = False
+        if state:
+            if not self._state:
+                # triggers if state is False or None
+                self._state = True
+                trig = True
+        else:
+            if self._state:
+                # triggers if state is True
+                self._state = False
+                trig = True
+        if trig:
+            for cb in self._subs:
+                launch(cb, (state,))
 
     def subscribe(self, cb):
         """Subscribe to interface connection state changes"""
