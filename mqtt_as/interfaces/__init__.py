@@ -57,6 +57,7 @@ class BaseInterface:
         return False
 
     def isconnected(self):
+        """"Checks if the interface is connected. Triggers callbacks if state changes"""
         if self._isconnected():
             if not self._state:
                 # triggers if state is False or None
@@ -69,11 +70,14 @@ class BaseInterface:
                 self._launch_subs(False)
 
     def _isconnected(self):
+        """Hardware specific isconnected method"""
         raise NotImplementedError()
 
     def _launch_subs(self, state):
+        """Private method executing all callbacks or creating asyncio tasks"""
         for cb in self._subs:
             launch(cb, (state,))
 
     def subscribe(self, cb):
+        """Subscribe to interface connection state changes"""
         self._subs.append(cb)
