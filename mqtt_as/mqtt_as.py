@@ -450,7 +450,7 @@ class MQTTClient(MQTT_base):
 
     async def connect(self):
         if not self._has_connected:
-            if not await self.wifi_connect():  # On 1st call, caller handles error
+            if not await self._interface.connect():  # On 1st call, caller handles error
                 raise OSError
             # Note this blocks if DNS lookup occurs. Do it once to prevent
             # blocking during later internet outage:
@@ -543,9 +543,7 @@ class MQTTClient(MQTT_base):
             else:
                 await self._interface.disconnect()
                 await asyncio.sleep(1)
-                try:
-                    await self._interface.connect()
-                except OSError:
+                if not await self._interface.connect():  # TODO: switch to reconnect once PR final.
                     continue
                 if not self._has_connected:  # User has issued the terminal .disconnect()
                     self.dprint('Disconnected, exiting _keep_connected')
