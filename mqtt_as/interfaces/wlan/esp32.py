@@ -11,6 +11,8 @@ class WLAN(BaseWLAN):
 
     async def _connect(self):
         s = self._sta_if
+        s.active(True)
+        s.connect(self._ssid, self._wifi_pw)
         while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
             await asyncio.sleep(1)
 
