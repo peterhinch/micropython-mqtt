@@ -6,6 +6,7 @@
 # Various improvements contributed by Kevin Köck.
 
 import gc
+import sys
 import ustruct as struct
 
 # imported here to optimize RAM usage
@@ -20,7 +21,9 @@ from utime import ticks_ms, ticks_diff
 
 gc.collect()
 from micropython import const
-from machine import unique_id
+
+if sys.platform != 'linux':
+    from machine import unique_id
 
 VERSION = (0, 7, 0)
 
@@ -35,7 +38,7 @@ async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
 
 
 config = {
-    'client_id':     hexlify(unique_id()),
+    'client_id':     hexlify(unique_id()) if sys.platform != 'linux' else 'linux',
     'server':        None,
     'port':          0,
     'user':          '',
@@ -98,17 +101,22 @@ class MQTT_base:
         else:
             self._set_last_will(*will)
         # Interface config
-        if 'interface' not in config:
-            # assume WLAN interface, backwards compatibility
-            from .interfaces.wlan import WLAN
-            self._interface = WLAN(config['ssid'], config['wifi_pw'])
+        if 'interface' not in config or config['interface'] is None:
+            if sys.platform == 'linux':
+                from .interfaces.linux import Linux
+                self._interface = Linux()
+            else:
+                # assume WLAN interface, backwards compatibility
+                from .interfaces.wlan import WLAN
+                self._interface = WLAN(config['ssid'], config['wifi_pw'])
         else:
             self._interface: BaseInterface = config['interface']
         self._ssl = config['ssl']
         self._ssl_params = config['ssl_params']
         # Callbacks and coros
         self._cb = config['subs_cb']
-        self._interface.subscribe(config['wifi_coro'])
+        if config['wifi_coro']:
+            self._interface.subscribe(config['wifi_coro'])
         self._connect_handler = config['connect_coro']
         # Network
         self.port = config['port']
