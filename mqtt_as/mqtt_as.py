@@ -549,9 +549,7 @@ class MQTTClient(MQTT_base):
                 await asyncio.sleep(1)
                 gc.collect()
             else:
-                await self._interface.disconnect()
-                await asyncio.sleep(1)
-                if not await self._interface.connect():  # TODO: switch to reconnect once PR final.
+                if not await self._interface.reconnect():
                     continue
                 if not self._has_connected:  # User has issued the terminal .disconnect()
                     self.dprint('Disconnected, exiting _keep_connected')

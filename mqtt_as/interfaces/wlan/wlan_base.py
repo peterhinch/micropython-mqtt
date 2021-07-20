@@ -30,6 +30,7 @@ class BaseWLAN(BaseInterface):
 
     async def _disconnect(self):
         self._sta_if.disconnect()
+        await asyncio.sleep(1)
         return True  # not checking if really disconnected.
 
     def _isconnected(self):
