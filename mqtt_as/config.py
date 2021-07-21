@@ -6,15 +6,15 @@ config['server'] = '192.168.0.10'  # Change to suit
 # config['server'] = 'iot.eclipse.org'
 
 # Not needed if you're only using ESP8266
-config['ssid'] = 'my_SSID'
-config['wifi_pw'] = 'my_WiFi_password'
+config['ssid'] = 'misspiggy'
+config['wifi_pw'] = '6163VMiqSTyx'
 
-# For demos ensure the same calling convention for LED's on all platforms.
+# For demos ensure same calling convention for LED's on all platforms.
 # ESP8266 Feather Huzzah reference board has active low LED's on pins 0 and 2.
 # ESP32 is assumed to have user supplied active low LED's on same pins.
 # Call with blue_led(True) to light
 
-if platform == 'esp8266' or platform == 'esp32' or platform == 'esp32_LoBo':
+if platform == 'esp8266' or platform == 'esp32':
     from machine import Pin
     def ledfunc(pin):
         pin = pin
