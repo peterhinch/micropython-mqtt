@@ -1,7 +1,3 @@
-# tls32.py Test of asynchronous mqtt client with SSL for ESP32. Fails with
-# mbedtls_ssl_handshake error: -77
-# Please help me fix it.
-
 # (C) Copyright Peter Hinch 2017-2019.
 # Released under the MIT licence.
 
