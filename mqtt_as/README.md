@@ -108,6 +108,10 @@ A release later than V1.13 must be used.
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements.
 
+2 Aug 2021
+SSL/TLS on ESP32 has now been confirmed working.
+[Reference](https://github.com/peterhinch/micropython-mqtt/pull/58).
+
 SSL/TLS on ESP8266 is
 [not supported](https://github.com/micropython/micropython/issues/7473#issuecomment-871074210),
 and it looks as if this isn't going to be fixed in the near future.
