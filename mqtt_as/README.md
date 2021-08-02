@@ -110,8 +110,7 @@ providing and testing a number of bugfixes and enhancements.
 
 SSL/TLS on ESP8266 is
 [not supported](https://github.com/micropython/micropython/issues/7473#issuecomment-871074210),
-and it looks as if this isn't going to be fixed in the near future. ESP32
-support was promised for firmware V1.14 but hasn't materialised as of V1.16.
+and it looks as if this isn't going to be fixed in the near future.
 
 8th April 2020-10th March 2021
 Adapted for new `uasyncio`.
@@ -179,12 +178,9 @@ messages without failure or data loss.
  1. `lowpower.py` Pyboard D micro-power test. See [Section 5](./README.md#5-low-power-demo).
  2. `tls8266.py` SSL/TLS connectionfor ESP8266. Fails with 
  `ssl_handshake_status: -4`.
- 3. `tls32.py` SSL/TLS connection for ESP32. Fails with
- `mbedtls_ssl_handshake error: -77`.
 
 Re TLS: It seems that the problem is due to lack of firmware support for TLS
-on nonblocking sockets. This was scheduled to be fixed for V1.14 but seems not
-to have happened.
+on nonblocking sockets.
 
 ### config.py
 
