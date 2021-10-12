@@ -230,8 +230,7 @@ with the topic `foo_topic` the topic and message are printed. The code
 periodically publishes an incrementing count under the topic `result`.
 
 ```python
-from mqtt_as import MQTTClient
-from config import config
+from mqtt_as import MQTTClient, config
 import uasyncio as asyncio
 
 SERVER = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
