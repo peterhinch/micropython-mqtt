@@ -381,10 +381,13 @@ until the WiFi/broker are accessible.
 operation.
 
 Args:
- 1. `topic`
- 2. `msg`
- 3. `retain=False`
- 4. `qos=0`
+ 1. `topic` A bytes or bytearray object.
+ 2. `msg` A bytes or bytearray object. 
+ 3. `retain=False` Boolean.
+ 4. `qos=0` Integer.
+
+Messages and topics may be strings provided that all characters have ordinal
+values <= 127 (Unicode single byte characters).
 
 ### 3.2.3 subscribe
 
@@ -397,8 +400,8 @@ The coro will pause until a `SUBACK` has been received from the broker, if
 necessary reconnecting to a failed network.
 
 Args:
- 1. `topic`
- 2. `qos=0`
+ 1. `topic` A bytes or bytearray object. Or string as described above.
+ 2. `qos=0` Integer.
 
 ### 3.2.4 isconnected
 
