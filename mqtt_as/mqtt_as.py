@@ -119,6 +119,7 @@ class MQTT_base:
         # Callbacks and coros
         self._cb = config['subs_cb']
         self._wifi_handler = config['wifi_coro']
+        self._wifi_coro_task = None
         self._connect_handler = config['connect_coro']
         # Network
         self.port = config['port']
@@ -528,7 +529,9 @@ class MQTTClient(MQTT_base):
         # If we get here without error broker/LAN must be up.
         self._isconnected = True
         self._in_connect = False  # Low level code can now check connectivity.
-        asyncio.create_task(self._wifi_handler(True))  # User handler.
+        if self._wifi_coro_task:
+            self._wifi_coro_task.cancel()
+        self._wifi_coro_task = asyncio.create_task(self._wifi_handler(True))  # User handler.
         if not self._has_connected:
             self._has_connected = True  # Use normal clean flag on reconnect.
             asyncio.create_task(
@@ -590,7 +593,9 @@ class MQTTClient(MQTT_base):
         if self._isconnected:
             self._isconnected = False
             self._close()
-            asyncio.create_task(self._wifi_handler(False))  # User handler.
+            if self._wifi_coro_task:
+                self._wifi_coro_task.cancel()
+            self._wifi_coro_task = asyncio.create_task(self._wifi_handler(False))  # User handler.
 
     # Await broker connection.
     async def _connection(self):
