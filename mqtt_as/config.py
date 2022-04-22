@@ -3,11 +3,11 @@ from sys import platform
 from mqtt_as import config
 
 config['server'] = '192.168.0.10'  # Change to suit
-# config['server'] = 'iot.eclipse.org'
+#  config['server'] = 'test.mosquitto.org'
 
 # Not needed if you're only using ESP8266
-config['ssid'] = 'misspiggy'
-config['wifi_pw'] = '6163VMiqSTyx'
+config['ssid'] = 'your_network_name'
+config['wifi_pw'] = 'your_password'
 
 # For demos ensure same calling convention for LED's on all platforms.
 # ESP8266 Feather Huzzah reference board has active low LED's on pins 0 and 2.
@@ -33,3 +33,6 @@ elif platform == 'pyboard':
         return func
     wifi_led = ledfunc(LED(1), 1)
     blue_led = ledfunc(LED(3), 0)
+else:  # Assume no LEDs
+    wifi_led = lambda _ : None
+    blue_led = wifi_led

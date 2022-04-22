@@ -13,7 +13,7 @@
 # blue LED pulse == message received
 # Publishes connection statistics.
 
-from mqtt_as import MQTTClient, config
+from mqtt_as import MQTTClient, config, RP2
 from config import wifi_led, blue_led
 import uasyncio as asyncio
 import network
@@ -87,7 +87,8 @@ config['keepalive'] = 120
 MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
-asyncio.create_task(get_rssi())
+if not RP2:  # Currently (Apr 22) this task causes connection to be dropped on RP2
+    asyncio.create_task(get_rssi())
 try:
     asyncio.run(main(client))
 finally:  # Prevent LmacRxBlk:1 errors.

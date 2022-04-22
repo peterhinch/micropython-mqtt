@@ -1,8 +1,8 @@
 # mqtt_as.py Asynchronous version of umqtt.robust
-# (C) Copyright Peter Hinch 2017-2021.
+# (C) Copyright Peter Hinch 2017-2022.
 # Released under the MIT licence.
 
-# Pyboard D support added
+# Pyboard D support added also RP2/default
 # Various improvements contributed by Kevin Köck.
 
 import gc
@@ -32,17 +32,18 @@ _DEFAULT_MS = const(20)
 _SOCKET_POLL_DELAY = const(5)  # 100ms added greatly to publish latency
 
 # Legitimate errors while waiting on a socket. See uasyncio __init__.py open_connection().
-if platform == 'esp32' or platform == 'esp32_LoBo':
+ESP32 = platform == 'esp32' or platform == 'esp32_LoBo'
+RP2 = platform == 'rp2'
+if ESP32:
     # https://forum.micropython.org/viewtopic.php?f=16&t=3608&p=20942#p20942
     BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT, 118, 119]  # Add in weird ESP32 errors
+elif RP2:
+    BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT, -110]
 else:
     BUSY_ERRORS = [EINPROGRESS, ETIMEDOUT]
 
 ESP8266 = platform == 'esp8266'
-ESP32 = platform == 'esp32'
 PYBOARD = platform == 'pyboard'
-LOBO = platform == 'esp32_LoBo'
-
 
 # Default "do little" coro for optional user replacement
 async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
@@ -395,7 +396,14 @@ class MQTT_base:
     # messages processed internally.
     # Immediate return if no data available. Called from ._handle_msg().
     async def wait_msg(self):
-        res = self._sock.read(1)  # Throws OSError on WiFi fail
+        try:
+            res = self._sock.read(1)  # Throws OSError on WiFi fail
+        except OSError as e:
+            if e.args[0] in BUSY_ERRORS:  # Needed by RP2
+                await asyncio.sleep_ms(0)
+                return
+            raise
+            
         if res is None:
             return
         if res == b'':
@@ -487,21 +495,18 @@ class MQTTClient(MQTT_base):
         else:
             s.active(True)
             s.connect(self._ssid, self._wifi_pw)
-            if PYBOARD:  # Doesn't yet have STAT_CONNECTING constant
-                while s.status() in (1, 2):
-                    await asyncio.sleep(1)
-            elif LOBO:
-                i = 0
-                while not s.isconnected():
-                    await asyncio.sleep(1)
-                    i += 1
-                    if i >= 10:
-                        break
-            else:
-                while s.status() == network.STAT_CONNECTING:  # Break out on fail or success. Check once per sec.
-                    await asyncio.sleep(1)
+            for _ in range(60):  # Break out on fail or success. Check once per sec.
+                await asyncio.sleep(1)
+                # Platforms with STAT_CONNECTING can break out quickly on failure
+                if PYBOARD and (s.status() not in (1, 2)):
+                    break
+                elif ESP32 and s.status() != network.STAT_CONNECTING:
+                    break
+                # Default e.g. RP2 assume no STAT_CONNECTING. Plough on until success or timeout.
+                elif s.isconnected():
+                    break
 
-        if not s.isconnected():
+        if not s.isconnected():  # Timed out
             raise OSError
         # Ensure connection stays up for a few secs.
         self.dprint('Checking WiFi integrity.')

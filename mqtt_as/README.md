@@ -21,6 +21,7 @@ application level.
   1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)  
   1.5 [ESP32 Issues](./README.md#15-esp32-issues)  
   1.6 [Pyboard D](./README.md#16-pyboard-d)  
+  1.7 [Arduino Nano RP2040 Connect](./README.md#17-arduino-nano-rp2040-connect)  
  2. [Getting started](./README.md#2-getting_started)  
   2.1 [Program files](./README.md#21-program-files)  
   2.2 [Installation](./README.md#22-installation)  
@@ -94,52 +95,37 @@ that use it. It uses nonblocking sockets and does not block the scheduler. The
 design is based on the official `umqtt` library but it has been substantially
 modified for resilience and for asynchronous operation.
 
-Hardware support: Pyboard D, ESP8266 and ESP32.  
-Firmware support: Official firmware, but see below.  
+Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S2 and Arduino Nano RP2040
+Connect.  
+Firmware support: Official MicroPython firmware.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
 Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
-
-#### Firmware
-
-A release later than V1.13 must be used.
 
 ## 1.3 Project Status
 
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements.
 
+22 Apr 2022
+Support added for Arduino Nano RP2040 Connect. See note below.
+
 2 Aug 2021
 SSL/TLS on ESP32 has now been confirmed working.
 [Reference](https://github.com/peterhinch/micropython-mqtt/pull/58).
-
-SSL/TLS on ESP8266 is
-[not supported](https://github.com/micropython/micropython/issues/7473#issuecomment-871074210),
-and it looks as if this isn't going to be fixed in the near future.
-
-8th April 2020-10th March 2021
-Adapted for new `uasyncio`.
-
-4th Nov 2019 V0.5.0  
-SSL/TLS now tested successfully on Pyboard D.  
-Fix bug where ESP8266 could hang attempting to connect.  
-Can now reconnect after disconnect is issued.  
-Now supports concurrent qos==1 publications and subscriptions.  
-**API change** The disconnect method is now asynchronous.
-
-24th Sept 2019  
-**API change:** the subscription callback requires an additional parameter for
-the retained message flag.  
-On ESP8266 the code disables automatic sleep: this reduces reconnects at cost
-of increased power consumption.  
 
 ## 1.4 ESP8266 limitations
 
 The module is too large to compile on the ESP8266 and should be precompiled or
 preferably frozen as bytecode. On the reference board with `uasyncio` and
 `mqtt_as` frozen, the demo script `range_ex` reports 21.8K of free RAM while
-running.
+running. The code disables automatic sleep: this reduces reconnects at cost of
+increased power consumption.
 
 Notes on the Sonoff Basic R3 may be found [here](../sonoff/SONOFF.md).
+
+SSL/TLS on ESP8266 is
+[not supported](https://github.com/micropython/micropython/issues/7473#issuecomment-871074210),
+and it looks as if this isn't going to be fixed in the near future.
 
 ## 1.5 ESP32 issues
 
@@ -151,6 +137,14 @@ has been abandoned by its author and is no longer supported.
 The library has been tested successfully with the Pyboard D SF2W and SF6W. In
 testing it has clocked up eight weeks of continuous runtime and nearly 1M
 messages without failure or data loss.
+
+## 1.7 Arduino Nano RP2040 Connect
+
+Firmware must be dated 22 Apr 22 or later. NINA firmware must be 1.4.8 or
+later - see
+[this doc](https://docs.arduino.cc/tutorials/nano-rp2040-connect/rp2040-upgrading-nina-firmware).
+Reading RSSI seems to break the WiFi link so should be avoided - the
+`range_ex.py` demo disables this on this platform.
 
 ###### [Contents](./README.md#1-contents)
 
@@ -352,7 +346,7 @@ received when connectivity resumes. This is standard MQTT behaviour (MQTT spec
 section 3.1.2.4). If the outage is prolonged this can imply a substantial
 backlog. On the ESP8266 this can cause buffer overflows in the Espressif WiFi
 stack causing `LmacRxBlk:1` errors to appear. 
-[see](http://docs.micropython.org/en/latest/esp8266/esp8266/general.html)
+[see this doc](http://docs.micropython.org/en/latest/esp8266/esp8266/general.html).
 
 `clean_init` should normally be `True`. If `False` the system will attempt
 to restore a prior session on the first connection. This may result in a large
