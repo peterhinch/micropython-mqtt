@@ -22,6 +22,12 @@ from machine import Pin, unique_id
 
 SERVER = 'test.mosquitto.org'
 
+#cert and key must be in der form
+with open('your client key here','rb') as f:
+    KEY=f.read()
+with open('your client cert here', 'rb') as f:
+    CERT=f.read()
+
 # Subscription callback
 def sub_cb(topic, msg, retained):
     print((topic, msg, retained))
@@ -60,6 +66,8 @@ config['server'] = SERVER
 config['connect_coro'] = conn_han
 config['wifi_coro'] = wifi_han
 config['ssl'] = True
+config['ssl_params'] = {'do_handshake':False, 'key':KEY, 'cert':CERT} 
+# Set do_handshake to false to defer the SSL handshake, somehow makes ssl connection works
 
 # Set up client
 MQTTClient.DEBUG = True  # Optional
