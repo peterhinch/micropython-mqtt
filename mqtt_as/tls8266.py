@@ -1,8 +1,7 @@
-# tls8266.py Test of asynchronous mqtt client with SSL. Doesn't actually work:
-# fails on connect with ssl_handshake_status: -4
-# Please help me fix it...
+# tls8266.py Test of asynchronous mqtt client with SSL.
+# Thanks to @SooOverpowered this is now fixed.
 
-# (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Peter Hinch 2017-2022.
 # Released under the MIT licence.
 
 # This demo publishes to topic "result" and also subscribes to that topic.

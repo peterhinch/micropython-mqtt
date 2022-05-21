@@ -106,6 +106,9 @@ Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements.
 
+21 May 2022
+SSL/TLS ESP8266 support contributed by @SooOverpowered: see `tls8266.py`.
+
 22 Apr 2022
 Support added for Arduino Nano RP2040 Connect. See note below.
 
@@ -122,10 +125,6 @@ running. The code disables automatic sleep: this reduces reconnects at cost of
 increased power consumption.
 
 Notes on the Sonoff Basic R3 may be found [here](../sonoff/SONOFF.md).
-
-SSL/TLS on ESP8266 is
-[not supported](https://github.com/micropython/micropython/issues/7473#issuecomment-871074210),
-and it looks as if this isn't going to be fixed in the near future.
 
 ## 1.5 ESP32 issues
 
