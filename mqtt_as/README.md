@@ -546,7 +546,8 @@ application calls the client's `connect` method any failure will cause an
 application-dependent. A check on WiFi or broker function may be required.
 There may be a need to fall back to a different network. In other applications
 brief power outages may be expected: when power resumes the client will simply
-reconnect.
+reconnect. If an error occurs the application might wait for a period before
+re-trying.
 
 The behaviour of "clean session" should be considered in this context. If the
 `clean` flag is `False` and a long power outage occurs there may be a large
