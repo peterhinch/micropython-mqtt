@@ -45,7 +45,7 @@ application level.
   4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-1)  
   4.4 [Application Design](./README.md#44-application-design)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.2 [Behaviour on power up](./README.md#442-behaviour-on-power up)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.2 [Behaviour on power up](./README.md#442-behaviour-on-power-up)  
  5. [Low Power Demo](./README.md#5-low-power-demo)  
  6. [References](./README.md#6-references)  
 
