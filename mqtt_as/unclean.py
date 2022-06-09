@@ -1,5 +1,5 @@
 # clean.py Test of asynchronous mqtt client with clean session False.
-# (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Peter Hinch 2017-2022.
 # Released under the MIT licence.
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
@@ -40,15 +40,13 @@ async def wifi_han(state):
         print('WiFi is down.')
     await asyncio.sleep(1)
 
-async def conn_han(client):
-    await client.subscribe('foo_topic', 1)
-
 async def main(client):
     try:
         await client.connect()
     except OSError:
         print('Connection failed.')
         return
+    await client.subscribe('foo_topic', 1)
     n = 0
     while True:
         await asyncio.sleep(5)
@@ -60,7 +58,6 @@ async def main(client):
 # Define configuration
 config['subs_cb'] = sub_cb
 config['wifi_coro'] = wifi_han
-config['connect_coro'] = conn_han
 config['clean'] = False
 config['will'] = ('result', 'Goodbye cruel world!', False, 0)
 config['keepalive'] = 120

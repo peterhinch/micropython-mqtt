@@ -45,6 +45,7 @@ application level.
   4.3 [Client subscriptions with qos == 1](./README.md#43-client-subscriptions-with-qos-1)  
   4.4 [Application Design](./README.md#44-application-design)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.2 [Behaviour on power up](./README.md#441-behaviour-on-power up)  
  5. [Low Power Demo](./README.md#5-low-power-demo) Note: Pyboard D specific and highly experimental.  
  6. [References](./README.md#6-references)  
 
@@ -105,6 +106,10 @@ Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
 
 Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements.
+
+10 June 2022
+Lowpower demo removed as it required an obsolete version of `uasyncio`.
+Improved handling of `clean_init` (issue #40).
 
 21 May 2022
 SSL/TLS ESP8266 support contributed by @SooOverpowered: see `tls8266.py`.
@@ -169,15 +174,8 @@ Reading RSSI seems to break the WiFi link so should be avoided - the
  Pyboard D. Publishes every 20s and subscribes to same topic. Connection to
  this public broker, though encrypted, is insecure because anyone can
  subscribe.
-
-### Experimental scripts
-
- 1. `lowpower.py` Pyboard D micro-power test. See [Section 5](./README.md#5-low-power-demo).
- 2. `tls8266.py` SSL/TLS connectionfor ESP8266. Fails with 
- `ssl_handshake_status: -4`.
-
-Re TLS: It seems that the problem is due to lack of firmware support for TLS
-on nonblocking sockets.
+ 8. `tls8266.py` SSL/TLS connectionfor ESP8266. Shows how to use keys and
+ certificates. For obvious reasons it requires editing to run.
 
 ### config.py
 
@@ -202,11 +200,6 @@ config['wifi_pw'] = 'my_password'
 ###### [Contents](./README.md#1-contents)
 
 ## 2.2 Installation
-
-The only dependency is uasyncio from the [MicroPython library](https://github.com/micropython/micropython-lib).
-Many firmware builds include this by default. Otherwise ensure it is installed
-on the device. Installation is described in the tutorial in
-[this repo](https://github.com/peterhinch/micropython-async).
 
 The module is too large to compile on the ESP8266. It must either be cross
 compiled or (preferably) built as frozen bytecode: copy `mqtt_as.py` to
@@ -544,41 +537,37 @@ disrupt the MQTT protocol. There are several ways to address this:
 This was not included in the library mainly because most use cases are covered
 by use of a timestamp. Other reasons are documented in the code comments.
 
+### 4.4.2 Behaviour on power up
+
+The library aims to handle connectivity outages transparently, however power
+cycling of the client must be considered at application level. When the
+application calls the client's `connect` method any failure will cause an
+`OSError` to be raised. This is by design because the action to be taken is
+application-dependent. A check on WiFi or broker function may be required.
+There may be a need to fall back to a different network. In other applications
+brief power outages may be expected: when power resumes the client will simply
+reconnect.
+
+The behaviour of "clean session" should be considered in this context. If the
+`clean` flag is `False` and a long power outage occurs there may be a large
+backlog of messages. This can cause problems on resource constrained clients,
+notably if the client has been taken out of service for a few days.
+
+The `clean_init` flag aims to address the case where the application normally
+runs with `clean==True`. If `clean_init=False` and `clean=True`, on power up
+existing session state is discarded. Subsequently in the event of connectivity
+outages subscriptions will meet the `qos==1` guarantee.
+
+If on power up both flags are `True` the broker will forward messages pending
+since the last (non-clean) session.
+
 ###### [Contents](./README.md#1-contents)
 
 # 5. Low power demo
 
-This is a somewhat experimental demo and is specific to the Pyboard D.  
-**NOTE** In my latest testing this ran but power consumption was 16mA. The
-behavior of Pyboard D firmware seems inconsistent between releases.
+The original demo has been removed as it required an obsolete version of
+uasyncio.
 
-The `micropower.py` script runs MQTT publications and a subscription. It
-reduces current consumption to about 6mA. It requires the following from the
-[async repo](https://github.com/peterhinch/micropython-async):  
- 1. The `fast_io` version of `uasyncio` must be installed.
- 2. `rtc_time.py` and `rtc_time_cfg.py` must be on the path and must be the
- latest version (17th Oct 2019 or later).
-
-Verify that the `fast_io` version is installed by issuing the following at the
-REPL:
-```python
-import uasyncio as asyncio
-asyncio.version
-```
-The official version will throw an exception; the `fast_io` version will report
-a version number (at the time of writing 0.26).
-
-To activate power saving the USB connection to the Pyboard should be unused.
-This is firstly because USB uses power, and secondly because the power saving
-mechanism would disrupt USB communications. If a USB connection is provided the
-demo will run, but the power saving feature will be disabled.
-
-It is possible to acquire a REPL in this mode using an FTDI adaptor connected
-to one of the Pyboard's UARTs. Use `pyb.repl_uart(uart)`.
-
-One means of powering the Pyboard is to link the Pyboard to a USB power source
-via a USB cable wired for power only. This will ensure that a USB connection is
-not detected.
 
 ###### [Contents](./README.md#1-contents)
 

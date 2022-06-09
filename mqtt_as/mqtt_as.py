@@ -25,7 +25,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 6, 2)
+VERSION = (0, 6, 3)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -523,12 +523,24 @@ class MQTTClient(MQTT_base):
             # blocking during later internet outage:
             self._addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self._in_connect = True  # Disable low level ._isconnected check
-        clean = self._clean if self._has_connected else self._clean_init
         try:
-            await self._connect(clean)
+            if not self._has_connected and self._clean_init and not self._clean:
+                # Power up. Clear previous session data but subsequently save it.
+                # Issue #40
+                await self._connect(True)  # Connect with clean session
+                try:
+                    async with self.lock:
+                        self._sock.write(b"\xe0\0")  # Force disconnect but keep socket open
+                except OSError:
+                    pass
+                print("Waiting for disconnect")
+                await asyncio.sleep(2)  # Wait for broker to disconnect
+                print("About to reconnect with unclean session.")
+            await self._connect(self._clean)
         except Exception:
             self._close()
             raise
+        clean = self._clean if self._has_connected else self._clean_init
         self.rcv_pids.clear()
         # If we get here without error broker/LAN must be up.
         self._isconnected = True
