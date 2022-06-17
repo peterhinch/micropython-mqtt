@@ -578,7 +578,9 @@ and pending subscriptions, before entering `deepsleep`.
 The `mqtt_as` module was not designed for micropower operation and `uasyncio`
 does not support power saving. However with suitable hardware it is possible to
 produce an MQTT client with very low average power consumption. This is done by
-keeping the application run time short and using `machine.deepsleep`.
+keeping the application run time short and setting `machine.deepsleep` to sleep
+for a period. When the period expires the board resets and `main.py` re-starts
+the application.
 
 Hardware tested was the [UM Feather S2](https://feathers2.io/) available from
 [Adafruit](https://www.adafruit.com/product/4769). My sample consumes only 66μA
