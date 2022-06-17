@@ -46,7 +46,7 @@ application level.
   4.4 [Application Design](./README.md#44-application-design)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.2 [Behaviour on power up](./README.md#442-behaviour-on-power-up)  
- 5. [Low Power Demo](./README.md#5-low-power-demo)  
+ 5. [Low Power Use](./README.md#5-low-power-use) Usage in a micropower application.  
  6. [References](./README.md#6-references)  
 
 ## 1.1 Rationale
@@ -353,10 +353,14 @@ MQTT spec 3.1.2.4.
 
 Asynchronous.
 
-No args. Connects to the specified broker. The application should call
-`connect` once on startup. If this fails (due to WiFi or the broker being
-unavailable) an `OSError` will be raised. Subsequent reconnections after
-outages are handled automatically.
+Keyword only arg:  
+ * `quick=False` Setting `quick=True` saves power in some battery applications.
+ See [Low Power Use](./README.md#5-low-power-use).
+
+Connects to the specified broker. The application should call `connect` once on
+startup. If this fails (due to WiFi or the broker being unavailable) an
+`OSError` will be raised. Subsequent reconnections after outages are handled
+automatically.
 
 ### 3.2.2 publish
 
@@ -564,11 +568,49 @@ since the last (non-clean) session.
 
 ###### [Contents](./README.md#1-contents)
 
-# 5. Low power demo
+# 5. Low power use
 
-The original demo has been removed as it required an obsolete version of
-uasyncio.
+Normal operation of `mqtt_as` is based on attempting to keep the link up as
+much as possible. This assures minimum latency for subscriptions but implies
+power draw. An alternative is periodically to connect, handle publications
+and pending subscriptions, before entering `deepsleep`.
 
+The `mqtt_as` module was not designed for micropower operation and `uasyncio`
+does not support power saving. However with suitable hardware it is possible to
+produce an MQTT client with very low average power consumption. This is done by
+keeping the application run time short and using `machine.deepsleep`.
+
+Hardware tested was the [UM Feather S2](https://feathers2.io/) available from
+[Adafruit](https://www.adafruit.com/product/4769). My sample consumes only 66μA
+in deepsleep mode. It has a switchable LDO regulator allowing external sensors
+to be powered down when the host is in deepsleep. It also supports battery
+operation via a LiPo cell with USB charging. A Pyboard D with WBUS-DIP28 has
+similar properties.
+
+The test script `lptest_min.py` wakes up periodically and connects to WiFi. It
+publishes the value from the onboard light sensor, and subscribes to the topic
+"foo_topic". Any matching publications which occured during deepsleep are
+received and revealed by flashing the blue LED.
+
+Note that `deepsleep` disables USB. This is inconvenient in development. The
+script has a test mode in which deepsleep is replaced by `time.sleep` and
+`machine.soft_reset` keeping the USB link active. An alternative approach to
+debugging is to use a UART with an FTDI adaptor. Such a link can survive a
+deep sleep.
+
+Each time the client goes into deepsleep it issues `.disconnect()`. This sends
+an MQTT `DISCONNECT` packet to the broker suppressing the last will as per MQTT
+spec para 3.1.2.5. The reasoning is that deepsleep periods are likely to be
+much longer than the keepalive time. Consequently the last will message is only
+triggered in the event of a failure such as a program crash.
+
+In applications which close the connection and deepsleep, power consumption may
+be further reduced by setting the `quick` arg to `.connect`. On connecting or
+re-connecting after an outage a check is made to ensure that WiFi connectivity
+is stable. Quick connection skips this check on initial connection only, saving
+several seconds. The reasoning here is that any error in initial connection
+must be handled by the application. The test script sleeps for `retry` seconds
+before re-trying the connection.
 
 ###### [Contents](./README.md#1-contents)
 

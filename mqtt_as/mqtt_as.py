@@ -474,7 +474,7 @@ class MQTTClient(MQTT_base):
             import esp
             esp.sleep_type(0)  # Improve connection integrity at cost of power consumption.
 
-    async def wifi_connect(self):
+    async def wifi_connect(self, quick=False):
         s = self._sta_if
         if ESP8266:
             if s.isconnected():  # 1st attempt, already connected.
@@ -508,17 +508,18 @@ class MQTTClient(MQTT_base):
 
         if not s.isconnected():  # Timed out
             raise OSError
-        # Ensure connection stays up for a few secs.
-        self.dprint('Checking WiFi integrity.')
-        for _ in range(5):
-            if not s.isconnected():
-                raise OSError  # in 1st 5 secs
-            await asyncio.sleep(1)
-        self.dprint('Got reliable connection')
+        if not quick:  # Skip on first connection only if power saving
+            # Ensure connection stays up for a few secs.
+            self.dprint('Checking WiFi integrity.')
+            for _ in range(5):
+                if not s.isconnected():
+                    raise OSError  # in 1st 5 secs
+                await asyncio.sleep(1)
+            self.dprint('Got reliable connection')
 
-    async def connect(self):
+    async def connect(self, *, quick=False):  # Quick initial connect option for battery apps
         if not self._has_connected:
-            await self.wifi_connect()  # On 1st call, caller handles error
+            await self.wifi_connect(quick)  # On 1st call, caller handles error
             # Note this blocks if DNS lookup occurs. Do it once to prevent
             # blocking during later internet outage:
             self._addr = socket.getaddrinfo(self.server, self.port)[0][-1]
@@ -533,9 +534,9 @@ class MQTTClient(MQTT_base):
                         self._sock.write(b"\xe0\0")  # Force disconnect but keep socket open
                 except OSError:
                     pass
-                print("Waiting for disconnect")
+                self.dprint("Waiting for disconnect")
                 await asyncio.sleep(2)  # Wait for broker to disconnect
-                print("About to reconnect with unclean session.")
+                self.dprint("About to reconnect with unclean session.")
             await self._connect(self._clean)
         except Exception:
             self._close()
