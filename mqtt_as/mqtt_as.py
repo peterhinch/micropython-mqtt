@@ -540,6 +540,7 @@ class MQTTClient(MQTT_base):
             await self._connect(self._clean)
         except Exception:
             self._close()
+            self._in_connect = False  # Caller may run .isconnected()
             raise
         clean = self._clean if self._has_connected else self._clean_init
         self.rcv_pids.clear()
