@@ -156,13 +156,18 @@ class MQTT_base:
     async def _as_read(self, n, sock=None):  # OSError caught by superclass
         if sock is None:
             sock = self._sock
-        data = b''
+        # Declare a byte array of size n. That space is needed anyway, better
+        # to just 'allocate' it in one go instead of appending to an
+        # existing object, this prevents reallocation and fragmentation.
+        data = bytearray(n)
+        buffer = memoryview(data)
+        size = 0
         t = ticks_ms()
-        while len(data) < n:
+        while size < n:
             if self._timeout(t) or not self.isconnected():
                 raise OSError(-1)
             try:
-                msg = sock.read(n - len(data))
+                msg = sock.read(n - size)
             except OSError as e:  # ESP32 issues weird 119 errors here
                 msg = None
                 if e.args[0] not in BUSY_ERRORS:
@@ -170,7 +175,9 @@ class MQTT_base:
             if msg == b'':  # Connection closed by host
                 raise OSError(-1)
             if msg is not None:  # data received
-                data = b''.join((data, msg))
+                msg_size = len(msg)
+                buffer[size:size + msg_size] = msg
+                size += msg_size
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
@@ -179,6 +186,9 @@ class MQTT_base:
     async def _as_write(self, bytes_wr, length=0, sock=None):
         if sock is None:
             sock = self._sock
+
+        # Wrap bytes in memoryview to avoid copying during slicing
+        bytes_wr = memoryview(bytes_wr)
         if length:
             bytes_wr = bytes_wr[:length]
         t = ticks_ms()
