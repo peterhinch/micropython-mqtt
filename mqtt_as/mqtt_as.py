@@ -331,6 +331,10 @@ class MQTT_base:
 
     def close(self):  # API. See https://github.com/peterhinch/micropython-mqtt/issues/60
         self._close()
+        try:
+            self._sta_if.disconnect()  # Disconnect Wi-Fi to avoid errors
+        except OSError:
+            self.dprint('WiFi is already disconnected')
         self._sta_if.active(False)
 
     async def _await_pid(self, pid):
