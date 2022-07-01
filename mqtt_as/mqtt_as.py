@@ -639,7 +639,10 @@ class MQTTClient(MQTT_base):
                 await asyncio.sleep(1)
                 gc.collect()
             else:
-                self._sta_if.disconnect()
+                try:
+                    self._sta_if.disconnect()
+                except OSError:
+                    self.dprint('already disconnected')
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
