@@ -317,9 +317,9 @@ class MQTT_base:
 
     async def disconnect(self):
         try:
-            async with self.lock:
-                if self._sock is not None:
-                    self._sock.write(b"\xe0\0")
+            if self._sock is not None:
+                async with self.lock:
+                        self._sock.write(b"\xe0\0")
         except OSError:
             pass
         self._has_connected = False
@@ -334,7 +334,7 @@ class MQTT_base:
         try:
             self._sta_if.disconnect()  # Disconnect Wi-Fi to avoid errors
         except OSError:
-            self.dprint('WiFi is already disconnected')
+            self.dprint('Wi-Fi not started, unable to disconnect interface')
         self._sta_if.active(False)
 
     async def _await_pid(self, pid):
@@ -642,7 +642,7 @@ class MQTTClient(MQTT_base):
                 try:
                     self._sta_if.disconnect()
                 except OSError:
-                    self.dprint('already disconnected')
+                    self.dprint('Wi-Fi not started, unable to disconnect interface')
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
