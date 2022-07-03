@@ -316,13 +316,15 @@ class MQTT_base:
         return False
 
     async def disconnect(self):
-        try:
-            async with self.lock:
-                self._sock.write(b"\xe0\0")
-        except OSError:
-            pass
+        if self._sock is not None:
+            try:
+                async with self.lock:
+                    self._sock.write(b"\xe0\0")
+                    await asyncio.sleep_ms(100)
+            except OSError:
+                pass
+            self._close()
         self._has_connected = False
-        self._close()
 
     def _close(self):
         if self._sock is not None:
@@ -330,6 +332,10 @@ class MQTT_base:
 
     def close(self):  # API. See https://github.com/peterhinch/micropython-mqtt/issues/60
         self._close()
+        try:
+            self._sta_if.disconnect()  # Disconnect Wi-Fi to avoid errors
+        except OSError:
+            self.dprint('Wi-Fi not started, unable to disconnect interface')
         self._sta_if.active(False)
 
     async def _await_pid(self, pid):
@@ -634,7 +640,10 @@ class MQTTClient(MQTT_base):
                 await asyncio.sleep(1)
                 gc.collect()
             else:
-                self._sta_if.disconnect()
+                try:
+                    self._sta_if.disconnect()
+                except OSError:
+                    self.dprint('Wi-Fi not started, unable to disconnect interface')
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
