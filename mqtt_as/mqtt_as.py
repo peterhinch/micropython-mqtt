@@ -316,14 +316,15 @@ class MQTT_base:
         return False
 
     async def disconnect(self):
-        try:
-            if self._sock is not None:
+        if self._sock is not None:
+            try:
                 async with self.lock:
-                        self._sock.write(b"\xe0\0")
-        except OSError:
-            pass
+                    self._sock.write(b"\xe0\0")
+                    await asyncio.sleep_ms(100)
+            except OSError:
+                pass
+            self._close()
         self._has_connected = False
-        self._close()
 
     def _close(self):
         if self._sock is not None:
