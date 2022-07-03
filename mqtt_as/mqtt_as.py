@@ -165,7 +165,7 @@ class MQTT_base:
         t = ticks_ms()
         while size < n:
             if self._timeout(t) or not self.isconnected():
-                raise OSError(-1)
+                raise OSError(-1, 'Timeout on socket read')
             try:
                 msg = sock.read(n - size)
             except OSError as e:  # ESP32 issues weird 119 errors here
@@ -173,7 +173,7 @@ class MQTT_base:
                 if e.args[0] not in BUSY_ERRORS:
                     raise
             if msg == b'':  # Connection closed by host
-                raise OSError(-1)
+                raise OSError(-1, 'Connection closed by host')
             if msg is not None:  # data received
                 msg_size = len(msg)
                 buffer[size:size + msg_size] = msg
@@ -194,7 +194,7 @@ class MQTT_base:
         t = ticks_ms()
         while bytes_wr:
             if self._timeout(t) or not self.isconnected():
-                raise OSError(-1)
+                raise OSError(-1, 'Timeout on socket write')
             try:
                 n = sock.write(bytes_wr)
             except OSError as e:  # ESP32 issues weird 119 errors here
@@ -270,7 +270,7 @@ class MQTT_base:
         resp = await self._as_read(4)
         self.dprint('Connected to broker.')  # Got CONNACK
         if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:
-            raise OSError(-1)  # Bad CONNACK e.g. authentication fail.
+            raise OSError(-1, 'Bad CONNACK')  # Bad CONNACK e.g. authentication fail.
 
     async def _ping(self):
         async with self.lock:
@@ -417,7 +417,7 @@ class MQTT_base:
         if res is None:
             return
         if res == b'':
-            raise OSError(-1)
+            raise OSError(-1, 'Empty response')
 
         if res == b"\xd0":  # PINGRESP
             await self._as_read(1)  # Update .last_rx time
@@ -427,23 +427,23 @@ class MQTT_base:
         if op == 0x40:  # PUBACK: save pid
             sz = await self._as_read(1)
             if sz != b"\x02":
-                raise OSError(-1)
+                raise OSError(-1, 'Invalid PUBACK packet')
             rcv_pid = await self._as_read(2)
             pid = rcv_pid[0] << 8 | rcv_pid[1]
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
-                raise OSError(-1)
+                raise OSError(-1, 'Invalid pid in PUBACK packet')
 
         if op == 0x90:  # SUBACK
             resp = await self._as_read(4)
             if resp[3] == 0x80:
-                raise OSError(-1)
+                raise OSError(-1, 'Invalid SUBACK packet')
             pid = resp[2] | (resp[1] << 8)
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
-                raise OSError(-1)
+                raise OSError(-1, 'Invalid pid in SUBACK packet')
 
         if op & 0xf0 != 0x30:
             return
@@ -464,7 +464,7 @@ class MQTT_base:
             struct.pack_into("!H", pkt, 2, pid)
             await self._as_write(pkt)
         elif op & 6 == 4:  # qos 2 not supported
-            raise OSError(-1)
+            raise OSError(-1, 'QoS 2 not supported')
 
 
 # MQTTClient class. Handles issues relating to connectivity.
@@ -517,13 +517,13 @@ class MQTTClient(MQTT_base):
                     break
 
         if not s.isconnected():  # Timed out
-            raise OSError
+            raise OSError('Wi-Fi connect timed out')
         if not quick:  # Skip on first connection only if power saving
             # Ensure connection stays up for a few secs.
             self.dprint('Checking WiFi integrity.')
             for _ in range(5):
                 if not s.isconnected():
-                    raise OSError  # in 1st 5 secs
+                    raise OSError('Connection Unstable')  # in 1st 5 secs
                 await asyncio.sleep(1)
             self.dprint('Got reliable connection')
 
