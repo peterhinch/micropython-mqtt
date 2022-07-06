@@ -137,10 +137,10 @@ SSL/TLS on ESP32 has now been confirmed working.
 ## 1.4 ESP8266 limitations
 
 The module is too large to compile on the ESP8266 and should be precompiled or
-preferably frozen as bytecode. On the reference board with `uasyncio` and
-`mqtt_as` frozen, the demo script `range_ex` reports 27.4K of free RAM while
-running. The code disables automatic sleep: this reduces reconnects at cost of
-increased power consumption.
+preferably frozen as bytecode. On the reference board with `mqtt_as` frozen,
+the demo script `range_ex` reports 27.4K of free RAM while running. The code
+disables automatic sleep: this reduces reconnects at cost of increased power
+consumption.
 
 Notes on the Sonoff Basic R3 may be found [here](../sonoff/SONOFF.md).
 
