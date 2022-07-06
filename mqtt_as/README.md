@@ -18,7 +18,7 @@ application level.
   1.1 [Rationale](./README.md#11-rationale)  
   1.2 [Overview](./README.md#12-overview)  
   1.3 [Project Status](./README.md#13-project-status)  
-  1.4 [ESP8266 Limitations](./README.md#14-esp8266-limitations)  
+  1.4 [ESP8266 limitations](./README.md#14-esp8266-limitations)  
   1.5 [ESP32 Issues](./README.md#15-esp32-issues)  
   1.6 [Pyboard D](./README.md#16-pyboard-d)  
   1.7 [Arduino Nano RP2040 Connect](./README.md#17-arduino-nano-rp2040-connect)  
@@ -106,9 +106,9 @@ detailed in [Non standard applications](./README.md#5-non-standard-applications)
 
 Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S2 and Arduino Nano RP2040
 Connect.  
-Firmware support: Official MicroPython firmware.  
+Firmware support: Official MicroPython firmware V1.19 or later.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
-Protocol: Currently the module supports a subset of MQTT revision 3.1.1.
+Protocol: The module supports a subset of MQTT revision 3.1.1.
 
 ## 1.3 Project Status
 
@@ -138,7 +138,7 @@ SSL/TLS on ESP32 has now been confirmed working.
 
 The module is too large to compile on the ESP8266 and should be precompiled or
 preferably frozen as bytecode. On the reference board with `uasyncio` and
-`mqtt_as` frozen, the demo script `range_ex` reports 21.8K of free RAM while
+`mqtt_as` frozen, the demo script `range_ex` reports 27.4K of free RAM while
 running. The code disables automatic sleep: this reduces reconnects at cost of
 increased power consumption.
 
@@ -157,8 +157,7 @@ messages without failure or data loss.
 
 ## 1.7 Arduino Nano RP2040 Connect
 
-Firmware must be dated 22 Apr 22 or later. NINA firmware must be 1.4.8 or
-later - see
+NINA firmware must be 1.4.8 or later - see
 [this doc](https://docs.arduino.cc/tutorials/nano-rp2040-connect/rp2040-upgrading-nina-firmware).
 Reading RSSI seems to break the WiFi link so should be avoided - the
 `range_ex.py` demo disables this on this platform.
