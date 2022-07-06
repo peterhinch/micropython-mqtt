@@ -28,7 +28,7 @@ async def heartbeat():
         s = not s
 
 def sub_cb(topic, msg, retained):
-    print((topic, msg, retained))
+    print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
 
 async def wifi_han(state):
     global outages

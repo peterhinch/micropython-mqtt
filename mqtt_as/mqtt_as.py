@@ -25,7 +25,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 6, 3)
+VERSION = (0, 6, 4)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -317,9 +317,10 @@ class MQTT_base:
 
     async def disconnect(self):
         if self._sock is not None:
+            await self._kill_tasks(False)  # Keep socket open
             try:
                 async with self.lock:
-                    self._sock.write(b"\xe0\0")
+                    self._sock.write(b"\xe0\0")  # Close broker connection
                     await asyncio.sleep_ms(100)
             except OSError:
                 pass
@@ -486,6 +487,7 @@ class MQTTClient(MQTT_base):
             self._ping_interval = p_i
         self._in_connect = False
         self._has_connected = False  # Define 'Clean Session' value to use.
+        self._tasks = []
         if ESP8266:
             import esp
             esp.sleep_type(0)  # Improve connection integrity at cost of power consumption.
@@ -569,10 +571,10 @@ class MQTTClient(MQTT_base):
             asyncio.create_task(
                 self._keep_connected())  # Runs forever unless user issues .disconnect()
 
-        asyncio.create_task(self._handle_msg())  # Tasks quit on connection fail.
-        asyncio.create_task(self._keep_alive())
+        asyncio.create_task(self._handle_msg())  # Task quits on connection fail.
+        self._tasks.append(asyncio.create_task(self._keep_alive()))
         if self.DEBUG:
-            asyncio.create_task(self._memory())
+            self._tasks.append(asyncio.create_task(self._memory()))
         asyncio.create_task(self._connect_handler(self))  # User handler.
 
     # Launched by .connect(). Runs until connectivity fails. Checks for and
@@ -603,16 +605,20 @@ class MQTTClient(MQTT_base):
                 break
         self._reconnect()  # Broker or WiFi fail.
 
+    async def _kill_tasks(self, kill_skt):  # Cancel running tasks
+        for task in self._tasks:
+            task.cancel()
+        self._tasks.clear()
+        await asyncio.sleep_ms(0)  # Ensure cancellation complete
+        if kill_skt:  # Close socket
+            self._close()
+
     # DEBUG: show RAM messages.
     async def _memory(self):
-        count = 0
-        while self.isconnected():  # Ensure just one instance.
-            await asyncio.sleep(1)  # Quick response to outage.
-            count += 1
-            count %= 20
-            if not count:
-                gc.collect()
-                self.dprint('RAM free {} alloc {}'.format(gc.mem_free(), gc.mem_alloc()))
+        while True:
+            await asyncio.sleep(20)
+            gc.collect()
+            self.dprint(f"RAM free {gc.mem_free()} alloc {gc.mem_alloc()}")
 
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
@@ -624,7 +630,7 @@ class MQTTClient(MQTT_base):
     def _reconnect(self):  # Schedule a reconnection if not underway.
         if self._isconnected:
             self._isconnected = False
-            self._close()
+            asyncio.create_task(self._kill_tasks(True))  # Shut down tasks and socket
             asyncio.create_task(self._wifi_handler(False))  # User handler.
 
     # Await broker connection.
@@ -639,7 +645,7 @@ class MQTTClient(MQTT_base):
             if self.isconnected():  # Pause for 1 second
                 await asyncio.sleep(1)
                 gc.collect()
-            else:
+            else:  # Link is down, socket is closed, tasks are killed
                 try:
                     self._sta_if.disconnect()
                 except OSError:

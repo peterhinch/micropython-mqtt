@@ -25,8 +25,9 @@ This contains two separate projects:
 This is an alternative to the official driver. It has been tested on the
 following platforms.
  1. ESP8266
- 2. ESP32
+ 2. ESP32 and ESP32-S2
  3. Pyboard D
+ 4. Arduino Nano Connect
 
 The principal features of this driver are:  
  1. Non-blocking operation for applications using uasyncio.

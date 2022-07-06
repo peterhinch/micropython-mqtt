@@ -18,7 +18,7 @@ import uasyncio as asyncio
 
 # Subscription callback
 def sub_cb(topic, msg, retained):
-    print((topic, msg, retained))
+    print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
 
 # Demonstrate scheduler is operational.
 async def heartbeat():

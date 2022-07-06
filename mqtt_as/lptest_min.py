@@ -15,7 +15,7 @@ debug = True  # In test mode assume a USB connection
 
 
 def sub_cb(topic, msg, retained):
-    debug and print(topic, msg)
+    debug and print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
     blue_led(True)  # Flash LED if subscription received
 
 

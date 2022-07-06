@@ -30,7 +30,7 @@ async def pulse():  # This demo pulses blue LED each time a subscribed msg arriv
     blue_led(False)
 
 def sub_cb(topic, msg, retained):
-    print((topic, msg))
+    print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
     asyncio.create_task(pulse())
 
 # The only way to measure RSSI is via scan(). Alas scan() blocks so the code
