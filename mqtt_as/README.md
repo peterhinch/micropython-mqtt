@@ -406,6 +406,9 @@ Args:
  1. `topic` A bytes or bytearray object. Or string as described above.
  2. `qos=0` Integer.
 
+It is possible to subscribe to multiple topics but there can only be one
+subscription callback.
+
 ### 3.2.4 isconnected
 
 Synchronous. No args.
@@ -611,10 +614,12 @@ to be powered down when the host is in deepsleep. It also supports battery
 operation via a LiPo cell with USB charging. A Pyboard D with WBUS-DIP28 has
 similar properties.
 
-The test script `lptest_min.py` wakes up periodically and connects to WiFi. It
-publishes the value from the onboard light sensor, and subscribes to the topic
-"foo_topic". Any matching publications which occured during deepsleep are
-received and revealed by flashing the blue LED.
+The test script
+[lptest_min.py](https://github.com/peterhinch/micropython-mqtt/blob/master/mqtt_as/lptest_min.py)
+wakes up periodically and connects to WiFi. It publishes the value from the
+onboard light sensor, and subscribes to the topic "foo_topic". Any matching
+publications which occured during deepsleep are received and revealed by
+flashing the blue LED.
 
 Note that `deepsleep` disables USB. This is inconvenient in development. The
 script has a test mode in which deepsleep is replaced by `time.sleep` and
