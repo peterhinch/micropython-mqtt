@@ -28,6 +28,7 @@ following platforms.
  2. ESP32 and ESP32-S2
  3. Pyboard D
  4. Arduino Nano Connect
+ 5. Raspberry Pi Pico W
 
 The principal features of this driver are:  
  1. Non-blocking operation for applications using uasyncio.

@@ -87,7 +87,9 @@ config['keepalive'] = 120
 MQTTClient.DEBUG = True
 client = MQTTClient(config)
 
-if not RP2:  # Currently (Apr 22) this task causes connection to be dropped on RP2
+# Currently (Apr 22) this task causes connection periodically to be dropped on Arduino Nano Connect
+# It does work on Pico W
+if not RP2:
     asyncio.create_task(get_rssi())
 try:
     asyncio.run(main(client))

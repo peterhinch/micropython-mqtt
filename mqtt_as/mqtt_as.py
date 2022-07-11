@@ -25,7 +25,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 6, 4)
+VERSION = (0, 6, 5)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -515,13 +515,13 @@ class MQTTClient(MQTT_base):
             s.connect(self._ssid, self._wifi_pw)
             for _ in range(60):  # Break out on fail or success. Check once per sec.
                 await asyncio.sleep(1)
+                if s.isconnected():
+                    break
                 # Platforms with STAT_CONNECTING can break out quickly on failure
                 if PYBOARD and (s.status() not in (1, 2)):
                     break
-                elif ESP32 and s.status() != network.STAT_CONNECTING:
-                    break
-                # Default e.g. RP2 assume no STAT_CONNECTING. Plough on until success or timeout.
-                elif s.isconnected():
+                # Default: assume that if network.STAT_CONNECTING exists we can use it
+                elif hasattr(network, "STAT_CONNECTING") and s.status() != network.STAT_CONNECTING:
                     break
 
         if not s.isconnected():  # Timed out

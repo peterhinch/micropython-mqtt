@@ -22,6 +22,7 @@ application level.
   1.5 [ESP32 Issues](./README.md#15-esp32-issues)  
   1.6 [Pyboard D](./README.md#16-pyboard-d)  
   1.7 [Arduino Nano RP2040 Connect](./README.md#17-arduino-nano-rp2040-connect)  
+  1.8 [RP2 Pico W](./README.md#18-rp2-pico-w)  
  2. [Getting started](./README.md#2-getting_started)  
   2.1 [Program files](./README.md#21-program-files)  
   2.2 [Installation](./README.md#22-installation)  
@@ -116,6 +117,7 @@ Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements. Also to other
 contributors, some mentioned below.
 
+11 July 2022 V0.6.5 Support RP2 Pico W
 5 July 2022 V0.6.4 Implement enhacements from Bob Veringa. Fix bug where tasks
 could fail to be stopped on a brief outage. Subscription callbacks now receive
 bytearrays rather than bytes objects.
@@ -157,10 +159,16 @@ messages without failure or data loss.
 
 ## 1.7 Arduino Nano RP2040 Connect
 
-NINA firmware must be 1.4.8 or later - see
+NINA firmware must up to date otherwise MicroPython produces error messages.
+See
 [this doc](https://docs.arduino.cc/tutorials/nano-rp2040-connect/rp2040-upgrading-nina-firmware).
 Reading RSSI seems to break the WiFi link so should be avoided - the
 `range_ex.py` demo disables this on this platform.
+
+## 1.8 RP2 Pico W
+
+The `mqtt_as` code should be V0.6.5 or later to avoid very slow recovery from
+outages.
 
 ###### [Contents](./README.md#1-contents)
 
