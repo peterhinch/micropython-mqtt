@@ -146,9 +146,17 @@ class MQTT_base:
         self._lw_qos = qos
         self._lw_retain = retain
 
-    def dprint(self, *args):
-        if self.DEBUG:
-            print(*args)
+    def dprint(self, msg, *args):
+        if not self.DEBUG:
+            # If it is not debug exit now.
+            return
+
+        if not args:
+            # If no arguments just print msg
+            print(msg)
+        else:
+            # If there are arguments use formatting.
+            print(msg % args)
 
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
@@ -420,7 +428,6 @@ class MQTT_base:
                 await asyncio.sleep_ms(0)
                 return
             raise
-            
         if res is None:
             return
         if res == b'':
@@ -618,7 +625,7 @@ class MQTTClient(MQTT_base):
         while True:
             await asyncio.sleep(20)
             gc.collect()
-            self.dprint(f"RAM free {gc.mem_free()} alloc {gc.mem_alloc()}")
+            self.dprint(f"RAM free %d alloc %d", gc.mem_free(), gc.mem_alloc())
 
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
@@ -663,7 +670,7 @@ class MQTTClient(MQTT_base):
                     # Now has set ._isconnected and scheduled _connect_handler().
                     self.dprint('Reconnect OK!')
                 except OSError as e:
-                    self.dprint('Error in reconnect.', e)
+                    self.dprint('Error in reconnect. %s', e)
                     # Can get ECONNABORTED or -1. The latter signifies no or bad CONNACK received.
                     self._close()  # Disconnect and try again.
                     self._in_connect = False
