@@ -514,13 +514,8 @@ class MQTTClient(MQTT_base):
             s.connect(self._ssid, self._wifi_pw)
             for _ in range(60):  # Break out on fail or success. Check once per sec.
                 await asyncio.sleep(1)
-                if s.isconnected():
-                    break
-                # Platforms with STAT_CONNECTING can break out quickly on failure
-                if PYBOARD and (s.status() not in (1, 2)):
-                    break
-                # Default: assume that if network.STAT_CONNECTING exists we can use it
-                elif hasattr(network, "STAT_CONNECTING") and s.status() != network.STAT_CONNECTING:
+                # Loop while connecting or no IP
+                if s.isconnected() or not  1 <= s.status() <= 2:
                     break
 
         if not s.isconnected():  # Timed out
