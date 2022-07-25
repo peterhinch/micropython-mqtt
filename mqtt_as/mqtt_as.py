@@ -515,8 +515,18 @@ class MQTTClient(MQTT_base):
             for _ in range(60):  # Break out on fail or success. Check once per sec.
                 await asyncio.sleep(1)
                 # Loop while connecting or no IP
-                if s.isconnected() or not  1 <= s.status() <= 2:
+                if s.isconnected():
                     break
+                if ESP32:
+                    if s.status() != network.STAT_CONNECTING:  # 1001
+                        break
+                elif PYBOARD:  # No symbolic constants in network
+                    if not 1 <= s.status() <= 2:
+                        break
+                elif RP2:  # 1 is STAT_CONNECTING. 2 reported by user (No IP?)
+                    if not 1 <= s.status() <= 2:
+                        break
+                    
 
         if not s.isconnected():  # Timed out
             raise OSError('Wi-Fi connect timed out')
