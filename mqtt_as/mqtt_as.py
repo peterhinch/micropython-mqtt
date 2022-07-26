@@ -153,81 +153,35 @@ class MQTT_base:
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
 
-    #async def _as_read(self, n, sock=None):  # OSError caught by superclass
-        #if sock is None:
-            #sock = self._sock
-        ## Declare a byte array of size n. That space is needed anyway, better
-        ## to just 'allocate' it in one go instead of appending to an
-        ## existing object, this prevents reallocation and fragmentation.
-        #data = bytearray(n)
-        #buffer = memoryview(data)
-        #size = 0
-        #t = ticks_ms()
-        #while size < n:
-            #if self._timeout(t) or not self.isconnected():
-                #raise OSError(-1, 'Timeout on socket read')
-            #try:
-                #msg = sock.read(n - size)
-            #except OSError as e:  # ESP32 issues weird 119 errors here
-                #msg = None
-                #if e.args[0] not in BUSY_ERRORS:
-                    #raise
-            #if msg == b'':  # Connection closed by host
-                #raise OSError(-1, 'Connection closed by host')
-            #if msg is not None:  # data received
-                #msg_size = len(msg)
-                #buffer[size:size + msg_size] = msg
-                #size += msg_size
-                #t = ticks_ms()
-                #self.last_rx = ticks_ms()
-            #await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
-        #return data
-
     async def _as_read(self, n, sock=None):  # OSError caught by superclass
         if sock is None:
             sock = self._sock
-        data = b''
+        # Declare a byte array of size n. That space is needed anyway, better
+        # to just 'allocate' it in one go instead of appending to an
+        # existing object, this prevents reallocation and fragmentation.
+        data = bytearray(n)
+        buffer = memoryview(data)
+        size = 0
         t = ticks_ms()
-        while len(data) < n:
+        while size < n:
             if self._timeout(t) or not self.isconnected():
-                raise OSError(-1)
+                raise OSError(-1, 'Timeout on socket read')
             try:
-                msg = sock.read(n - len(data))
+                msg = sock.read(n - size)
             except OSError as e:  # ESP32 issues weird 119 errors here
                 msg = None
                 if e.args[0] not in BUSY_ERRORS:
                     raise
             if msg == b'':  # Connection closed by host
-                raise OSError(-1)
+                raise OSError(-1, 'Connection closed by host')
             if msg is not None:  # data received
-                data = b''.join((data, msg))
+                msg_size = len(msg)
+                buffer[size:size + msg_size] = msg
+                size += msg_size
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
         return data
-
-    async def _as_write(self, bytes_wr, length=0, sock=None):
-        if sock is None:
-            sock = self._sock
-
-        # Wrap bytes in memoryview to avoid copying during slicing
-        bytes_wr = memoryview(bytes_wr)
-        if length:
-            bytes_wr = bytes_wr[:length]
-        t = ticks_ms()
-        while bytes_wr:
-            if self._timeout(t) or not self.isconnected():
-                raise OSError(-1, 'Timeout on socket write')
-            try:
-                n = sock.write(bytes_wr)
-            except OSError as e:  # ESP32 issues weird 119 errors here
-                n = 0
-                if e.args[0] not in BUSY_ERRORS:
-                    raise
-            if n:
-                t = ticks_ms()
-                bytes_wr = bytes_wr[n:]
-            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
 
     async def _send_str(self, s):
         await self._as_write(struct.pack("!H", len(s)))
