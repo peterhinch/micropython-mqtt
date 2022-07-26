@@ -526,7 +526,9 @@ class MQTTClient(MQTT_base):
                 elif RP2:  # 1 is STAT_CONNECTING. 2 reported by user (No IP?)
                     if not 1 <= s.status() <= 2:
                         break
-                    
+            else:  # Timeout: still in connecting state
+                s.disconnect()
+                await asyncio.sleep(1)
 
         if not s.isconnected():  # Timed out
             raise OSError('Wi-Fi connect timed out')
