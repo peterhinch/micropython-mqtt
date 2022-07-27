@@ -183,6 +183,29 @@ class MQTT_base:
             await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
         return data
 
+    async def _as_write(self, bytes_wr, length=0, sock=None):
+        if sock is None:
+            sock = self._sock
+
+        # Wrap bytes in memoryview to avoid copying during slicing
+        bytes_wr = memoryview(bytes_wr)
+        if length:
+            bytes_wr = bytes_wr[:length]
+        t = ticks_ms()
+        while bytes_wr:
+            if self._timeout(t) or not self.isconnected():
+                raise OSError(-1, 'Timeout on socket write')
+            try:
+                n = sock.write(bytes_wr)
+            except OSError as e:  # ESP32 issues weird 119 errors here
+                n = 0
+                if e.args[0] not in BUSY_ERRORS:
+                    raise
+            if n:
+                t = ticks_ms()
+                bytes_wr = bytes_wr[n:]
+            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
+
     async def _send_str(self, s):
         await self._as_write(struct.pack("!H", len(s)))
         await self._as_write(s)
