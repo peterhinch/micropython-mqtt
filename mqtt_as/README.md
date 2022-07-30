@@ -23,6 +23,7 @@ application level.
   1.6 [Pyboard D](./README.md#16-pyboard-d)  
   1.7 [Arduino Nano RP2040 Connect](./README.md#17-arduino-nano-rp2040-connect)  
   1.8 [RP2 Pico W](./README.md#18-rp2-pico-w)  
+  1.9 [Limitations](./README.md#19-limitations) Please read this.  
  2. [Getting started](./README.md#2-getting_started)  
   2.1 [Program files](./README.md#21-program-files)  
   2.2 [Installation](./README.md#22-installation)  
@@ -105,8 +106,8 @@ aiming to maintainin that link indefinitely. Applications which close and
 re-open the link (e.g. for power saving purposes) are subject to limitations
 detailed in [Non standard applications](./README.md#5-non-standard-applications).
 
-Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S2 and Arduino Nano RP2040
-Connect.  
+Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S2, Pico W and Arduino Nano
+RP2040 Connect.  
 Firmware support: Official MicroPython firmware V1.19 or later.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
 Protocol: The module supports a subset of MQTT revision 3.1.1.
@@ -169,6 +170,17 @@ Reading RSSI seems to break the WiFi link so should be avoided - the
 
 The `mqtt_as` code should be V0.6.5 or later to avoid very slow recovery from
 outages.
+
+## 1.9 Limitations
+
+The MQTT 3.1 protocol supports extremely long messages. On a microcontroller
+message length is limited by available RAM. The actual limit will depend on the
+platform and user code but it is wise to design on the basis of a maximum of
+around 1KiB.
+
+Some platforms - notably ESP32 - are unhelpful when dealing with gross errors
+such as incorrect WiFi credentials. Initial connection will only fail after a
+one minute timeout. Other platforms enable an immediate bail-out.
 
 ###### [Contents](./README.md#1-contents)
 
