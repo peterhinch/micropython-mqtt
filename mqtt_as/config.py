@@ -1,5 +1,5 @@
 # config.py Local configuration for mqtt_as demo programs.
-from sys import platform
+from sys import platform, implementation
 from mqtt_as import config
 
 config['server'] = '192.168.0.10'  # Change to suit
@@ -33,6 +33,16 @@ elif platform == 'pyboard':
         return func
     wifi_led = ledfunc(LED(1), 1)
     blue_led = ledfunc(LED(3), 0)
+elif platform == 'rp2':
+    from machine import Pin
+    def ledfunc(pin):
+        pin = pin
+        def func(v):
+            pin(v)
+        return func
+    wifi_led = lambda _ : None  # Only one LED
+    LED = 'LED' if 'Pico W' in implementation._machine else 25
+    blue_led = ledfunc(Pin(LED, Pin.OUT, value = 0))  # Message received
 else:  # Assume no LEDs
     wifi_led = lambda _ : None
     blue_led = wifi_led
