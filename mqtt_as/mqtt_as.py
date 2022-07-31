@@ -25,7 +25,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 6, 5)
+VERSION = (0, 6, 6)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -511,6 +511,10 @@ class MQTTClient(MQTT_base):
                     await asyncio.sleep(1)
         else:
             s.active(True)
+            if RP2:  # Disable auto-sleep. 
+                # https://datasheets.raspberrypi.com/picow/connecting-to-the-internet-with-pico-w.pdf
+                # para 3.6.3
+                s.config(pm = 0xa11140)
             s.connect(self._ssid, self._wifi_pw)
             for _ in range(60):  # Break out on fail or success. Check once per sec.
                 await asyncio.sleep(1)
