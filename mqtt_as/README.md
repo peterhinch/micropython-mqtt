@@ -119,23 +119,17 @@ Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements. Also to other
 contributors, some mentioned below.
 
-11 July 2022 V0.6.5 Support RP2 Pico W
+8 Aug 2022 V0.6.6 Support unsubscribe (courtesy of Kevin Köck's fork).  
+11 July 2022 V0.6.5 Support RP2 Pico W  
 5 July 2022 V0.6.4 Implement enhacements from Bob Veringa. Fix bug where tasks
 could fail to be stopped on a brief outage. Subscription callbacks now receive
-bytearrays rather than bytes objects.
-
-10 June 2022
-Lowpower demo removed as it required an obsolete version of `uasyncio`.
-Improved handling of `clean_init` (issue #40).
-
-21 May 2022
-SSL/TLS ESP8266 support contributed by @SooOverpowered: see `tls8266.py`.
-
-22 Apr 2022
-Support added for Arduino Nano RP2040 Connect. See note below.
-
-2 Aug 2021
-SSL/TLS on ESP32 has now been confirmed working.
+bytearrays rather than bytes objects.  
+10 June 2022 Lowpower demo removed as it required an obsolete version of
+`uasyncio`. Improved handling of `clean_init` (issue #40).  
+21 May 2022 SSL/TLS ESP8266 support contributed by @SooOverpowered: see
+`tls8266.py`.  
+22 Apr 2022 Support added for Arduino Nano RP2040 Connect. See note below.  
+2 Aug 2021 SSL/TLS on ESP32 has now been confirmed working.
 [Reference](https://github.com/peterhinch/micropython-mqtt/pull/58).
 
 ## 1.4 ESP8266 limitations

@@ -14,6 +14,8 @@
 # Publishes connection statistics.
 
 from mqtt_as import MQTTClient, config, RP2
+if RP2:
+    from sys import implementation
 from config import wifi_led, blue_led
 import uasyncio as asyncio
 import network
@@ -89,7 +91,7 @@ client = MQTTClient(config)
 
 # Currently (Apr 22) this task causes connection periodically to be dropped on Arduino Nano Connect
 # It does work on Pico W
-if not RP2:
+if not RP2 or 'Pico W' in implementation._machine:
     asyncio.create_task(get_rssi())
 try:
     asyncio.run(main(client))
