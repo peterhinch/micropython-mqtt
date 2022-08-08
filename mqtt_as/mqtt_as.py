@@ -393,7 +393,7 @@ class MQTT_base:
             await self._as_write(pkt, 2)
         await self._as_write(msg)
 
-    # Can raise OSError if WiFi fails. Subclass traps
+    # Can raise OSError if WiFi fails. Subclass traps.
     async def subscribe(self, topic, qos):
         pkt = bytearray(b"\x82\0\0\0")
         pid = next(self.newpid)
@@ -403,6 +403,19 @@ class MQTT_base:
             await self._as_write(pkt)
             await self._send_str(topic)
             await self._as_write(qos.to_bytes(1, "little"))
+
+        if not await self._await_pid(pid):
+            raise OSError(-1)
+
+    # Can raise OSError if WiFi fails. Subclass traps.
+    async def unsubscribe(self, topic):
+        pkt = bytearray(b"\xa2\0\0\0")
+        pid = next(self.newpid)
+        self.rcv_pids.add(pid)
+        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), pid)
+        async with self.lock:
+            await self._as_write(pkt)
+            await self._send_str(topic)
 
         if not await self._await_pid(pid):
             raise OSError(-1)
@@ -450,6 +463,14 @@ class MQTT_base:
                 self.rcv_pids.discard(pid)
             else:
                 raise OSError(-1, 'Invalid pid in SUBACK packet')
+
+        if op == 0xB0:  # UNSUBACK
+            resp = await self._as_read(3)
+            pid = resp[2] | (resp[1] << 8)
+            if pid in self.rcv_pids:
+                self.rcv_pids.discard(pid)
+            else:
+                raise OSError(-1)
 
         if op & 0xf0 != 0x30:
             return
@@ -686,6 +707,15 @@ class MQTTClient(MQTT_base):
             await self._connection()
             try:
                 return await super().subscribe(topic, qos)
+            except OSError:
+                pass
+            self._reconnect()  # Broker or WiFi fail.
+
+    async def unsubscribe(self, topic):
+        while 1:
+            await self._connection()
+            try:
+                return await super().unsubscribe(topic)
             except OSError:
                 pass
             self._reconnect()  # Broker or WiFi fail.

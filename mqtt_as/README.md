@@ -34,12 +34,13 @@ application level.
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.1 [connect](./README.md#321-connect)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.2 [publish](./README.md#322-publish)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.3 [subscribe](./README.md#323-subscribe)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.4 [isconnected](./README.md#324-isconnected)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.5 [disconnect](./README.md#325-disconnect)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.6 [close](./README.md#326-close)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.7 [broker_up](./README.md#327-broker_up)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.8 [wan_ok](./README.md#328-wan_ok)  
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.9 [dprint](./README.md#329-dprint)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.4 [unsubscribe](./README.md#324-unsubscribe)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.5 [isconnected](./README.md#325-isconnected)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.6 [disconnect](./README.md#326-disconnect)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.7 [close](./README.md#327-close)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.8 [broker_up](./README.md#328-broker_up)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.9 [wan_ok](./README.md#329-wan_ok)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.10 [dprint](./README.md#3210-dprint)  
   3.3 [Class Variables](./README.md#33-class-variables)  
   3.4 [Module Attribute](./README.md#34-module-attribute)  
  4. [Notes](./README.md#4-notes)  
@@ -381,6 +382,11 @@ MQTT spec 3.1.2.4.
 
 ## 3.2 Methods
 
+Note re data types. Messages and topics may be strings provided that all
+characters have ordinal values <= 127 (Unicode single byte characters).
+Otherwise the string `encode` method should be used to convert them to `bytes`
+objects.
+
 ### 3.2.1 connect
 
 Asynchronous.
@@ -404,13 +410,10 @@ until the WiFi/broker are accessible.
 operation.
 
 Args:
- 1. `topic` A bytes or bytearray object.
+ 1. `topic` A bytes or bytearray object. Or ASCII string as described above.
  2. `msg` A bytes or bytearray object. 
  3. `retain=False` Boolean.
  4. `qos=0` Integer.
-
-Messages and topics may be strings provided that all characters have ordinal
-values <= 127 (Unicode single byte characters).
 
 ### 3.2.3 subscribe
 
@@ -423,20 +426,33 @@ The coro will pause until a `SUBACK` has been received from the broker, if
 necessary reconnecting to a failed network.
 
 Args:
- 1. `topic` A bytes or bytearray object. Or string as described above.
+ 1. `topic` A bytes or bytearray object. Or ASCII string as described above.
  2. `qos=0` Integer.
 
 It is possible to subscribe to multiple topics but there can only be one
 subscription callback.
 
-### 3.2.4 isconnected
+### 3.2.4 unsubscribe
+
+Asynchronous.
+
+The coro will pause until an `UNSUBACK` has been received from the broker, if
+necessary reconnecting to a failed network.
+
+Arg:
+ 1. `topic` A bytes or bytearray object. Or ASCII string as described above.
+
+If there is no subscription in place with the passed topic name the method will
+complete normally. This is in accordance with MQTT spec 3.10.4 Response.
+
+### 3.2.5 isconnected
 
 Synchronous. No args.
 
 Returns `True` if connectivity is OK otherwise it returns `False` and schedules
 reconnection attempts.
 
-### 3.2.5 disconnect
+### 3.2.6 disconnect
 
 Asynchronous. No args.
 
@@ -445,7 +461,7 @@ suppresses the Will (MQTT spec. 3.1.2.5). This may be done prior to a power
 down or deepsleep. For restrictions on the use of this method see
 [lightsleep and disconnect](./README.md#52-lightsleep-and-disconnect).
 
-### 3.2.6 close
+### 3.2.7 close
 
 Synchronous. No args.
 
@@ -454,7 +470,7 @@ development to prevent ESP8266 `LmacRxBlk:1` failures if an application raises
 an exception or is terminated with ctrl-C (see
 [Example Usage](./README.md#23-example-usage).
 
-### 3.2.7 broker_up
+### 3.2.8 broker_up
 
 Asynchronous. No args.
 
@@ -462,7 +478,7 @@ Unless data was received in the last second it issues an MQTT ping and waits
 for a response. If it times out (`response_time` exceeded) with no response it
 returns `False` otherwise it returns `True`.
 
-### 3.2.8 wan_ok
+### 3.2.9 wan_ok
 
 Asynchronous.
 
@@ -473,7 +489,7 @@ to '8.8.8.8' and checks for a valid response.
 There is a single arg `packet` which is a bytes object being the DNS query. The
 default object queries the Google DNS server.
 
-### 3.2.9 dprint
+### 3.2.10 dprint
 
 If the class variable `DEBUG` is true, debug messages are output via `dprint`.
 This method can be redefined in a subclass, for example to log debug output to
