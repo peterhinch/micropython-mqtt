@@ -323,7 +323,7 @@ attempt to connect to the specified LAN.
 'ping_interval' [0] Period (secs) between broker pings. 0 == use default.  
 'ssl' [False] If `True` use SSL.  
 'ssl_params' [{}] See [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
-for details on how to populate this dictionary.
+for details on how to populate this dictionary.\
 'response_time' [10] Time in which server is expected to respond (s). See note
 below.  
 'clean_init' [`True`] Clean Session state on initial connection.  
