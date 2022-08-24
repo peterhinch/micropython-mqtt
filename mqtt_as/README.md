@@ -309,38 +309,38 @@ automatically. If credentials are provided, an ESP8266 which has no stored
 values or which has stored values which don't match any available network will
 attempt to connect to the specified LAN.
 
-'ssid' [`None`]  
-'wifi_pw' [`None`]  
+'**ssid**' [`None`]  
+'**wifi_pw**' [`None`]  
 
 **MQTT parameters**
 
-'client_id' [auto-generated unique ID] Must be a bytes instance.  
-'server' [`None`] Broker IP address (mandatory).  
-'port' [0] 0 signifies default port (1883 or 8883 for SSL).  
-'user' [`''`] MQTT credentials (if required).  
-'password' [`''`] If a password is provided a user must also exist.  
-'keepalive' [60] Period (secs) before broker regards client as having died.  
-'ping_interval' [0] Period (secs) between broker pings. 0 == use default.  
-'ssl' [False] If `True` use SSL.  
-'ssl_params' [{}] See [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
-for details on how to populate this dictionary.
-'response_time' [10] Time in which server is expected to respond (s). See note
+'**client_id**' [auto-generated unique ID] Must be a bytes instance.  
+'**server**' [`None`] Broker IP address (mandatory).  
+'**port**' [0] 0 signifies default port (1883 or 8883 for SSL).  
+'**user**' [`''`] MQTT credentials (if required).  
+'**password**' [`''`] If a password is provided a user must also exist.  
+'**keepalive**' [60] Period (secs) before broker regards client as having died.  
+'**ping_interval**' [0] Period (secs) between broker pings. 0 == use default.  
+'**ssl**' [False] If `True` use SSL.  
+'**ssl_params**' [{}] See [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
+for details on how to populate this dictionary.\
+'**response_time**' [10] Time in which server is expected to respond (s). See note
 below.  
-'clean_init' [`True`] Clean Session state on initial connection.  
-'clean' [`True`] Clean session state on reconnection.  
-'max_repubs' [4] Maximum no. of republications before reconnection is
+'**clean_init**' [`True`] Clean Session state on initial connection.  
+'**clean**' [`True`] Clean session state on reconnection.  
+'**max_repubs**' [4] Maximum no. of republications before reconnection is
  attempted.  
-'will' : [`None`] A list or tuple defining the last will (see below).
+'**will**' : [`None`] A list or tuple defining the last will (see below).
 
 **Callbacks and coros**  
 
-'subs_cb' [a null lambda function] Subscription callback. Runs when a message
+'**subs_cb**' [a null lambda function] Subscription callback. Runs when a message
 is received whose topic matches a subscription. The callback must take three
 args, `topic`, `message` and `retained`. The first two are `bytes` instances,
 `retained` is a `bool`, `True` if the message is a retained message.  
-'wifi_coro' [a null coro] A coroutine. Defines a task to run when the network
+'**wifi_coro**' [a null coro] A coroutine. Defines a task to run when the network
 state changes. The coro receives a single `bool` arg being the network state.  
-'connect_coro' [a null coro] A coroutine. Defines a task to run when a
+'**connect_coro**' [a null coro] A coroutine. Defines a task to run when a
 connection to the broker has been established. This is typically used to
 register and renew subscriptions. The coro receives a single argument, the
 client instance.
