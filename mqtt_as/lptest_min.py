@@ -2,7 +2,7 @@
 # (C) Copyright Peter Hinch 2022.
 # Released under the MIT licence.
 from mqtt_as import MQTTClient
-from config import config
+from mqtt_local import config
 import uasyncio as asyncio
 from machine import Pin, ADC, deepsleep, soft_reset
 from time import sleep

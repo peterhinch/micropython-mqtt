@@ -1,4 +1,4 @@
-# config.py Local configuration for mqtt_as demo programs.
+# mqtt_local.py Local configuration for mqtt_as demo programs.
 from sys import platform, implementation
 from mqtt_as import config
 

@@ -67,14 +67,14 @@ The official "robust" MQTT client has the following limitations.
  arrives; this can occur on a WiFi network if an outage occurs at this point in
  the sequence.
 
- This blocking behaviour implies limited compatibility with asynchronous
+ 3. This blocking behaviour implies limited compatibility with asynchronous
  applications since pending coroutines will not be scheduled for the duration.
 
- 3. Its support for qos == 1 is partial. It does not support retransmission in
+ 4. Its support for qos == 1 is partial. It does not support retransmission in
  the event of a publication acknowledge being lost. This can occur on a WiFi
  network especially near the limit of range or in the presence of interference.
  
- 4. Its partial qos == 1 support and inability reliably to resume after a WiFi
+ 5. Its partial qos == 1 support and inability reliably to resume after a WiFi
  outage places a limit on the usable WiFi range. To achieve reliable operation
  a client must be well within range of the access point (AP).
 
@@ -119,6 +119,7 @@ Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements. Also to other
 contributors, some mentioned below.
 
+2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.
 8 Aug 2022 V0.6.6 Support unsubscribe (courtesy of Kevin Köck's fork).  
 11 July 2022 V0.6.5 Support RP2 Pico W  
 5 July 2022 V0.6.4 Implement enhacements from Bob Veringa. Fix bug where tasks
@@ -186,7 +187,8 @@ one minute timeout. Other platforms enable an immediate bail-out.
 ### Required files
 
  1. `mqtt_as.py` The main module.
- 2. `config.py` Stores cross-project settings. See below.
+ 2. `mqtt_local.py` Used by demos to store local configuration details: see
+ below.
 
 ### Test/demo scripts
 
@@ -204,16 +206,23 @@ one minute timeout. Other platforms enable an immediate bail-out.
  8. `tls8266.py` SSL/TLS connectionfor ESP8266. Shows how to use keys and
  certificates. For obvious reasons it requires editing to run.
 
-### config.py
+### Configuration
 
-This file will require editing before deploying to all nodes in a project. As
-a minimum it contains broker details but usually also holds WiFi credentials.
+The MQTT client is configured using a dictionary named `config` and defined in
+[MQTTClient class](./README.md#3-mqttclient-class). The user can populate this
+in any manner. The approach used in the test scripts is as follows. The main
+`mqtt_as.py` initialises `config` with typical defaults. Then `mqtt_local.py`
+adds local settings common to all nodes, e.g. WiFi credentials and broker
+details. Finally the application adds application specific settings such as
+subscriptions.
+
+In a typical project `mqtt_local.py` will be edited then deployed to all nodes.
 
 The ESP8266 stores WiFi credentials internally: if the ESP8266 has connected to
 the LAN prior to running there is no need explicitly to specify these. On other
 platforms, or to have the capability of running on an ESP8266 which has not
-previously connected, `config.py` should be edited to provide them. This is a
-sample cross-platform file:
+previously connected, `mqtt_local.py` should be edited to provide them. This is
+a  sample cross-platform file:
 ```python
 from mqtt_as import config
 
@@ -230,8 +239,8 @@ config['wifi_pw'] = 'my_password'
 
 The module is too large to compile on the ESP8266. It must either be cross
 compiled or (preferably) built as frozen bytecode: copy `mqtt_as.py` to
-`esp8266/modules` in the source tree, build and deploy. Copy `config.py` to the
-filesystem for convenience.
+`esp8266/modules` in the source tree, build and deploy. Copy `mqtt_local.py` to
+the filesystem for ease of making changes.
 
 On other platforms simply copy the Python source to the filesystem (items 1 and
 2 above as a minimum).
@@ -246,7 +255,10 @@ periodically publishes an incrementing count under the topic `result`.
 from mqtt_as import MQTTClient, config
 import uasyncio as asyncio
 
-SERVER = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
+# Local configuration
+config['ssid'] = 'your_network_name'  # Optional on ESP8266
+config['wifi_pw'] = 'your_password'
+config['server'] '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
 def callback(topic, msg, retained):
     print((topic, msg, retained))
@@ -266,7 +278,6 @@ async def main(client):
 
 config['subs_cb'] = callback
 config['connect_coro'] = conn_han
-config['server'] = SERVER
 
 MQTTClient.DEBUG = True  # Optional: print diagnostic messages
 client = MQTTClient(config)
@@ -510,8 +521,12 @@ connectivity has been lost if no messages have been received in that period.
 The module attempts to keep the connection open by issuing an MQTT ping up to
 four times during the keepalive interval. (It pings if the last response from
 the broker was over 1/4 of the keepalive period). More frequent pings may be
-desirable to reduce latency in subscribe-only applications. This may be done
-using the `ping_interval` configuration option.
+desirable to reduce latency of outage detection. This may be done using the
+`ping_interval` configuration option. The point here is that while WiFi
+failures are detected fast, upstream failure can only be detected by an absence
+of communication from the broker. With a long ping interval, the broker could
+be unreachable for a long time before the client detects it and initiates a
+reconnection attempt.
 
 If the broker times out it will issue the "last will" publication (if any).
 This will be received by other clients subscribed to the topic.
@@ -699,6 +714,7 @@ general solution.
 [mosquitto client subscribe](http://mosquitto.org/man/mosquitto_sub-1.html)  
 [MQTT 3.1.1 spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718048)  
 [python client for PC's](https://www.eclipse.org/paho/clients/python/)  
-[Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)
+[Unofficial MQTT FAQ](https://forum.micropython.org/viewtopic.php?f=16&t=2239)  
+[List of public brokers](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers)  
 
 ###### [Contents](./README.md#1-contents)

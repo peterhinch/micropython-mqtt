@@ -13,8 +13,8 @@
 # blue LED heartbeat: demonstrates scheduler is running.
 # Publishes connection statistics.
 
-from mqtt_as import MQTTClient, config
-from config import wifi_led, blue_led
+from mqtt_as import MQTTClient
+from mqtt_local import wifi_led, blue_led, config
 import uasyncio as asyncio
 
 outages = 0

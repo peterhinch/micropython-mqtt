@@ -13,10 +13,10 @@
 # blue LED pulse == message received
 # Publishes connection statistics.
 
-from mqtt_as import MQTTClient, config, RP2
+from mqtt_as import MQTTClient, RP2
 if RP2:
     from sys import implementation
-from config import wifi_led, blue_led
+from mqtt_local import wifi_led, blue_led, config
 import uasyncio as asyncio
 import network
 import gc

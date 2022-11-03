@@ -13,7 +13,7 @@
 # green LED heartbeat: demonstrates scheduler is running.
 
 from mqtt_as import MQTTClient
-from config import config
+from mqtt_local import config
 import uasyncio as asyncio
 
 SERVER = 'test.mosquitto.org'
