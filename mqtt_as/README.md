@@ -43,6 +43,7 @@ application level.
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.10 [dprint](./README.md#3210-dprint)  
   3.3 [Class Variables](./README.md#33-class-variables)  
   3.4 [Module Attribute](./README.md#34-module-attribute)  
+  3.5 [Event based interface](./README.md#35-event-based-interface)  
  4. [Notes](./README.md#4-notes)  
   4.1 [Connectivity](./README.md#41-connectivity)  
   4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-1)  
@@ -119,7 +120,8 @@ Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements. Also to other
 contributors, some mentioned below.
 
-2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.
+12 Nov 2022 V0.7.0 Provide alternative Event interface (callback-free).  
+2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.  
 8 Aug 2022 V0.6.6 Support unsubscribe (courtesy of Kevin Köck's fork).  
 11 July 2022 V0.6.5 Support RP2 Pico W  
 5 July 2022 V0.6.4 Implement enhacements from Bob Veringa. Fix bug where tasks
@@ -356,6 +358,13 @@ connection to the broker has been established. This is typically used to
 register and renew subscriptions. The coro receives a single argument, the
 client instance.
 
+**Event based interface**  
+
+'**queue_length**' [0] If a value > 0 is passed the Event-based interface is
+engaged. This replaces the above callbacks with a message queue and `Event`
+instances. This is arguably a more uasyncio-friendly interface. See
+[section 3.5](./README.md#35-event-based-interface).
+
 **Notes**
 
 The `response_time` entry works as follows. If a read or write operation times
@@ -509,6 +518,35 @@ a file. The method takes an arbitrary number of positional args as per `print`.
 ## 3.4 Module Attribute
 
  1. `VERSION` A 3-tuple of ints (major, minor, micro) e.g. (0, 5, 0).
+
+## 3.5 Event based interface
+
+This is invoked by setting `config["queue_len"] = N` where `N > 0`. In this
+mode there are no callbacks. Incoming messages are queued and may be accessed
+with an asynchronous iterator. Coonectivity changes are registered by setting
+bound `.up` and `.down` `Event` instances. The demo `range_ex.py` uses this
+interface. The following code fragments illustrate its use:
+```python
+async def messages(client):
+    async for topic, msg, retained in client.queue:
+        print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
+
+async def down(client):
+    while True:
+        await client.down.wait()  # Pause until connectivity changes
+        client.down.clear()
+        print('WiFi or broker is down.')
+
+async def up(client):
+    while True:
+        await client.up.wait()
+        client.up.clear()
+        print('We are connected to broker.')
+        await client.subscribe('foo_topic', 1)  # Re-subscribe after outage
+
+config["queue_len"] = 10  # Use event interface
+client = MQTTClient(config)
+```
 
 ###### [Contents](./README.md#1-contents)
 

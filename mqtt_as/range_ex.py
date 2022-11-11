@@ -1,6 +1,6 @@
 # range_ex.py Test of asynchronous mqtt client with clean session False.
 # Extended version publishes SSID
-# (C) Copyright Peter Hinch 2017-2019.
+# (C) Copyright Peter Hinch 2017-2022.
 # Released under the MIT licence.
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
@@ -31,10 +31,6 @@ async def pulse():  # This demo pulses blue LED each time a subscribed msg arriv
     await asyncio.sleep(1)
     blue_led(False)
 
-def sub_cb(topic, msg, retained):
-    print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
-    asyncio.create_task(pulse())
-
 # The only way to measure RSSI is via scan(). Alas scan() blocks so the code
 # causes the obvious uasyncio issues.
 async def get_rssi():
@@ -48,18 +44,27 @@ async def get_rssi():
             rssi = -199
         await asyncio.sleep(30)
 
-async def wifi_han(state):
+async def messages(client):
+    async for topic, msg, retained in client.queue:
+        print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
+        asyncio.create_task(pulse())
+
+async def down(client):
     global outages
-    wifi_led(not state)  # Light LED when WiFi down
-    if state:
-        print('We are connected to broker.')
-    else:
+    while True:
+        await client.down.wait()  # Pause until connectivity changes
+        client.down.clear()
+        wifi_led(False)
         outages += 1
         print('WiFi or broker is down.')
-    await asyncio.sleep(1)
 
-async def conn_han(client):
-    await client.subscribe('foo_topic', 1)
+async def up(client):
+    while True:
+        await client.up.wait()
+        client.up.clear()
+        wifi_led(True)
+        print('We are connected to broker.')
+        await client.subscribe('foo_topic', 1)
 
 async def main(client):
     try:
@@ -67,6 +72,9 @@ async def main(client):
     except OSError:
         print('Connection failed.')
         return
+    asyncio.create_task(up(client))
+    asyncio.create_task(down(client))
+    asyncio.create_task(messages(client))
     n = 0
     s = '{} repubs: {} outages: {} rssi: {}dB free: {}bytes'
     while True:
@@ -79,11 +87,9 @@ async def main(client):
         n += 1
 
 # Define configuration
-config['subs_cb'] = sub_cb
-config['wifi_coro'] = wifi_han
 config['will'] = (TOPIC, 'Goodbye cruel world!', False, 0)
-config['connect_coro'] = conn_han
 config['keepalive'] = 120
+config["queue_len"] = 10  # Use event interface
 
 # Set up client. Enable optional debug statements.
 MQTTClient.DEBUG = True
