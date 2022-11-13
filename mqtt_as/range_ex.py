@@ -3,6 +3,8 @@
 # (C) Copyright Peter Hinch 2017-2022.
 # Released under the MIT licence.
 
+# Now uses the event interface
+
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
 
 # This demo is for wireless range tests. If OOR the red LED will light.
@@ -76,20 +78,20 @@ async def main(client):
     asyncio.create_task(down(client))
     asyncio.create_task(messages(client))
     n = 0
-    s = '{} repubs: {} outages: {} rssi: {}dB free: {}bytes'
+    s = '{} repubs: {} outages: {} rssi: {}dB free: {}bytes discards: {}'
     while True:
         await asyncio.sleep(5)
         gc.collect()
         m = gc.mem_free()
         print('publish', n)
         # If WiFi is down the following will pause for the duration.
-        await client.publish(TOPIC, s.format(n, client.REPUB_COUNT, outages, rssi, m), qos = 1)
+        await client.publish(TOPIC, s.format(n, client.REPUB_COUNT, outages, rssi, m, client.queue.discards), qos = 1)
         n += 1
 
 # Define configuration
 config['will'] = (TOPIC, 'Goodbye cruel world!', False, 0)
 config['keepalive'] = 120
-config["queue_len"] = 10  # Use event interface
+config["queue_len"] = 4  # Use event interface
 
 # Set up client. Enable optional debug statements.
 MQTTClient.DEBUG = True

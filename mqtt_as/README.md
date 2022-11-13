@@ -104,7 +104,7 @@ design is based on the official `umqtt` library but it has been substantially
 modified for resilience and for asynchronous operation.
 
 It is primarily intended for applications which open a link to the MQTT broker
-aiming to maintainin that link indefinitely. Applications which close and
+aiming to maintaining that link indefinitely. Applications which close and
 re-open the link (e.g. for power saving purposes) are subject to limitations
 detailed in [Non standard applications](./README.md#5-non-standard-applications).
 
@@ -120,11 +120,11 @@ Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements. Also to other
 contributors, some mentioned below.
 
-12 Nov 2022 V0.7.0 Provide alternative Event interface (callback-free).  
+12 Nov 2022 V0.7.0 Provide alternative callback-free Event interface.  
 2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.  
 8 Aug 2022 V0.6.6 Support unsubscribe (courtesy of Kevin Köck's fork).  
 11 July 2022 V0.6.5 Support RP2 Pico W  
-5 July 2022 V0.6.4 Implement enhacements from Bob Veringa. Fix bug where tasks
+5 July 2022 V0.6.4 Implement enhancements from Bob Veringa. Fix bug where tasks
 could fail to be stopped on a brief outage. Subscription callbacks now receive
 bytearrays rather than bytes objects.  
 10 June 2022 Lowpower demo removed as it required an obsolete version of
@@ -194,18 +194,20 @@ one minute timeout. Other platforms enable an immediate bail-out.
 
 ### Test/demo scripts
 
- 1. `clean.py` Test/demo program using MQTT Clean Session.
- 2. `unclean.py` Test/demo program with MQTT Clean Session `False`.
- 3. `range.py` For WiFi range testing.
- 4. `range_ex.py` As above but also publishes RSSI and free RAM. See code
- listing for limitations.
+The first two of these demonstrate the event interface. Others use callbacks.
+
+ 1. `range.py` For WiFi range testing. Good general demo.
+ 2. `range_ex.py` As above but also publishes RSSI and free RAM. See code
+ comments for limitations on Pico W and Arduino nano connect.
+ 3. `clean.py` Test/demo program using MQTT Clean Session.
+ 4. `unclean.py` Test/demo program with MQTT Clean Session `False`.
  5. `pubtest` Bash script illustrating publication with Mosquitto.
  6. `main.py` Example for auto-starting an application.
  7. `tls.py` Demo of SSL/TLS connection to a public broker. This runs on a
  Pyboard D. Publishes every 20s and subscribes to same topic. Connection to
  this public broker, though encrypted, is insecure because anyone can
  subscribe.
- 8. `tls8266.py` SSL/TLS connectionfor ESP8266. Shows how to use keys and
+ 8. `tls8266.py` SSL/TLS connection for ESP8266. Shows how to use keys and
  certificates. For obvious reasons it requires editing to run.
 
 ### Configuration
@@ -327,25 +329,32 @@ attempt to connect to the specified LAN.
 
 **MQTT parameters**
 
-'**client_id**' [auto-generated unique ID] Must be a bytes instance.  
+'**client_id**' [auto-generated unique ID] Must be a `bytes` instance.  
 '**server**' [`None`] Broker IP address (mandatory).  
-'**port**' [0] 0 signifies default port (1883 or 8883 for SSL).  
+'**port**' [`0`] 0 signifies default port (1883 or 8883 for SSL).  
 '**user**' [`''`] MQTT credentials (if required).  
 '**password**' [`''`] If a password is provided a user must also exist.  
-'**keepalive**' [60] Period (secs) before broker regards client as having died.  
-'**ping_interval**' [0] Period (secs) between broker pings. 0 == use default.  
-'**ssl**' [False] If `True` use SSL.  
-'**ssl_params**' [{}] See [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
-for details on how to populate this dictionary.\
-'**response_time**' [10] Time in which server is expected to respond (s). See note
+'**keepalive**' [`60`] Period (secs) before broker regards client as having died.  
+'**ping_interval**' [`0`] Period (secs) between broker pings. 0 == use default.  
+'**ssl**' [`False`] If `True` use SSL.  
+'**ssl_params**' [`{}`] See [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
+for details on how to populate this dictionary.  
+'**response_time**' [`10`] Time in which server is expected to respond (s). See note
 below.  
 '**clean_init**' [`True`] Clean Session state on initial connection.  
 '**clean**' [`True`] Clean session state on reconnection.  
-'**max_repubs**' [4] Maximum no. of republications before reconnection is
+'**max_repubs**' [`4`] Maximum no. of republications before reconnection is
  attempted.  
 '**will**' : [`None`] A list or tuple defining the last will (see below).
+'**queue_length**' [`0`] If a value > 0 is passed the Event-based interface is
+engaged. This replaces the callbacks defined below with a message queue and
+`Event` instances. See [section 3.5](./README.md#35-event-based-interface).
 
-**Callbacks and coros**  
+**Callback based interface**  
+
+This interface is optional. It is retained for compatibility with existing
+code. In new designs please consider the event based interface which replaces
+callbacks with a more uasyncio-friendly approach.
 
 '**subs_cb**' [a null lambda function] Subscription callback. Runs when a message
 is received whose topic matches a subscription. The callback must take three
@@ -358,18 +367,11 @@ connection to the broker has been established. This is typically used to
 register and renew subscriptions. The coro receives a single argument, the
 client instance.
 
-**Event based interface**  
-
-'**queue_length**' [0] If a value > 0 is passed the Event-based interface is
-engaged. This replaces the above callbacks with a message queue and `Event`
-instances. This is arguably a more uasyncio-friendly interface. See
-[section 3.5](./README.md#35-event-based-interface).
-
 **Notes**
 
 The `response_time` entry works as follows. If a read or write operation times
 out, the connection is presumed dead and the reconnection process begins. If a
-qos == 1 publication is not acknowledged in this period, republication will
+`qos==1` publication is not acknowledged in this period, republication will
 occur. May need extending for slow internet connections.
 
 The `will` entry defines a publication which the broker will issue if it
@@ -387,10 +389,12 @@ backlog. On the ESP8266 this can cause buffer overflows in the Espressif WiFi
 stack causing `LmacRxBlk:1` errors to appear. 
 [see this doc](http://docs.micropython.org/en/latest/esp8266/esp8266/general.html).
 
-`clean_init` should normally be `True`. If `False` the system will attempt
-to restore a prior session on the first connection. This may result in a large
-backlog of qos == 1 messages being received with consequences described above.
-MQTT spec 3.1.2.4.
+`clean_init` should normally be `True`. If `False` the system will attempt to
+restore a prior session on the first connection. This may result in a large
+backlog of `qos==1` messages being received, for example if a client is taken
+out of service for a long time. This can have the consequences described above.
+See MQTT spec 3.1.2.4. This is decribe further below in
+[section 4.4.2 behaviour on power up](./README.md#442-behaviour-on-power-up).
 
 ###### [Contents](./README.md#1-contents)
 
@@ -523,29 +527,61 @@ a file. The method takes an arbitrary number of positional args as per `print`.
 
 This is invoked by setting `config["queue_len"] = N` where `N > 0`. In this
 mode there are no callbacks. Incoming messages are queued and may be accessed
-with an asynchronous iterator. Coonectivity changes are registered by setting
-bound `.up` and `.down` `Event` instances. The demo `range_ex.py` uses this
-interface. The following code fragments illustrate its use:
+with an asynchronous iterator. The module reports connectivity changes by
+setting bound `.up` and `.down` `Event` instances. The demos `range.py` and
+`range_ex.py` use this interface. The following code fragments illustrate its use.
+
+Reading messages:
 ```python
 async def messages(client):
     async for topic, msg, retained in client.queue:
         print(f'Topic: "{topic.decode()}" Message: "{msg.decode()}" Retained: {retained}')
-
-async def down(client):
-    while True:
-        await client.down.wait()  # Pause until connectivity changes
-        client.down.clear()
-        print('WiFi or broker is down.')
-
-async def up(client):
+```
+Handling connect events:
+```python
+async def up(client):  # (re)connection.
     while True:
         await client.up.wait()
         client.up.clear()
         print('We are connected to broker.')
         await client.subscribe('foo_topic', 1)  # Re-subscribe after outage
-
-config["queue_len"] = 10  # Use event interface
+```
+Optional outage handler:
+```python
+async def down(client):
+    while True:
+        await client.down.wait()  # Pause until outage
+        client.down.clear()
+        print('WiFi or broker is down.')
+```
+Initialisation with a default small queue:
+```python
+config["queue_len"] = 1
 client = MQTTClient(config)
+```
+In applications where incoming messages arrive slowly and the `clean` flag is
+`False`, messages will not accumulate and the queue length can be small. A
+value of 1 provides a minimal queue. The queue comes into play when bursts of
+messages arrive too quickly for the application to process them. This can occur
+if multiple clients independently publish to the same topic: the broker may
+forward them to subscribers at a high rate. Another case is when the `clean`
+flag is `False` and a long wifi outage occurs: when the outage ends there may
+be a large backlog of messages. Such cases may warrant a larger queue.
+
+In the event of the queue overflowing, the oldest messages will be discarded.
+This policy prioritises resilience over the `qos==1` guarantee. The bound
+variable `client.queue.discards` keeps a running total of lost messages. In
+development this can help determine the optimum queue length.
+
+It is possible (though seldmom useful) to have multiple tasks waiting on
+messages. These must yield control after each message to allow the others to be
+scheduled. Messages will be distributed between waiting tasks in a round-robin
+fashion. Multiple instances of this task may be created:
+```python
+async def messages(client):
+    async for topic, msg, retained in client.queue:
+        await asyncio.sleep(0)  # Allow other instances to be scheduled
+        # handle message
 ```
 
 ###### [Contents](./README.md#1-contents)
@@ -657,18 +693,31 @@ brief power outages may be expected: when power resumes the client will simply
 reconnect. If an error occurs the application might wait for a period before
 re-trying.
 
+When that initial connection has been achieved, subsequent connections caused
+by network outages are handled transparently to the application.
+
 The behaviour of "clean session" should be considered in this context. If the
 `clean` flag is `False` and a long power outage occurs there may be a large
 backlog of messages. This can cause problems on resource constrained clients,
-notably if the client has been taken out of service for a few days.
+notably if the client has been taken out of service for a few days. This module
+addresses this by enabling behaviour which differs between the power up case
+and the case of a network outage.
 
-The `clean_init` flag aims to address the case where the application normally
-runs with `clean==True`. If `clean_init=False` and `clean=True`, on power up
-existing session state is discarded. Subsequently in the event of connectivity
-outages subscriptions will meet the `qos==1` guarantee.
+The `clean_init` flag determines behaviour on power up, while `clean` defines
+behaviour after a connectivity outage. If `clean_init` is `True` and `clean` is
+`False`, on power up prior session state is discarded. The client reconnects
+with `clean==False`. It reconnects similarly after connectivity outages. Hence,
+after power up, subscriptions will meet the `qos==1` guarantee for messages
+published during connectivity outages.
 
-If on power up both flags are `True` the broker will forward messages pending
-since the last (non-clean) session.
+If both flags are `False` normal non-clean behaviour ensues with the potential
+for substantial backlogs after long power outages.
+
+If on power up both flags are `True` the broker will discard session state
+during connectivity (and hence power) outages. This implies a loss of messages
+published during connectivity outages(MQTT spec 3.1.2.4 Clean Session).
+
+Also discussed [here](https://github.com/peterhinch/micropython-mqtt/issues/40).
 
 ###### [Contents](./README.md#1-contents)
 
@@ -701,7 +750,7 @@ The test script
 [lptest_min.py](https://github.com/peterhinch/micropython-mqtt/blob/master/mqtt_as/lptest_min.py)
 wakes up periodically and connects to WiFi. It publishes the value from the
 onboard light sensor, and subscribes to the topic "foo_topic". Any matching
-publications which occured during deepsleep are received and revealed by
+publications which occurred during deepsleep are received and revealed by
 flashing the blue LED.
 
 Note that `deepsleep` disables USB. This is inconvenient in development. The
