@@ -27,9 +27,10 @@ application level.
  2. [Getting started](./README.md#2-getting_started)  
   2.1 [Program files](./README.md#21-program-files)  
   2.2 [Installation](./README.md#22-installation)  
-  2.3 [Example Usage](./README.md#23-example-usage)  
+  2.3 [Example Usage](./README.md#23-example-usage) Using the event interface.  
+  2.4 [Usage with callbacks](./README.md#24-usage-with-callbacks)  
  3. [MQTTClient class](./README.md#3-mqttclient-class)  
-  3.1 [Constructor](./README.md#31-constructor)  
+  3.1 [Constructor](./README.md#31-constructor) Describes the MQTT configuration dictionary.  
   3.2 [Methods](./README.md#32-methods)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.1 [connect](./README.md#321-connect)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.2.2 [publish](./README.md#322-publish)  
@@ -176,6 +177,12 @@ message length is limited by available RAM. The actual limit will depend on the
 platform and user code but it is wise to design on the basis of a maximum of
 around 1KiB.
 
+Avoid unrealistic expectations of performance: latency can be significant,
+especially when using a TLS connection to a broker located on the internet.
+With a non-encrypted connection to a local broker it is feasible to use one
+MicroPython client to control another. I haven't measured latency but I would
+guess at ~100ms. 
+
 Some platforms - notably ESP32 - are unhelpful when dealing with gross errors
 such as incorrect WiFi credentials. Initial connection will only fail after a
 one minute timeout. Other platforms enable an immediate bail-out.
@@ -186,11 +193,13 @@ one minute timeout. Other platforms enable an immediate bail-out.
 
 ## 2.1 Program files
 
-### Required files
+### Required file
 
  1. `mqtt_as.py` The main module.
- 2. `mqtt_local.py` Used by demos to store local configuration details: see
- below.
+
+### Required by demo scripts
+
+ 1. `mqtt_local.py` Holds local configuration details such as WiFi credentials.
 
 ### Test/demo scripts
 
@@ -212,13 +221,13 @@ The first two of these demonstrate the event interface. Others use callbacks.
 
 ### Configuration
 
-The MQTT client is configured using a dictionary named `config` and defined in
-[MQTTClient class](./README.md#3-mqttclient-class). The user can populate this
-in any manner. The approach used in the test scripts is as follows. The main
-`mqtt_as.py` initialises `config` with typical defaults. Then `mqtt_local.py`
-adds local settings common to all nodes, e.g. WiFi credentials and broker
-details. Finally the application adds application specific settings such as
-subscriptions.
+The MQTT client is configured using a dictionary. An instance named `config`
+is defined in the [MQTTClient class](./README.md#3-mqttclient-class) and
+populated with common default values. The user can populate this in any manner.
+The approach used in the test scripts is as follows. The main `mqtt_as.py`
+module instantiates `config` with typical defaults. Then `mqtt_local.py` adds
+local settings common to all nodes, e.g. WiFi credentials and broker details.
+Finally the application adds application specific settings like subscriptions.
 
 In a typical project `mqtt_local.py` will be edited then deployed to all nodes.
 
@@ -249,12 +258,68 @@ the filesystem for ease of making changes.
 On other platforms simply copy the Python source to the filesystem (items 1 and
 2 above as a minimum).
 
+If an application is to auto-run on power-up it can be necessary to add a short
+delay in main.py:
+```python
+import time
+time.sleep(5)  # Could probably be shorter
+import range  # Your application
+```
+This is platform dependent and gives the hardware time to initialise.
+
 ## 2.3 Example Usage
 
-The following illustrates the library's use. If a PC client publishes a message
-with the topic `foo_topic` the topic and message are printed. The code
-periodically publishes an incrementing count under the topic `result`.
+The library offers two alternative ways to handle events such as the arrival of
+a message. One uses traditional callbacks. The following uses `Event` instances
+and an asynchronous iterator. If a PC client publishes a message with the topic
+`foo_topic` the topic and message are printed. The code periodically publishes
+an incrementing count under the topic `result`.
+```python
+from mqtt_as import MQTTClient, config
+import uasyncio as asyncio
 
+# Local configuration
+config['ssid'] = 'your_network_name'  # Optional on ESP8266
+config['wifi_pw'] = 'your_password'
+config['server'] '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
+
+async def messages(client):  # Respond to incoming messages
+    async for topic, msg, retained in client.queue:
+        print((topic, msg, retained))
+
+async def up(client):  # Respond to connectivity being (re)established
+    while True:
+        await client.up.wait()  # Wait on an Event
+        client.up.clear()
+        await client.subscribe('foo_topic', 1)  # renew subscriptions
+
+async def main(client):
+    await client.connect()
+    for coroutine in (up, messages):
+        asyncio.create_task(coroutine(client))
+    n = 0
+    while True:
+        await asyncio.sleep(5)
+        print('publish', n)
+        # If WiFi is down the following will pause for the duration.
+        await client.publish('result', '{}'.format(n), qos = 1)
+        n += 1
+
+config["queue_len"] = 1  # Use event interface with default queue size
+MQTTClient.DEBUG = True  # Optional: print diagnostic messages
+client = MQTTClient(config)
+try:
+    asyncio.run(main(client))
+finally:
+    client.close()  # Prevent LmacRxBlk:1 errors
+```
+The code may be tested by running `pubtest` in one terminal and, in another,
+`mosquitto_sub -h 192.168.0.10 -t result` (change the IP address to match your
+broker).
+
+## 2.4 Usage with callbacks
+
+The alternative callback-based interface may be run as follows:
 ```python
 from mqtt_as import MQTTClient, config
 import uasyncio as asyncio
@@ -290,19 +355,9 @@ try:
 finally:
     client.close()  # Prevent LmacRxBlk:1 errors
 ```
-
-The code may be tested by running `pubtest` in one terminal and, in another,
+As above, testing is done by running `pubtest` in one terminal and, in another,
 `mosquitto_sub -h 192.168.0.10 -t result` (change the IP address to match your
 broker).
-
-If an application is to auto-run on power-up it can be necessary to add a short
-delay in main.py:
-```python
-import time
-time.sleep(5)  # Could probably be shorter
-import range  # Your application
-```
-This is platform dependent and gives the hardware time to initialise.
 
 ###### [Contents](./README.md#1-contents)
 
