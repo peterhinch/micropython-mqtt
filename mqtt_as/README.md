@@ -401,7 +401,7 @@ below.
 '**max_repubs**' [`4`] Maximum no. of republications before reconnection is
  attempted.  
 '**will**' : [`None`] A list or tuple defining the last will (see below).  
-'**queue_length**' [`0`] If a value > 0 is passed the Event-based interface is
+'**queue_len**' [`0`] If a value > 0 is passed the Event-based interface is
 engaged. This replaces the callbacks defined below with a message queue and
 `Event` instances. See [section 3.5](./README.md#35-event-based-interface).
 
