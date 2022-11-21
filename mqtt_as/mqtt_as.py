@@ -203,16 +203,14 @@ class MQTT_base:
             if self._timeout(t) or not self.isconnected():
                 raise OSError(-1, "Timeout on socket read")
             try:
-                msg = sock.read(n - size)
+                msg_size = sock.readinto(buffer[size:], n - size)
             except OSError as e:  # ESP32 issues weird 119 errors here
-                msg = None
+                msg_size = None
                 if e.args[0] not in BUSY_ERRORS:
                     raise
-            if msg == b"":  # Connection closed by host
+            if msg_size == 0:  # Connection closed by host
                 raise OSError(-1, "Connection closed by host")
-            if msg is not None:  # data received
-                msg_size = len(msg)
-                buffer[size : size + msg_size] = msg
+            if msg_size is not None:  # data received
                 size += msg_size
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
