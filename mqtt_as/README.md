@@ -638,6 +638,8 @@ async def messages(client):
         await asyncio.sleep(0)  # Allow other instances to be scheduled
         # handle message
 ```
+In applications RAM is at a premium, in testing the callback-based interface
+offers somewhat (~1.3KiB) lower consumption than the minimal queue case.
 
 ###### [Contents](./README.md#1-contents)
 
