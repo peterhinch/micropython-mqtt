@@ -18,7 +18,7 @@ An effective PC client and server is [mosquitto](https://mosquitto.org/).
 This contains two separate projects:  
  1. A "resilient" asynchronous non-blocking MQTT driver.
  2. A means of using a cheap ESP8266 module to bring MQTT to MicroPython
- platforms which lack a WiFi interface.
+ platforms which lack a WiFi interface. This is now obsolescent.
 
 ## 1. The "resilient" driver
 
@@ -44,34 +44,17 @@ and Pyboard D it may be run as a standard Python module.
 
 ## 2. MQTT bridge for generic MicroPython targets
 
+This is obsolescent. It dates from a time when the only WiFi capable MicroPython
+target was the ESP8266. For all new applications one of the many WiFi-capable
+targets should be used with [mqtt_as](./mqtt_as/README.md).
+
 This comprises an ESP8266 firmware image and a MicroPython driver. The target
 hardware is linked to an ESP8266 running the firmware image using a 5-wire
 interface. The driver runs on the target which can then access MQTT. The driver
 is non-blocking and is designed for applications using `uasyncio`.
 
-The current version of this library is in the `bridge` directory and is
-documented  
+This library is in the `bridge` directory and is documented  
 ### [here](./bridge/BRIDGE.md)
 
-It uses the new version of `uasyncio`.
-
-An old version is archived to the `pb_link` directory, although I plan to
-delete this.
-
-#### [Project archive](./pb_link/NO_NET.md).
-
-The MQTT Bridge replaces this library. It was written a long time ago when the
-issues around portability were less clear. The client code is substantially
-revised with API changes. Objectives:
- 1. Compatibility with `uasyncio` V3.
- 2. True portability between platforms. In particular:
- 3. Tested compatibility with the Raspberry Pi Pico.
- 4. A more consistent API with significant simplifications.
- 5. Replace the non-portable RTC code with a means of retrieving NTP time.
- 6. Enable a choice of time server.
- 7. Bugs fixed!
-
-There seems little hope of a portable `machine.RTC` class, so setting the RTC
-is now the responsibility of the application (if required).
-
-The ESP8266 code has only minor changes.
+It works and is supported, but its days are numbered unless someone reports a
+definite use case.
