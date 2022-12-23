@@ -25,7 +25,7 @@ This contains two separate projects:
 This is an alternative to the official driver. It has been tested on the
 following platforms.
  1. ESP8266
- 2. ESP32 and ESP32-S2
+ 2. ESP32, ESP32-S2 and ESP32-S3
  3. Pyboard D
  4. Arduino Nano Connect
  5. Raspberry Pi Pico W

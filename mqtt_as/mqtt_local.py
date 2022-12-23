@@ -16,13 +16,15 @@ config['wifi_pw'] = 'your_password'
 
 if platform == 'esp8266' or platform == 'esp32':
     from machine import Pin
-    def ledfunc(pin):
+    def ledfunc(pin, active=0):
         pin = pin
         def func(v):
             pin(not v)  # Active low on ESP8266
-        return func
+        return pin if active else func
     wifi_led = ledfunc(Pin(0, Pin.OUT, value = 0))  # Red LED for WiFi fail/not ready yet
     blue_led = ledfunc(Pin(2, Pin.OUT, value = 1))  # Message received
+    # Example of active high LED on UM Feather S3
+    # blue_led = ledfunc(Pin(13, Pin.OUT, value = 0), 1)  # Message received ESP32-S3
 elif platform == 'pyboard':
     from pyb import LED
     def ledfunc(led, init):
