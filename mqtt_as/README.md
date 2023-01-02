@@ -56,6 +56,7 @@ application level.
   5.1 [deepsleep](./README.md#51-deepsleep)  
   5.2 [lightsleep and disconnect](./README.md#52-lightsleep-and-disconnect)  
  6. [References](./README.md#6-references)  
+ 7. [Connect Error Codes](./README.md#7-connect-error-codes)  
 
 ## 1.1 Rationale
 
@@ -470,8 +471,9 @@ Keyword only arg:
 
 Connects to the specified broker. The application should call `connect` once on
 startup. If this fails (due to WiFi or the broker being unavailable) an
-`OSError` will be raised. Subsequent reconnections after outages are handled
-automatically.
+`OSError` will be raised: see
+[Connect Error Codes](./README.md#7-connect-error-codes). Subsequent
+reconnections after outages are handled automatically.
 
 ### 3.2.2 publish
 
@@ -862,3 +864,21 @@ general solution.
 [List of public brokers](https://github.com/mqtt/mqtt.github.io/wiki/public_brokers)  
 
 ###### [Contents](./README.md#1-contents)
+
+# 7. Connect Error Codes
+
+On the initial connection attempt the broker may reject the attempt. In this
+instance an `OSError` will be raised showing two numbers. The first number
+should be `0x2002` which is the MQTT `CONNACK` fixed header. The second
+is `CONNACK` variable header byte 2 which indicates the reason for failure as
+follows:
+
+| Value | Reason                                       |
+|:------|:---------------------------------------------|
+| 1     | Unacceptable protocol version.               |
+| 2     | Client identifier rejected.                  |
+| 3     | MQTT service unavailable.                    |
+| 4     | Username or password have an invalid format. |
+| 5     | Client is not authorised to connect.         |
+
+See MQTT spec section 3.2.2.

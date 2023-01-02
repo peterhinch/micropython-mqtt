@@ -304,8 +304,8 @@ class MQTT_base:
         # read causes ECONNABORTED if broker is out; triggers a reconnect.
         resp = await self._as_read(4)
         self.dprint("Connected to broker.")  # Got CONNACK
-        if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:
-            raise OSError(-1, "Bad CONNACK")  # Bad CONNACK e.g. authentication fail.
+        if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:  # Bad CONNACK e.g. authentication fail.
+            raise OSError(-1, f"Connect fail: 0x{(resp[0] << 8) + resp[1]:04x} {resp[3]} (README 7)")
 
     async def _ping(self):
         async with self.lock:
