@@ -372,7 +372,7 @@ This takes a dictionary as argument. The default is `mqtt_as.config`. Normally
 an application imports this and modifies selected entries as required. Entries
 are as follows (default values shown in []):
 
-**WiFi Credentials**
+### WiFi Credentials
 
 These are required for platforms other than ESP8266 where they are optional. If
 the ESP8266 has previously connected to the required LAN the chip can reconnect
@@ -383,7 +383,7 @@ attempt to connect to the specified LAN.
 '**ssid**' [`None`]  
 '**wifi_pw**' [`None`]  
 
-**MQTT parameters**
+### MQTT parameters
 
 '**client_id**' [auto-generated unique ID] Must be a `bytes` instance.  
 '**server**' [`None`] Broker IP address (mandatory).  
@@ -393,8 +393,7 @@ attempt to connect to the specified LAN.
 '**keepalive**' [`60`] Period (secs) before broker regards client as having died.  
 '**ping_interval**' [`0`] Period (secs) between broker pings. 0 == use default.  
 '**ssl**' [`False`] If `True` use SSL.  
-'**ssl_params**' [`{}`] See [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
-for details on how to populate this dictionary.  
+'**ssl_params**' [`{}`] See below.  
 '**response_time**' [`10`] Time in which server is expected to respond (s). See note
 below.  
 '**clean_init**' [`True`] Clean Session state on initial connection.  
@@ -402,11 +401,14 @@ below.
 '**max_repubs**' [`4`] Maximum no. of republications before reconnection is
  attempted.  
 '**will**' : [`None`] A list or tuple defining the last will (see below).  
+
+### Interface definition
+
 '**queue_len**' [`0`] If a value > 0 is passed the Event-based interface is
 engaged. This replaces the callbacks defined below with a message queue and
 `Event` instances. See [section 3.5](./README.md#35-event-based-interface).
 
-**Callback based interface**  
+### Callback based interface  
 
 This interface is optional. It is retained for compatibility with existing
 code. In new designs please consider the event based interface which replaces
@@ -423,7 +425,7 @@ connection to the broker has been established. This is typically used to
 register and renew subscriptions. The coro receives a single argument, the
 client instance.
 
-**Notes**
+### Notes
 
 The `response_time` entry works as follows. If a read or write operation times
 out, the connection is presumed dead and the reconnection process begins. If a
@@ -451,6 +453,19 @@ backlog of `qos==1` messages being received, for example if a client is taken
 out of service for a long time. This can have the consequences described above.
 See MQTT spec 3.1.2.4. This is decribe further below in
 [section 4.4.2 behaviour on power up](./README.md#442-behaviour-on-power-up).
+
+### SSL/TLS
+
+Populating the `ssl_params` dictionary is something of a black art. Some sites
+require certificates: see [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
+for details on how to specify these. Connecting to
+[Hive MQ](https://www.hivemq.com/) did not require certificates but did need:
+```python
+broker = 'your_long_hexadecimal_instance_name.s2.eu.hivemq.cloud'
+config['server'] = broker
+config['ssl'] = True
+config['ssl_params'] = {"server_hostname": broker}
+```
 
 ###### [Contents](./README.md#1-contents)
 
