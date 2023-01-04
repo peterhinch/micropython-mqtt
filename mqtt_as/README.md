@@ -57,6 +57,7 @@ application level.
   5.2 [lightsleep and disconnect](./README.md#52-lightsleep-and-disconnect)  
  6. [References](./README.md#6-references)  
  7. [Connect Error Codes](./README.md#7-connect-error-codes)  
+ 8. [Hive MQ](./README.md#8-hive-mq) A secure, free, broker.  
 
 ## 1.1 Rationale
 
@@ -368,9 +369,10 @@ The module provides a single class: `MQTTClient`.
 
 ## 3.1 Constructor
 
-This takes a dictionary as argument. The default is `mqtt_as.config`. Normally
-an application imports this and modifies selected entries as required. Entries
-are as follows (default values shown in []):
+This takes a dictionary as argument. The default is `mqtt_as.config` which is
+populated with default values listed below. A typical application imports this
+and modifies selected entries as required. Entries are as follows (default
+values shown in []):
 
 ### WiFi Credentials
 
@@ -458,14 +460,9 @@ See MQTT spec 3.1.2.4. This is decribe further below in
 
 Populating the `ssl_params` dictionary is something of a black art. Some sites
 require certificates: see [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
-for details on how to specify these. Connecting to
-[Hive MQ](https://www.hivemq.com/) did not require certificates but did need:
-```python
-broker = 'your_long_hexadecimal_instance_name.s2.eu.hivemq.cloud'
-config['server'] = broker
-config['ssl'] = True
-config['ssl_params'] = {"server_hostname": broker}
-```
+for details on how to specify these. See [Hive MQ](./README.md#8-hive-mq) for
+details of connecting to a secure, free broker service. This may provide hints
+for connecting to other TLS brokers.
 
 ###### [Contents](./README.md#1-contents)
 
@@ -897,3 +894,30 @@ follows:
 | 5     | Client is not authorised to connect.         |
 
 See MQTT spec section 3.2.2.
+
+###### [Contents](./README.md#1-contents)
+
+# 8. Hive MQ
+
+The [Hive MQ](https://www.hivemq.com/) site offers a free web-based broker
+which is more secure than public brokers. With a public broker anyone can
+detect and subscribe to your publications. Hive MQ gives you a unique broker
+internet address which requires a password to access. TLS is mandatory but does
+not require certificates.
+
+A simple GitHub registration gets you:
+ * The unique broker address.
+ * You specify a username.
+ * The website supplies a password.
+
+Typical usage:
+```python
+config['user'] = 'my_username'
+config['password'] = 'my_password'
+broker = 'unique broker address'  # e.g long_hex_string.s2.eu.hivemq.cloud
+config['server'] = broker
+config['ssl'] = True
+config['ssl_params'] = {"server_hostname": broker}
+```
+The free service is scalable (at cost) to large commercial deployments.
+###### [Contents](./README.md#1-contents)
