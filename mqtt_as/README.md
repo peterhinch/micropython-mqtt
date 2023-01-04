@@ -282,7 +282,7 @@ import uasyncio as asyncio
 # Local configuration
 config['ssid'] = 'your_network_name'  # Optional on ESP8266
 config['wifi_pw'] = 'your_password'
-config['server'] '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
+config['server'] = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
 async def messages(client):  # Respond to incoming messages
     async for topic, msg, retained in client.queue:
@@ -328,7 +328,7 @@ import uasyncio as asyncio
 # Local configuration
 config['ssid'] = 'your_network_name'  # Optional on ESP8266
 config['wifi_pw'] = 'your_password'
-config['server'] '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
+config['server'] = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 
 def callback(topic, msg, retained):
     print((topic, msg, retained))
