@@ -7,7 +7,8 @@
 # This demonstrates bidirectional TLS communication.
 # You can also run the following on a PC to verify:
 # mosquitto_sub -h test.mosquitto.org -t result
-# I haven't yet figured out how to get mosquitto_sub to use a secure connection.
+# To get mosquitto_sub to use a secure connection use this, offered by @gmrza:
+# mosquitto_sub -h <my local mosquitto server> -t result -u <username> -P <password> -p 8883
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
 

@@ -58,6 +58,7 @@ application level.
  6. [References](./README.md#6-references)  
  7. [Connect Error Codes](./README.md#7-connect-error-codes)  
  8. [Hive MQ](./README.md#8-hive-mq) A secure, free, broker.  
+ 9. [The ssl_params dictionary](./README.md#9-the-ssl_params-dictionary)  
 
 ## 1.1 Rationale
 
@@ -921,3 +922,15 @@ config['ssl_params'] = {"server_hostname": broker}
 ```
 The free service is scalable (at cost) to large commercial deployments.
 ###### [Contents](./README.md#1-contents)
+
+# 9. The ssl_params dictionary
+
+The following are the allowable keys:
+
+ * 'key'
+ * 'cert'
+ * 'server_side'
+ * 'server_hostname'
+ * 'do_handshake'
+ * 'cert_reqs' mbedtls only
+ * 'cadata' mbedtls only
