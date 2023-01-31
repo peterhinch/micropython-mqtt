@@ -934,3 +934,12 @@ The following are the allowable keys:
  * 'do_handshake'
  * 'cert_reqs' mbedtls only
  * 'cadata' mbedtls only
+
+According to [this post](https://github.com/orgs/micropython/discussions/10559#discussioncomment-4820939)
+the following platforms use mbedtls:
+
+ * esp32 port
+ * pico w
+ * unix port
+ * stm32
+
