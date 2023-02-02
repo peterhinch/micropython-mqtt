@@ -99,6 +99,7 @@ config = {
     "connect_coro": eliza,
     "ssid": None,
     "wifi_pw": None,
+    "wan_check_ip": "8.8.8.8",
     "queue_len": 0,
 }
 
@@ -321,7 +322,7 @@ class MQTT_base:
         length = 32  # DNS query and response packet size
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setblocking(False)
-        s.connect(("8.8.8.8", 53))
+        s.connect((config["wan_check_ip"], 53))
         await asyncio.sleep(1)
         try:
             await self._as_write(packet, sock=s)
