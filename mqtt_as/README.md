@@ -577,6 +577,9 @@ to '8.8.8.8' and checks for a valid response.
 There is a single arg `packet` which is a bytes object being the DNS query. The
 default object queries the Google DNS server.
 
+Please note that this is merely a convenience method. It is not used by the
+client code and its use is entirely optional.
+
 ### 3.2.10 dprint
 
 If the class variable `DEBUG` is true, debug messages are output via `dprint`.
