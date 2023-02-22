@@ -58,7 +58,7 @@ application level.
  6. [References](./README.md#6-references)  
  7. [Connect Error Codes](./README.md#7-connect-error-codes)  
  8. [Hive MQ](./README.md#8-hive-mq) A secure, free, broker.  
- 9. [The ssl_params dictionary](./README.md#9-the-ssl_params-dictionary)  
+ 9. [The ssl_params dictionary](./README.md#9-the-ssl_params-dictionary) Plus user notes on SSL/TLS.  
 
 ## 1.1 Rationale
 
@@ -946,3 +946,5 @@ the following platforms use mbedtls:
  * unix port
  * stm32
 
+See [this post](https://github.com/orgs/micropython/discussions/10801#discussioncomment-5071764)
+for details of how to use client certificates with a `mosquitto` broker.
