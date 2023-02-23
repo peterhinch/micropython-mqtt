@@ -948,3 +948,10 @@ the following platforms use mbedtls:
 
 See [this post](https://github.com/orgs/micropython/discussions/10801#discussioncomment-5071764)
 for details of how to use client certificates with a `mosquitto` broker.
+
+Note also that TLS with client certificates requires the cliet's clock to be
+approximately correct. This can be achieved with an NTP query. If `mosquitto`
+is run on a local server it also runs the NTP daemon. A high availability
+option is to run the NTP query against the local server. See
+[this doc](https://github.com/peterhinch/micropython-samples/blob/master/README.md#414-ntp-time),
+also [the official ntptime module](https://github.com/micropython/micropython-lib/blob/master/micropython/net/ntptime/ntptime.py).
