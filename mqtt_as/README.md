@@ -955,3 +955,6 @@ is run on a local server it also runs the NTP daemon. A high availability
 option is to run the NTP query against the local server. See
 [this doc](https://github.com/peterhinch/micropython-samples/blob/master/README.md#414-ntp-time),
 also [the official ntptime module](https://github.com/micropython/micropython-lib/blob/master/micropython/net/ntptime/ntptime.py).
+
+See [this link](https://github.com/JustinS-B/Mosquitto_CA_and_Certs) for
+information on creating client certificates and a Bash script for doing so.
