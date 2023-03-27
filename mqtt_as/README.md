@@ -83,6 +83,11 @@ The official "robust" MQTT client has the following limitations.
  outage places a limit on the usable WiFi range. To achieve reliable operation
  a client must be well within range of the access point (AP).
 
+ 6. As a synchronous solution it has no mechanism to support the "keepalive"
+ mechanism of MQTT. This prevents the "last will" system from working. It also
+ makes subscribe-only clients problematic: the broker has no means of "knowing"
+ whether the client is still connected.
+
 This module aims to address these issues, at the cost of significant code size.
 
 ## 1.2 Overview
