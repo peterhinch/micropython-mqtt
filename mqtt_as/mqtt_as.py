@@ -100,8 +100,8 @@ config = {
     "ssid": None,
     "wifi_pw": None,
     "queue_len": 0,
-    "gw" : False,
-}  # "gw": called from gateway. Channel no. to use.
+    "gwtopic" : None,
+}  # "gwtopic": called from gateway. See docs.
 
 
 class MQTTException(Exception):
@@ -168,14 +168,11 @@ class MQTT_base:
         self._sock = None
         self._sta_if = network.WLAN(network.STA_IF)
         self._sta_if.active(True)
-        if (chan := config["gw"]):  # Called from gateway (hence ESP32).
+        if config["gwtopic"] is not None:  # Called from gateway (hence ESP32).
             import aioespnow  # Set up ESPNOW
             while not (sta := self._sta_if).active():
                 time.sleep(0.1)
-            sta.config(channel = chan)  # Force to single channe]
-            sta.config(protocol = network.MODE_LR)
             sta.config(pm = sta.PM_NONE)  # No power management
-            sta.config(reconnects=0)  # Disable auto-reconnect ????
             sta.active(True)
             self._espnow = aioespnow.AIOESPNow()  # Returns AIOESPNow enhanced with async support
             self._espnow.active(True)

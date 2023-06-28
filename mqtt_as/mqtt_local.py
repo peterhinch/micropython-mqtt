@@ -4,6 +4,8 @@ from mqtt_as import config
 
 config['server'] = '192.168.0.10'  # Change to suit
 #  config['server'] = 'test.mosquitto.org'
+# For gateway need to specify topic(s) as tuple of 2-tuples (("topic name", qos),)
+# config['gwtopic'] = (("gateway", 1),)
 
 # Not needed if you're only using ESP8266
 config['ssid'] = 'your_network_name'
