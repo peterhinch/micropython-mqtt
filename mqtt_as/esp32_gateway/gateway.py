@@ -22,8 +22,6 @@ import uasyncio as asyncio
 from ubinascii import hexlify, unhexlify
 from primitives import RingbufQueue
 
-kipping = True  # Debug flag. Test queueing by disabling immediate send.
-
 
 class Gateway:
     def __init__(self, debug, qlen, lpmode):

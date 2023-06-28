@@ -413,10 +413,27 @@ I have no plan to implement these.
 When a node publishes a message the `retain` flag works normally: the broker
 retains the message for future subscribers if `qos==1`. See the MQTT spec.
 
-# 8. Issues
+# 8. ESP8266 Nodes
 
-I have experienced problems using an ESP32-S3 with SPIRAM as the gateway. A
-standard ESP32 greatly reduces the incidence of failed messages
+Currently these are unsupported. From the docs:
+
+> Receiving messages from an ESP8266 device: Strangely, an ESP32 device connected
+to a wifi network using method 1 or 2 above, will receive ESPNow messages sent to
+the STA_IF MAC address from another ESP32 device, but will reject messages from
+an ESP8266 device!!!. To receive messages from an ESP8266 device, the AP_IF
+interface must be set to active(True) and messages must be sent to the AP_IF MAC
+address.
+
+It seems a bad idea to force the gateway to run an access point interface
+and it complicates the gateway design to concurrently support two different
+`espnow` interfaces. There is also a question over whether the gateway's AP
+interface will track the channel number of its station interface which is set
+when the station interface connects to the system AP.
+
+Further there is a question whether this behaviour is a feature or a bug -
+in which case it will be fixed in the ESP IDF.
+
+Comments welcome.
 
 # Appendix 1 Power saving
 

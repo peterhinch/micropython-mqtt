@@ -1,6 +1,6 @@
 # common.py Common settings for all nodes
 import network
-import aioespnow
+import espnow
 from ubinascii import unhexlify
 
 # Adapt these two lines
@@ -19,7 +19,7 @@ while not sta.active():
 sta.config(channel=channel)
 sta.config(pm = sta.PM_NONE)  # No power management
 sta.active(True)
-espnow = aioespnow.AIOESPNow()  # Returns AIOESPNow enhanced with async support
+espnow = espnow.ESPNow()  # Returns ESPNow object
 espnow.active(True)
 espnow.add_peer(gateway)
 # TODO ping gateway. On fail, scan for it.
