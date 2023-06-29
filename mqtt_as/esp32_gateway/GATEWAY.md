@@ -16,28 +16,38 @@ hardware use ESPNow to publish and to receive MQTT messages targeted on them.
 Nodes may operate in micropower mode where they spend most of the time in
 deepsleep. Such operation is particularly suited to publish-only nodes;
 subscription messages are subject to latency when the node is asleep. ESPNow
-enables substantial power saving compared to a normal `mqtt_as` client. While a
-client can be put into deepsleep between publications, re-establishing a WiFi
-connection and re-connecting to the broker takes time and consumes power. By
-contrast ESPNow can start very quickly after a wake from deepsleep and
-communications can complete in a short period.
+enables substantial power saving compared to a normal `mqtt_as` client. While
+an `mqtt_as` client can be put into deepsleep between publications,
+re-establishing a WiFi connection and re-connecting to the broker takes time
+and consumes power. By contrast ESPNow can start very quickly after a wake from
+deepsleep and communications can complete in a short period.
 
-Where a node runs continously, subscription messages are received promptly. A
+Where a node runs continuously, subscription messages are received promptly. A
 node may have periods when it is awake and periods of sleep: the gateway's
 default behaviour is to attempt to send the message immediately. If this fails
 the message is queued for when the node wakes.
 
 There are tradeoffs relative to running an `mqtt_as` client, notably in cases
 where connectivity between the node and gateway is temporarily lost.
- 1. If connectivity failures are to be handled it must be done by the
+ 1. If such connectivity failures are to be handled it must be done by the
  application. By contrast, in `mqtt_as` a message published with `qos==1` will
  be delivered when the outage ends.
  2. The ESPNow node supports only basic publish and subscribe aspects of MQTT,
  whereas the `mqtt_as` client adds broker directives such as last will and
  clean session.
  3. At the time of writing ESPNow is not fully characterised. It is moot
- whether the  `qos==1` guarantee is strictly honoured for messages to the node.
- Where a node publishes the guarantee can be met with application support.
+ whether the  `qos==1` guarantee is strictly honoured. There may be a chance
+ that, when an ESPNow node transmits and a success status is returned, the
+ message may not have been received. The gateway module provides a means to
+ ensure that the `qos==1` guarantee can be met. This applies to node
+ publications and requires application support.
+
+## Under development
+
+This module is under development. The API may change. Areas under discussion
+and not currently supported:
+ 1. ESP8266 nodes (gateway is strictly ESP32).
+ 2. Support for access points with non-fixed WiFi channel numbers.
 
 # 2. Files
 
@@ -54,12 +64,15 @@ All files should be copied to the root directory of the device.
 
 ## 2.2 Nodes
 
+Copy the contents of the `nodes` directory to the device root. Note that
+`common.py` requires customisation before copying see 
+[section 4.3](./GATEWAY.md#43-gateway-setup).
  1. `common.py` Common initialisation for all nodes. Customise with ID of
  gateway and WiFi channel if this is fixed.
  2. `pubonly.py` Demo of a fixed channel micropower publish-only application.
  3. `subonly.py` As above but subscribe-only.
- 4. `synctx` Example of a fixed channel application with subscription reception
- and WiFi/broker outage detection.
+ 4. `synctx` Example of an application which runs continuously, publishing,
+ handling incoming messages and doing WiFi/broker outage detection.
 
 # 3. Overview
 
@@ -83,7 +96,7 @@ msg = str(adc.read_u16())
 publish(espnow, "light", msg, False, 0)
 espnow.active(False)
 sta.active(False)
-deepsleep(60_000)
+deepsleep(60_000)  # When the ESP32 wakes, main.py restarts the application
 ```
 The gateway forwards the publication to the broker which may be local or on the
 internet.
@@ -99,7 +112,7 @@ The node receives a JSON encoded 3-list comprising topic name, payload and the
 retain flag.
 
 This design means that publications are directed to a single node. It is also
-possible to publish to all nodes: see section 5.4.
+possible to publish to all nodes: see [section 5.4](./GATEWAY.md#54-publication-to-multiple-nodes).
 
 # 4. Installation
 
@@ -113,7 +126,7 @@ points or routers pick a channel on power up. To achieve reliable operation in
 the event of a power outage there are two options:
  1. Override the AP behaviour to ensure a fixed channel.
  2. Write the node application in such a way that an outage is detected and a
- scan of channels is initiated. See section 6.3.
+ scan of channels is initiated. See [section 6.3](./GATEWAY.md#63-case-where-wifi-channel-varies).
 
 ## 4.2 mqtt-as setup
 
@@ -133,7 +146,7 @@ from machine import unique_id
 print(hexlify(unique_id()))
 ```
 The result should be used to amend the `gateway` assignment in
-`nodes/common.py`.
+`nodes/common.py` which is copied to all nodes.
 
 Edit the file `mqtt_local.py` on the device to uncomment and amend the following
 lines:
@@ -155,7 +168,7 @@ gateway.run(debug=True, qlen=10, lpmode=True)
 Run args:
  1. `debug` Prints progress and RAM usage messages.
  2. `qlen` Defines the size (for each node) of the incoming MQTT message queue.
- 3. `lpmode` If `True` the gateway makes no attmpt to send messages to nodes
+ 3. `lpmode` If `True` the gateway makes no attempt to send messages to nodes
  unless they have just transmitted and are known to be ready to receive. Avoids
  spurious message transmission if all nodes are mainly in `deepsleep`.
 
@@ -168,7 +181,7 @@ from machine import unique_id
 print(hexlify(unique_id()))
 ```
 Ensure that the file `nodes/common.py` has the correct gateway ID and WiFi
-channel number. Copy the files `common.py` and `syctx.py` to the device. With
+channel number. Copy the files `common.py` and `synctx.py` to the device. With
 the gateway running, run
 ```python
 import synctx
@@ -224,7 +237,7 @@ The topic must be one to which the gateway has subscribed. The gateway
 subscribes to a set of topics defined as a tuple in the file `mqtt_local.py`. A
 topic is defined as a 2-tuple with the following elements:
  1. `topic_name:str`
- 2: `qos:int` This is the qos to use in communication with the broker. The
+ 2. `qos:int` This is the qos to use in communication with the broker. The
  default is the single topic "gateway" with qos of 1. It is defined as follows
  in `mqtt_local.py`:
 ```python
@@ -247,12 +260,12 @@ MQTT message.
 
 All nodes are set up to receive ESPNow messages via `common.py`. When a device
 publishes to one of the gateway topics, and the message is either targeted on
-the node or is in a wildcard format, the gateway forwards an ESPNow messge to
+the node or is in a wildcard format, the gateway forwards an ESPNow message to
 the node. A normal message is a JSON-encoded 3-list comprising:
  1. `topic:str`
  2. `message:str` This may itself be JSON-encoded for complex objects.
  3. `retained:bool`
-`"OUT"` and `"ACK"` messges are 2-lists lacking the `retained` element.
+`"OUT"` and `"ACK"` messages are 2-lists lacking the `retained` element.
 
 ## 5.3 Broker/WiFi outages
 
@@ -263,11 +276,12 @@ application may want to re-try after a delay.
 ## 5.4 Publication to multiple nodes
 
 There are two ways to do this. Both will send a message to all nodes that have
-previously communicated with the gateway. One uses the ESPNow broadcast address
+either published or been the target of a message from another MQTT client. One
+method uses the ESPNow broadcast address:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t gateway -m '["FFFFFFFFFFFF", "hello"]' -q 1
 ```
-the other uses an `"all"` address
+the other uses an `"all"` address:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t gateway -m '["all", "hello"]' -q 1
 ```
@@ -296,7 +310,7 @@ In ESPNow Corrupted messages never seem to occur. The TCP/IP protocol ensures
 they are not a problem for MQTT.
 
 Dupes can occur for various reasons, including the limitations of MQTT qos==1.
-ESPNow transmission uses a handhsake to verify successful transmission. This
+ESPNow transmission uses a handshake to verify successful transmission. This
 can be pessimistic, reporting failure when success has occurred. In this
 situation the gateway will re-transmit, causing a dupe. There is also the issue
 of broadcast messages to clients that are awake, as discussed above. If dupes
@@ -304,11 +318,11 @@ are an issue a message ID should be used to enable the application to discard
 them.
 
 At MQTT level missing messages should never occur if qos==1 is used. ESPNow has
-a handhsake which, in conjunction with the gateway design, should avoid missing
-nessages from the node. For cast-iron certainty, node publications can request
+a handshake which, in conjunction with the gateway design, should avoid missing
+messages from the node. For cast-iron certainty, node publications can request
 an acknowledge enabling the application to retransmit. Incoming node messages
 have no such mechanism and rely on the ESPNow handshake. I haven't yet
-established if the handhsake can be considered "perfect" in preventing missed
+established if the handshake can be considered "perfect" in preventing missed
 messages.
 
 # 6. Node application design
@@ -322,19 +336,21 @@ code should run as quickly as possible: if possible looping constructs should
 be avoided. Code is typically synchronous: `uasyncio` has no support for sleep.
 
 Messages received by the gateway and targeted on a node are forwarded when the
-node wakes up and performs a publication. Any messges sent since the last
+node wakes up and performs a publication. Any messages sent since the last
 wakeup will rapidly be received in the order in which they were created. If
-more messges were sent than can fit in the queue, the oldest messages will be
+more messages were sent than can fit in the queue, the oldest messages will be
 lost.
 
 When debugging an application it is often best to start out with `time.sleep()`
 calls as this keeps the USB interface active. When the basic design is proven,
 `sleep` may be replaced with `deepsleep`. Applications which deepsleep may be
-debugged using a UART and an FTDI adaptor.
+debugged using a UART and an FTDI adapter.
 
 An example of a micropower publish-only application is `pubonly.py` and is
 listed in [section 3](./GATEWAY.md#3-overview). A subscribe-only application
-is `subonly.py`:
+is `subonly.py`, listed below. Note that because a node is deaf when sleeping,
+incoming messages are only received after a publication. A dummy publication
+is used to provoke the gateway into sending any pending messages.
 ```python
 import json
 from machine import deepsleep, Pin
@@ -388,7 +404,13 @@ a dummy message may be sent.
 
 If power consumption is not a concern a node may be kept running continuously.
 The application can use synchronous or asynchronous code and can expect to
-receive subscribed messages promptly.
+receive subscribed messages promptly. A continuously running publish-only
+application should probably check for incoming messages (such as `OUT`) to
+remove them from the ESPNow buffer.
+
+A continuously running application may be genuinely subscribe-only provided
+that the gateway is run with `lpmode=False`: the connection is full-duplex
+with messages arriving with minimal latency.
 
 ## 6.3 Case where WiFi channel varies
 
