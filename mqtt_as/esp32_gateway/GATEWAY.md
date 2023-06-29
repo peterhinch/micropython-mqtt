@@ -48,6 +48,7 @@ This module is under development. The API may change. Areas under discussion
 and not currently supported:
  1. ESP8266 nodes (gateway is strictly ESP32).
  2. Support for access points with non-fixed WiFi channel numbers.
+ 3. ESPNow message encryption.
 
 # 2. Files
 
