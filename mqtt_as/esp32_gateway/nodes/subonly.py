@@ -8,13 +8,15 @@
 # if the AP channel changes after an AP power cycle.
 '''
 To test need something like
-mosquitto_pub -h 192.168.0.10 -t gateway -m '["f412fa420cd4", "red"]' -q 1
+mosquitto_pub -h 192.168.0.10 -t gateway -m "red" -q 1
+or
+mosquitto_pub -h 192.168.0.10 -t foo_topic -m "green" -q 1
 '''
 
 import json
 from machine import deepsleep, Pin
 from neopixel import NeoPixel
-from common import gateway, sta, espnow
+from common import gateway, sta, espnow, subscribe
 from time import sleep_ms
 
 np = NeoPixel(Pin(40), 1)  # 1 LED
@@ -45,6 +47,7 @@ def trigger(espnow):
     np.write()
     sleep_ms(500)  # Not micropower but let user see LED
 
+subscribe("foo_topic", 1)
 #while True:
     #trigger(espnow)
     #sleep_ms(3000)

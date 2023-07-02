@@ -58,7 +58,7 @@ All files should be copied to the root directory of the device.
 
  1. `mqtt_as.py` MQTT client module.
  2. `mqtt_local.py` Customise to define WiFi credentials, broker IP address and
- gateway topic(s).
+ a default gateway topic.
  3. `gateway.py` ESPNow gateway.
  4. `primitives` directory containing `__init__.py` and `ringbuf_queue.py`.
  5. `main.py` Ensure startup on power up.
@@ -104,16 +104,12 @@ internet.
 
 For micropower nodes the gateway queues subscriptions, forwarding them to the
 node in a brief time window after the node performs a publication. The gateway
-subscribes to one or more topics defined in `mqtt_local.py`. A device wishing
-to send a message to a node publishes to one of those topics; the message
-consists of of a JSON encoded 2-list comprising the ID of the destination node
-and the payload. The latter may optionally be a JSON-encoded object.
+subscribes to one topic defined in `mqtt_local.py`: publications to that topic
+are forwarded to all nodes. A node can also subscribe to additional topics.
+This enables external devices to publish to any subset of the nodes.
 
 The node receives a JSON encoded 3-list comprising topic name, payload and the
 retain flag.
-
-This design means that publications are directed to a single node. It is also
-possible to publish to all nodes: see [section 5.4](./GATEWAY.md#54-publication-to-multiple-nodes).
 
 # 4. Installation
 
@@ -150,13 +146,12 @@ The result should be used to amend the `gateway` assignment in
 `nodes/common.py` which is copied to all nodes.
 
 Edit the file `mqtt_local.py` on the device to uncomment and amend the following
-lines:
+line:
 ```python
-config['gwtopic'] = (("gateway", 1),)
+config['gwtopic'] = ("gateway", 1)
 ```
-By default "gateway" is the topic used when other devices publish to nodes. A
-topic is defined by a 2-tuple of topic name (str) and qos (int 0 or 1) used to
-communicate with the broker. Multiple topics are defined by a tuple of 2-tuples.
+This defines a default topic and qos. Publications to this topic will be sent
+to all nodes that have communicated with the gateway.
 
 The gateway may be started with the following `main.py` script:
 ```python
@@ -195,7 +190,7 @@ $ mosquitto_sub -h 192.168.0.10 -t shed
 This should receive the publications. To publish to the device run this, 
 changing the IP address and the destination device ID:
 ```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m '["70041dad8f14", "hello"]' -q 1
+$ mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
 ```
 # 5. Detailed Description
 
@@ -204,10 +199,11 @@ broker a response is sent enabling the application to respond as required. It
 is possible to request an acknowledge to every message sent. This can be used
 to ensure adherence to the `qos==1` guarantee.
 
-The gateway subscribes to one or more topic. When a device publishes to one of
-those topics, the gateway checks the format of the message. Unless the message
-has a specific format, it is ignored. Correctly formatted messages are
-forwarded either to an individual node or to all nodes.
+The gateway subscribes to a default topic plus others created by nodes. When an
+extrenal device publishes to one of those topics, the gateway checks the format
+of the message. Unless the message has a specific format, it is ignored.
+Correctly formatted messages are forwarded either to an individual node or to
+all nodes.
 
 If a node is awake and `lpmode` in `main.py` is `False` the message is
 forwarded immediately. If communications fail, the message is queued and will
@@ -235,34 +231,30 @@ fields being `"ACK"` (see below).
 
 A device sends a message to a node by publishing a specially formatted message.
 The topic must be one to which the gateway has subscribed. The gateway
-subscribes to a set of topics defined as a tuple in the file `mqtt_local.py`. A
+subscribes to a default topic defined as a tuple in the file `mqtt_local.py`. A
 topic is defined as a 2-tuple with the following elements:
  1. `topic_name:str`
  2. `qos:int` This is the qos to use in communication with the broker. The
- default is the single topic "gateway" with qos of 1. It is defined as follows
- in `mqtt_local.py`:
+ default is the topic "gateway" with qos of 1. It is defined as follows in
+ `mqtt_local.py`:
 ```python
-config["gwtopic"] = (("gateway", 1),)  # Can add further topics to outer tuple
+config["gwtopic"] = ("gateway", 1)
 ```
-Publications to these topics should comprise a JSON-encoded 2-list whose
-elements are:
- 1. ID of destination node.
- 2. Actual text of message (which may itself be a JSON-encoded object).
-
 A typical publication looks like
 ```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m '["70041dad8f14", "hello"]' -q 1
+$ mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
 ```
 Where `192.168.0.10` is the IP address of the broker, `gateway` is the gateway
-topic, `"70041dad8f14"` is the ID of the destination node, and `"hello"` is the
-MQTT message.
+topic, and `"hello"` is the MQTT message. The message can optionally be a JSON
+encoded object.
 
 ### 5.3.2 Node setup
 
 All nodes are set up to receive ESPNow messages via `common.py`. When a device
-publishes to one of the gateway topics, and the message is either targeted on
-the node or is in a wildcard format, the gateway forwards an ESPNow message to
-the node. A normal message is a JSON-encoded 3-list comprising:
+publishes to a topic to which a node is subscribed, the gateway forwards an
+ESPNow message to the node. All nodes are subscribed to the default topic.
+
+A normal message is a JSON-encoded 3-list comprising:
  1. `topic:str`
  2. `message:str` This may itself be JSON-encoded for complex objects.
  3. `retained:bool`
@@ -276,31 +268,25 @@ application may want to re-try after a delay.
 
 ## 5.4 Publication to multiple nodes
 
-There are two ways to do this. Both will send a message to all nodes that have
-either published or been the target of a message from another MQTT client. One
-method uses the ESPNow broadcast address:
+This is done by publishing to the default topic as defined in `mqtt_local.py`.
+The message will be forwarded to all nodes which have communicated with the
+gateway. If the default topic is "gateway":
 ```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m '["FFFFFFFFFFFF", "hello"]' -q 1
+$ mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
 ```
-the other uses an `"all"` address:
-```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m '["all", "hello"]' -q 1
+## 5.5 Subscriptions
+
+If a node wishes to subscribe to a topic, the `subscribe` method may be used.
+```python
+from common import gateway, sta, espnow, subscribe
+subscribe("foo_topic", 1)  # Subscribe with qos==1
 ```
-In both cases the topic must be one of those defined in `mqtt_local.py`.
+If another node has already subscribed to this topic, the node will be added to
+the set of subscribed nodes. If no other node has subscribed to this topic, the
+gateway will subscribe to the broker and will create a record identifying the
+topic and the node so that messages are routed to that node.
 
-The broadcast approach will cause the gateway to send a message to any ESP32
-unit that is in range. ESPNow offers no feedback on whether a broadcast
-transmission succeeded. The gateway makes two attempts to send the message:
-when it is received and after the node next publishes. If the node is awake
-and listening when the message is sent, it will receive it again after it next
-publishes.
-
-The `"all"` destination overcomes those limitations using normal transmissions
-employing the ESPNow feedback to minimise the risk of duplicates. Transmission
-is restricted to nodes "known to" the gateway: either because they have
-published previously or because the node has already been sent a message.
-
-## 5.5 Message integrity
+## 5.6 Message integrity
 
 Radio communications suffer from three potential issues:
  1. Corrupted messages.

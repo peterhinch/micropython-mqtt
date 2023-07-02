@@ -9,7 +9,7 @@ config['server'] = '192.168.0.10'  # Change to suit
 config['ssid'] = 'misspiggy'
 config['wifi_pw'] = '6163VMiqSTyx'
 # Use with gateway only:
-config['gwtopic'] = (("gateway", 1),)
+config['gwtopic'] = ("gateway", 1)
 
 # For demos ensure same calling convention for LED's on all platforms.
 # ESP8266 Feather Huzzah reference board has active low LED's on pins 0 and 2.

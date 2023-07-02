@@ -3,13 +3,13 @@
 '''
 To test need something like
 mosquitto_sub -h 192.168.0.10 -t shed
-mosquitto_pub -h 192.168.0.10 -t gateway -m '["70041dad8f14", "hello"]' -q 1
+mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
 '''
 
 import json
 import time
 from machine import deepsleep
-from common import gateway, sta, espnow
+from common import gateway, sta, espnow, subscribe
 
 def subs(message):  # Handle subscriptions
     print(f'Got subscription   topic: "{message[0]}" message: "{message[1]}" retained {message[2]}')
@@ -43,7 +43,9 @@ def publish(espnow, topic, msg, retain=False, qos=0):
             fail_count += 1
             time.sleep_ms(100)  # Try again after short break?
     return True  # Pub succeeded
-        
+
+subscribe("foo_topic", 1)
+
 n = 0
 nr_count = 0
 while True:

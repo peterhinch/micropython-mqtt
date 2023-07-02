@@ -2,6 +2,7 @@
 import network
 import espnow
 from ubinascii import unhexlify
+import json
 
 # Adapt these two lines
 gateway = unhexlify(b'2462abe6b0b4')  # ESP reference clone
@@ -22,5 +23,7 @@ sta.active(True)
 espnow = espnow.ESPNow()  # Returns ESPNow object
 espnow.active(True)
 espnow.add_peer(gateway)
+def subscribe(topic, qos):
+    espnow.send(gateway, json.dumps([topic, qos]))
 # TODO ping gateway. On fail, scan for it.
 # Also need to ping and optionally scan after WiFi outage

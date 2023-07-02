@@ -29,7 +29,11 @@ class Gateway:
         self.debug = debug
         self.qlen = qlen
         self.lpmode = lpmode
+        self.allnodes, qos = config["gwtopic"]  # Default topic sends to all nodes
         self.queues = {}  # Key node ID, value RingbufQueue of pending messages
+        # Dict of current subscriptions. All nodes are subscribed to default topic.
+        # Key topic, value [qos, {node_id...}] Set of nodes subscribed to that topic.
+        self.topics = {self.allnodes: [qos, set()]}
         self.connected = False
         self.client = MQTTClient(config)
 
@@ -59,12 +63,12 @@ class Gateway:
             client.up.clear()
             self.connected = True
             self.debug and print("We are connected to broker.")
-            for topic, qos in config["gwtopic"]:
-                await client.subscribe(topic, qos)
+            for topic in self.topics:
+                await client.subscribe(topic, self.topics[topic][0])
 
     # Send an ESPNOW message. Return True on success. Failure can occur because
-    # node is OOR, powered down or failed.
-    # node not initialised, WiFi not active due to outage recovery
+    # node is OOR, powered down or failed. Other failure causes are
+    # node not initialised or WiFi not active due to outage recovery in progress.
     async def do_send(self, mac, msg):
         espnow = self.client._espnow
         try:
@@ -76,8 +80,7 @@ class Gateway:
     # queue for sending when node is awake/in range.
     # If messages are queued or GW is in low power mode, queue the current message.
     async def try_send(self, node_id, ms):
-        if node_id not in self.queues:
-            self.queues[node_id] = RingbufQueue([None] * self.qlen)  # Create a message queue
+        assert node_id in self.queues, f"Unknown node_id {node_id}"
         queue = self.queues[node_id]
         # Messages are queued: node is asleep/AWOL. Or nodes are in low power mode.
         if queue.qsize() or self.lpmode:
@@ -102,15 +105,29 @@ class Gateway:
         client = self.client
         espnow = client._espnow
         async for mac, msg in espnow:
-            #print(f"ESPnow {mac} message: {msg}")
             try:
                 message = json.loads(msg)
             except ValueError:  # Node is probably pinging
                 continue  # no response required
             node = hexlify(mac)  # MAC as hex bytes
-            if node not in self.queues:  # First contact. May need to send it a message.
+            #print(f"ESPnow {mac} node {node} message: {message} msg: {msg}")
+            if node not in self.queues:  # First contact. Initialise.
                 self.queues[node] = RingbufQueue([None] * self.qlen)  # Create a message queue
                 espnow.add_peer(mac)
+                self.topics[self.allnodes][1].add(node)  # Add to default "all nodes" topic
+            if len(message) == 2:  # It's a subscription.
+                topic, qos = message
+                if topic in self.topics:  # topic is already a client subscription
+                    self.topics[topic][1].add(node)  # add node to set of subscribed nodes
+                    if self.debug and qos != self.topics[topic][0]:
+                        print("Warning: attempt to change qos of existing subscription:", topic)
+                else:  # New subscription
+                    self.topics[topic] = [qos, {node}]
+                    await client.subscribe(topic, qos)
+                continue
+            if len(message) != 4:  # Malformed
+                self.debug and print(f"Malformed message {message} from node {node}")
+                continue
             # args topic, message, retain, qos
             #print(f"Node {node} topic {message[0]} message {message[1]} retain {message[2]} qos {message[3]}")
             if message[3] & 4:  # Bit 2 (qos==5) indicates ACK
@@ -135,44 +152,19 @@ class Gateway:
                     break  # Leave on queue. Don't send more. Try again on next incoming.
 
     # Manage message queues for each node.
-    # Subscription message is json-encoded [node, payload] or ["all", payload].
-    # Both ESPNow and mqtt_as use bytes objects. json.loads() returns strings.
-    # Note re broadcast: Sent immediately for awake nodes but also queued. There is no feedback
-    # on success so all nodes are queued, meaning that awake nodes get dupes,
-    # Wildcard "ALL" messages don't have this issue so dupes are much rarer.
+    # Both ESPNow and mqtt_as use bytes objects. json.dumps() returns strings.
     async def messages(self):
-        broadcast = b"FFFFFFFFFFFF"
-        wildcard = (b"all", b"ALL")
-        client = self.client
-        espnow = client._espnow
-        espnow.add_peer(unhexlify(broadcast))
-        async for topic, msg, retained in client.queue:
+        async for topic, message, retained in self.client.queue:
+            topic = topic.decode()  # Convert to strings
+            message = message.decode()
+            # queues key is node MAC as a ubinascii-format bytes object
+            ms = json.dumps([topic, message, retained])
             try:
-                node, payload = json.loads(msg)
-            except ValueError:  # Badly formatted message.
-                continue
-            node_id = node.encode()
-            # queues key is node MAC as a ubinascii-format bytes object or b'all'
-            ms = json.dumps([topic.decode(), payload, retained])
-            print(f"Subs {node_id} ms {ms}")
-            # Broadcast
-            if node_id == broadcast:
-                mac = unhexlify(node_id)
-                await self.do_send(mac, ms)  # No return status. May be asleep.
-                for q in self.queues.values():  # So put on every queue
-                    q.put_nowait(ms)
-            # Wildcard
-            if node_id in wildcard:  # Sending to all known nodes
-                for node_id in self.queues:  # Check every peer
-                    await self.try_send(node_id, ms)  # Send, otherwise queue
-                continue
-            # Non-wildcard message. Validate the MAC address.
-            try:
-                mac = unhexlify(node_id)
-            except ValueError:
-                continue
-            if len(mac) == 6:
-                await self.try_send(node_id, ms)  # Send or queue on failure.
+                for node_id in self.topics[topic][1]:  # For each node subscribed to topic
+                    self.debug and print(f"Sending or queueing message {ms} to node {node_id}")
+                    await self.try_send(node_id, ms)  # Send or queue on failure.
+            except KeyError:
+                self.debug and print(f"No nodes subscribed to topic {topic}")
 
     def close(self):
         self.client.close()
