@@ -5,7 +5,8 @@
 This module provides publish and subscribe MQTT access using ESPNow. Benefits
 relative to running an `mqtt_as` client are:
  1. Nodes can be designed to have extremely low power consumption.
- 2. Node scripts can comprise a small amount of synchronous code.
+ 2. Node scripts can comprise a small amount of synchronous code. On ESP8266
+ the MQTT node interface is much smaller than a full `mqtt_as` client.
  3. WiFi and broker outages are handled by the gateway rather than by a large
  library running on the node.
 
@@ -24,8 +25,9 @@ deepsleep and communications can complete in a short period.
 
 Where a node runs continuously, subscription messages are received promptly. A
 node may have periods when it is awake and periods of sleep: the gateway's
-default behaviour is to attempt to send the message immediately. If this fails
-the message is queued for when the node wakes.
+default behaviour is to queue MQTT messages for when the node wakes. This may
+be changed such that the gateway tries to send the message immediately, only
+queueing it on failure.
 
 There are tradeoffs relative to running an `mqtt_as` client, notably in cases
 where connectivity between the node and gateway is temporarily lost.
@@ -39,16 +41,16 @@ where connectivity between the node and gateway is temporarily lost.
  whether the  `qos==1` guarantee is strictly honoured. There may be a chance
  that, when an ESPNow node transmits and a success status is returned, the
  message may not have been received. The gateway module provides a means to
- ensure that the `qos==1` guarantee can be met. This applies to node
- publications and requires application support.
+ ensure that, in the case of node publications, the `qos==1` guarantee can be
+ met. This requires application support.
 
 ## Under development
 
 This module is under development. The API may change. Areas under discussion
 and not currently supported:
- 1. ESP8266 nodes (gateway is strictly ESP32).
- 2. Support for access points with non-fixed WiFi channel numbers.
- 3. ESPNow message encryption.
+ 1. Support for access points with non-fixed WiFi channel numbers.
+ 2. ESPNow message encryption.
+ 3. Error reporting: ESPNow errors will be published to a user-defined topic.
 
 # 2. Files
 
@@ -109,7 +111,8 @@ are forwarded to all nodes. A node can also subscribe to additional topics.
 This enables external devices to publish to any subset of the nodes.
 
 The node receives a JSON encoded 3-list comprising topic name, payload and the
-retain flag.
+retain flag. See the demo `subonly.py` for an example where a node subscribes
+to a topic and goes to sleep. On waking any messages are received.
 
 # 4. Installation
 
@@ -136,22 +139,13 @@ the device.
 
 ## 4.3 Gateway setup
 
-Determine the identity of the gateway, to enable nodes to access it. Run
-```python
-from ubinascii import hexlify
-from machine import unique_id
-print(hexlify(unique_id()))
-```
-The result should be used to amend the `gateway` assignment in
-`nodes/common.py` which is copied to all nodes.
-
-Edit the file `mqtt_local.py` on the device to uncomment and amend the following
-line:
+Edit the file `mqtt_local.py` on the device to uncomment and if necessary amend
+the following line:
 ```python
 config['gwtopic'] = ("gateway", 1)
 ```
-This defines a default topic and qos. Publications to this topic will be sent
-to all nodes that have communicated with the gateway.
+This defines a default topic "gateway" and qos 1. Publications to this topic
+will be sent to all nodes that have communicated with the gateway.
 
 The gateway may be started with the following `main.py` script:
 ```python
@@ -159,14 +153,25 @@ The gateway may be started with the following `main.py` script:
 import time
 time.sleep(4)  # Enable break-in at boot time
 import gateway
-gateway.run(debug=True, qlen=10, lpmode=True)
+gateway.run()
 ```
-Run args:
- 1. `debug` Prints progress and RAM usage messages.
- 2. `qlen` Defines the size (for each node) of the incoming MQTT message queue.
- 3. `lpmode` If `True` the gateway makes no attempt to send messages to nodes
- unless they have just transmitted and are known to be ready to receive. Avoids
- spurious message transmission if all nodes are mainly in `deepsleep`.
+`gateway.run()` takes the following args:
+ 1. `debug=True` Prints progress and RAM usage messages.
+ 2. `qlen=10` Defines the size (for each node) of the incoming MQTT message
+ queue. Messages are queued when a node is sleeping.
+ 3. `lpmode=True` If `True` the gateway makes no attempt to send messages to
+ nodes unless they have just transmitted and are known to be ready to receive.
+ Avoids spurious message transmission if all nodes are mainly in `deepsleep`.
+ 4. `use_ap_if=False` This must be set `True` if any of the nodes use ESP8266.
+ It causes the Access Point (AP) interface to be active. On ESP32-only networks
+ setting the arg `False` disables the AP.
+
+The gateway should be started with its intended args (particularly
+`use_ap_if`). On startup it will report its ID as an ASCII hex string e.g.
+`b'2462abe6b0b5'`. The file `nodes/common.py` should be edited to refelect this
+```python
+gateway = unhexlify(b'2462abe6b0b5')
+```
 
 ## 4.4 Testing
 
@@ -400,6 +405,12 @@ that the gateway is run with `lpmode=False`: the connection is full-duplex
 with messages arriving with minimal latency.
 
 ## 6.3 Case where WiFi channel varies
+
+This is addressed by, in `common.py`, setting `channel = None`. This prompts
+the gateway to scan for channels on startup. A `common.scan()` method is
+available which enables the application to re-scan if communications fail.
+
+Currently this **does not work**.
 
 **TODO** Consult with @glenn20
 

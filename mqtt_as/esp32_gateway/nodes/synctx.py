@@ -1,5 +1,8 @@
-# synctx.py
-# A synchronous ESPNOW node
+# synctx.py A synchronous ESPNOW node
+
+# (C) Copyright Peter Hinch 2023
+# Released under the MIT licence.
+
 '''
 To test need something like
 mosquitto_sub -h 192.168.0.10 -t shed

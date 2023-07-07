@@ -1,4 +1,7 @@
 # subonly.py
+# (C) Copyright Peter Hinch 2023
+# Released under the MIT licence.
+
 # Demonstrate a "subscribe only" micropower application on a UM Feather S3 board.
 # Note a publish must be done to trigger reception of any messages. Demo can
 # receive "red", "green" or "blue" flashing the NeoPixel accordingly before sleeping

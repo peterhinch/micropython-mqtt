@@ -22,9 +22,12 @@ import uasyncio as asyncio
 from ubinascii import hexlify, unhexlify
 from primitives import RingbufQueue
 
+def printid(iface):
+    a = iface.config('mac')
+    print(f"ESPNow ID: {hexlify(a)}")
 
 class Gateway:
-    def __init__(self, debug, qlen, lpmode):
+    def __init__(self, debug, qlen, lpmode, use_ap_if):
         MQTTClient.DEBUG = debug  # Optional debug statements.
         self.debug = debug
         self.qlen = qlen
@@ -36,6 +39,13 @@ class Gateway:
         self.topics = {self.allnodes: [qos, set()]}
         self.connected = False
         self.client = MQTTClient(config)
+        if use_ap_if:
+            import network
+            iface = network.WLAN(network.AP_IF)
+            iface.active(True)
+        else:
+            iface = self.client._sta_if
+        printid(iface)
 
     async def run(self):
         try:
@@ -175,8 +185,8 @@ config["keepalive"] = 120
 config["queue_len"] = 1  # Use event interface with default queue
 
 
-def run(debug=True, qlen=10, lpmode=True):
-    gw = Gateway(debug, qlen, lpmode)
+def run(debug=True, qlen=10, lpmode=True, use_ap_if=False):
+    gw = Gateway(debug, qlen, lpmode, use_ap_if)
     try:
         asyncio.run(gw.run())
     finally:

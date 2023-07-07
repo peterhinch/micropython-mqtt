@@ -1,4 +1,7 @@
 # pubonly.py
+# (C) Copyright Peter Hinch 2023
+# Released under the MIT licence.
+
 # A synchronous ESPNOW node publishes the reading of a Feather S3 ambient light sensor.
 # If a WiFi/broker outage occurs, messages are lost for the duration.
 # Requires AP/router to use a fixed channel, otherwise communications may be lost after
