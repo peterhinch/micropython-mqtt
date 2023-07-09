@@ -34,7 +34,7 @@ where connectivity between the node and gateway is temporarily lost.
  1. If such connectivity failures are to be handled it must be done by the
  application. By contrast, in `mqtt_as` a message published with `qos==1` will
  be delivered when the outage ends.
- 2. The ESPNow node supports only basic publish and subscribe aspects of MQTT,
+ 2. The ESPNow node supports only basic publish and subscribe MQTT operations,
  whereas the `mqtt_as` client adds broker directives such as last will and
  clean session.
  3. At the time of writing ESPNow is not fully characterised. It is moot
@@ -50,36 +50,34 @@ This module is under development. The API may change. Areas under discussion
 and not currently supported:
  1. Support for access points with non-fixed WiFi channel numbers.
  2. ESPNow message encryption.
- 3. Error reporting: ESPNow errors will be published to a user-defined topic.
+ 3. Gateway status reporting.
 
 # 2. Files
 
-All files should be copied to the root directory of the device.
-
 ## 2.1 Gateway
 
+This is normally installed with `mip`. Files are listed for reference.
  1. `mqtt_as.py` MQTT client module.
- 2. `mqtt_local.py` Customise to define WiFi credentials, broker IP address and
- a default gateway topic.
+ 2. `mqtt_local.py` Customise to define WiFi credentials and broker IP address.
  3. `gateway.py` ESPNow gateway.
- 4. `primitives` directory containing `__init__.py` and `ringbuf_queue.py`.
- 5. `main.py` Ensure startup on power up.
+ 4. `gwconfig.py` Configuration file for gateway.
+ 5. `primitives` directory containing `__init__.py` and `ringbuf_queue.py`.
 
 ## 2.2 Nodes
 
-Copy the contents of the `nodes` directory to the device root. Note that
-`common.py` requires customisation before copying see 
-[section 4.3](./GATEWAY.md#43-gateway-setup).
- 1. `common.py` Common initialisation for all nodes. Customise with ID of
- gateway and WiFi channel if this is fixed.
- 2. `pubonly.py` Demo of a fixed channel micropower publish-only application.
- 3. `subonly.py` As above but subscribe-only.
- 4. `synctx` Example of an application which runs continuously, publishing,
+The only required file is `common.py` which should be copied from the `nodes`
+directory to the device root. Note that this file requires customisation before
+copying to identify the gateway and WiFi channel. See [section 4.3](./GATEWAY.md#43-gateway-setup).
+
+The following demos are optional:
+ 1. `pubonly.py` Demo of a fixed channel micropower publish-only application.
+ 2. `subonly.py` As above but subscribe-only.
+ 3. `synctx` Example of an application which runs continuously, publishing,
  handling incoming messages and doing WiFi/broker outage detection.
 
 # 3. Overview
 
-If the AP channel is fixed a low power publish-only application can be simple.
+If the AP channel is fixed, a low power publish-only application can be simple.
 The following publishes a reading once per minute from the ambient light sensor
 of a [FeatherS3 board](https://esp32s3.com/):
 ```python
@@ -106,13 +104,14 @@ internet.
 
 For micropower nodes the gateway queues subscriptions, forwarding them to the
 node in a brief time window after the node performs a publication. The gateway
-subscribes to one topic defined in `mqtt_local.py`: publications to that topic
-are forwarded to all nodes. A node can also subscribe to additional topics.
-This enables external devices to publish to any subset of the nodes.
+subscribes to one topic defined in `gwconfig.py`: publications to that topic
+(default "allnodes") are forwarded to all nodes. A node can subscribe to
+additional topics. This enables external devices to publish to any subset of
+the nodes.
 
 The node receives a JSON encoded 3-list comprising topic name, payload and the
 retain flag. See the demo `subonly.py` for an example where a node subscribes
-to a topic and goes to sleep. On waking any messages are received.
+to a topic and goes to sleep. On waking, pending messages are received.
 
 # 4. Installation
 
@@ -128,62 +127,36 @@ the event of a power outage there are two options:
  2. Write the node application in such a way that an outage is detected and a
  scan of channels is initiated. See [section 6.3](./GATEWAY.md#63-case-where-wifi-channel-varies).
 
-## 4.2 mqtt-as setup
+## 4.2 Gateway installation
 
 Select the hardware to become the gateway. ESP32 or S2 and S3 variants may be
 employed, however I have found a standard ESP32 to suffer fewer communications
-problems than an S3 with SPIRAM. Install the current build of `mqtt-as` as per
-the docs and ensure it is working with your broker by running one of the demos
-e.g. `range.py`. When this is complete there will be a file `mqtt_local.py` on
-the device.
+problems than an S3 with SPIRAM. 
+
+Install with
+```python
+import mip
+mip.install("github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/package.json")
+```
+Edit the file `mqtt_local.py` on the device as per the `mqtt_as` docs to include
+the correct WiFi credentials and broker IP address. Verify thet `mqtt_as` is
+working by running one of the demos e.g. `range.py`.
 
 ## 4.3 Gateway setup
 
-Edit the file `mqtt_local.py` on the device to uncomment and if necessary amend
-the following line:
-```python
-config['gwtopic'] = ("gateway", 1)
-```
-This defines a default topic "gateway" and qos 1. Publications to this topic
-will be sent to all nodes that have communicated with the gateway.
-
-The gateway may be started with the following `main.py` script:
-```python
-# Gateway startup
-import time
-time.sleep(4)  # Enable break-in at boot time
-import gateway
-gateway.run()
-```
-`gateway.run()` takes the following args:
- 1. `debug=True` Prints progress and RAM usage messages.
- 2. `qlen=10` Defines the size (for each node) of the incoming MQTT message
- queue. Messages are queued when a node is sleeping.
- 3. `lpmode=True` If `True` the gateway makes no attempt to send messages to
- nodes unless they have just transmitted and are known to be ready to receive.
- Avoids spurious message transmission if all nodes are mainly in `deepsleep`.
- 4. `use_ap_if=False` This must be set `True` if any of the nodes use ESP8266.
- It causes the Access Point (AP) interface to be active. On ESP32-only networks
- setting the arg `False` disables the AP.
-
-The gateway should be started with its intended args (particularly
-`use_ap_if`). On startup it will report its ID as an ASCII hex string e.g.
+The gateway starts on issuing `import gateway`. On startup it reports its ID as
+an ASCII hex string e.g.
 `b'2462abe6b0b5'`. The file `nodes/common.py` should be edited to refelect this
 ```python
 gateway = unhexlify(b'2462abe6b0b5')
 ```
+Note that this ID is dependent on the `"use_ap_if"` entry in `gwconfig.py`.
 
 ## 4.4 Testing
 
-On another ESP32, determine and note its unique ID:
-```python
-from ubinascii import hexlify
-from machine import unique_id
-print(hexlify(unique_id()))
-```
-Ensure that the file `nodes/common.py` has the correct gateway ID and WiFi
-channel number. Copy the files `common.py` and `synctx.py` to the device. With
-the gateway running, run
+On an ESP32, ensure that the file `nodes/common.py` has the correct gateway ID
+and WiFi channel number. Copy the files `common.py` and `synctx.py` to the
+device. With the gateway running, run
 ```python
 import synctx
 ```
@@ -193,9 +166,9 @@ following (changing the IP address to that of the broker):
 $ mosquitto_sub -h 192.168.0.10 -t shed
 ```
 This should receive the publications. To publish to the device run this, 
-changing the IP address and the destination device ID:
+changing the IP address:
 ```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
+$ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```
 # 5. Detailed Description
 
@@ -205,17 +178,51 @@ is possible to request an acknowledge to every message sent. This can be used
 to ensure adherence to the `qos==1` guarantee.
 
 The gateway subscribes to a default topic plus others created by nodes. When an
-extrenal device publishes to one of those topics, the gateway checks the format
+external device publishes to one of those topics, the gateway checks the format
 of the message. Unless the message has a specific format, it is ignored.
 Correctly formatted messages are forwarded either to an individual node or to
 all nodes.
 
-If a node is awake and `lpmode` in `main.py` is `False` the message is
+If a node is awake and `lpmode` in `gwconfig.py` is `False` the message is
 forwarded immediately. If communications fail, the message is queued and will
 be sent the next time the node communicates with the gateway. This is the
 normal means of operation for micropower nodes.
 
-## 5.1 Publications from a node
+## 5.1 Gateway configuration
+
+The file `gwconfig.py` instantiates a `defaultdict` with entries defining the
+mode of operation of the gateway. These have default values so the file may not
+need to be edited for initial testing. Keys and defaults are as follows:
+```python
+PubIn = namedtuple('PubIn', 'topic qos')  # Publication to gateway/nodes from outside
+PubOut = namedtuple('PubOut', 'topic retain qos')  # Publication by gateway
+
+gwcfg = defaultdict(lambda : None)
+gwcfg["debug"] = True  # Print debug info. Also causes more status messages to be published.
+gwcfg["qlen"] = 10  # No. of messages to queue (for each node).
+# If queue overruns (e.g. because node is asleep), oldest messages will be lost.
+gwcfg["lpmode"] = True  # Set True if all nodes are micropower: messages are queued
+# and only forwarded to the node after it has published.
+# If False the gateway will attempt to send the message on receipt, only queuing
+# it on failure.
+gwcfg["use_ap_if"] = True  # Enable ESP8266 nodes by using AP interface
+# This has the drawback of visibility. If all nodes are ESP32 this may be set False
+# enebling station mode to be used. Note that this affects the gateway ID.
+gwcfg["pub_all"] = PubIn("allnodes", 1)  # Publish to all nodes
+
+# Optional keys
+gwcfg["errors"] = PubOut("gw_errors", False, 1)  # Gateway publishes any errors.
+gwcfg["status"] = PubOut("gw_status", False, 0)  # Destination for status reports.
+gwcfg["statreq"] = PubIn("gw_query", 0)  # Status request (not yet implemented)
+```
+`PubIn` objects refer to topics to which the gateway will respond. `PubOut`
+topics are those to which the gateway may publish. If an error occurs the
+gateway will publish it to the topic defined in "errors". If "debug" is `True`
+it will also print it.
+
+Gateway publications may be prevented by omitting the optional `PubOut` key. 
+
+## 5.2 Publications from a node
 
 Each node sends the gateway a message comprising a json-encoded 4-list. 
 Elements are:
@@ -230,9 +237,7 @@ enables the design of nodes which re-transmit lost ESPNow messages. The
 acknowledge takes the form of a subscribed message having topic and message
 fields being `"ACK"` (see below).
 
-## 5.2 Publications to a node
-
-### 5.3.1 Gateway setup
+## 5.3 Publications to a node
 
 A device sends a message to a node by publishing a specially formatted message.
 The topic must be one to which the gateway has subscribed. The gateway
@@ -247,9 +252,9 @@ config["gwtopic"] = ("gateway", 1)
 ```
 A typical publication looks like
 ```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
+$ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```
-Where `192.168.0.10` is the IP address of the broker, `gateway` is the gateway
+Where `192.168.0.10` is the IP address of the broker, `allnodes` is the gateway
 topic, and `"hello"` is the MQTT message. The message can optionally be a JSON
 encoded object.
 
@@ -265,21 +270,23 @@ A normal message is a JSON-encoded 3-list comprising:
  3. `retained:bool`
 `"OUT"` and `"ACK"` messages are 2-lists lacking the `retained` element.
 
-## 5.3 Broker/WiFi outages
+## 5.4 Broker/WiFi outages
 
 If an outage occurs the gateway will respond to a publish attempt with a
 subscribe message `["OUT", "OUT"]`. The published message will be lost. The
 application may want to re-try after a delay.
 
-## 5.4 Publication to multiple nodes
+The gateway will publish status messages indicating connection state.
 
-This is done by publishing to the default topic as defined in `mqtt_local.py`.
+## 5.5 Publication to multiple nodes
+
+This is done by publishing to the default topic as defined in `gwconfig.py`.
 The message will be forwarded to all nodes which have communicated with the
-gateway. If the default topic is "gateway":
+gateway. With the default topic "allnodes":
 ```bash
-$ mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
+$ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```
-## 5.5 Subscriptions
+## 5.6 Subscriptions
 
 If a node wishes to subscribe to a topic, the `subscribe` method may be used.
 ```python
@@ -347,7 +354,7 @@ is used to provoke the gateway into sending any pending messages.
 import json
 from machine import deepsleep, Pin
 from neopixel import NeoPixel
-from common import gateway, sta, espnow
+from common import gateway, sta, espnow, subscribe
 from time import sleep_ms
 
 np = NeoPixel(Pin(40), 1)  # 1 LED
@@ -362,7 +369,7 @@ def trigger(espnow):
     message = json.dumps(["dummy", "dummy", False, 0])
     try:
         espnow.send(gateway, message)
-    except OSError:  # Radio communications with gateway down.
+    except OSError:  #   # Radio communications with gateway down.
         return
     msg = None
     while True:  # Discard all but last pending message
@@ -378,15 +385,17 @@ def trigger(espnow):
     np.write()
     sleep_ms(500)  # Not micropower but let user see LED
 
+subscribe("foo_topic", 1)
 trigger(espnow)
 espnow.active(False)
 sta.active(False)
 deepsleep(3_000)
+# Now effectively does a hard reset
 ```
 This enables an MQTT client to flash the LED on a UM FeatherS3 board with a
 message like
 ```bash
-mosquitto_pub -h 192.168.0.10 -t gateway -m '["f412fa420cd4", "red"]' -q 1
+mosquitto_pub -h 192.168.0.10 -t allnodes -m "red" -q 1
 ```
 The LED flashing is not exactly micropower, but it illustrates the concept.
 The node requests data by publishing. If the application has no need to publish,
@@ -432,28 +441,6 @@ I have no plan to implement these.
 
 When a node publishes a message the `retain` flag works normally: the broker
 retains the message for future subscribers if `qos==1`. See the MQTT spec.
-
-# 8. ESP8266 Nodes
-
-Currently these are unsupported. From the docs:
-
-> Receiving messages from an ESP8266 device: Strangely, an ESP32 device connected
-to a wifi network using method 1 or 2 above, will receive ESPNow messages sent to
-the STA_IF MAC address from another ESP32 device, but will reject messages from
-an ESP8266 device!!!. To receive messages from an ESP8266 device, the AP_IF
-interface must be set to active(True) and messages must be sent to the AP_IF MAC
-address.
-
-It seems a bad idea to force the gateway to run an access point interface
-and it complicates the gateway design to concurrently support two different
-`espnow` interfaces. There is also a question over whether the gateway's AP
-interface will track the channel number of its station interface which is set
-when the station interface connects to the system AP.
-
-Further there is a question whether this behaviour is a feature or a bug -
-in which case it will be fixed in the ESP IDF.
-
-Comments welcome.
 
 # Appendix 1 Power saving
 

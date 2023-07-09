@@ -168,7 +168,7 @@ class MQTT_base:
         self._sock = None
         self._sta_if = network.WLAN(network.STA_IF)
         self._sta_if.active(True)
-        if config["gwtopic"] is not None:  # Called from gateway (hence ESP32).
+        if config["gateway"]:  # Called from gateway (hence ESP32).
             import aioespnow  # Set up ESPNOW
             while not (sta := self._sta_if).active():
                 time.sleep(0.1)

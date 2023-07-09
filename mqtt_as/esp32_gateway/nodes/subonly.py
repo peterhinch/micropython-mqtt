@@ -11,7 +11,7 @@
 # if the AP channel changes after an AP power cycle.
 '''
 To test need something like
-mosquitto_pub -h 192.168.0.10 -t gateway -m "red" -q 1
+mosquitto_pub -h 192.168.0.10 -t allnodes -m "red" -q 1
 or
 mosquitto_pub -h 192.168.0.10 -t foo_topic -m "green" -q 1
 '''

@@ -6,7 +6,10 @@
 '''
 To test need something like
 mosquitto_sub -h 192.168.0.10 -t shed
-mosquitto_pub -h 192.168.0.10 -t gateway -m "hello" -q 1
+mosquitto_pub -h 192.168.0.10 -t foo_topic -m "hello" -q 1
+optionally:
+mosquitto_sub -h 192.168.0.10 -t gw_errors
+mosquitto_sub -h 192.168.0.10 -t gw_status
 '''
 
 import json
