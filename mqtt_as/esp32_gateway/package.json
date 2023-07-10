@@ -1,11 +1,11 @@
 {
   "urls": [
-    ["gateway.py", "github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/gateway.py"],
-    ["gwconfig.py", "github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/gwconfig.py"],
-    ["mqtt_as.py", "github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/mqtt_as.py"],
-    ["mqtt_local.py", "github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/mqtt_local.py"],
-    ["primitives/__init__.py", "github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/primitives/__init__.py"],
-    ["primitives/ringbuf_queue.py", "github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/primitives/ringbuf_queue.py"]
+    ["gateway.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/gateway.py"],
+    ["gwconfig.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/gwconfig.py"],
+    ["mqtt_as.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/mqtt_as.py"],
+    ["mqtt_local.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/mqtt_local.py"],
+    ["primitives/__init__.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/primitives/__init__.py"],
+    ["primitives/ringbuf_queue.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/primitives/ringbuf_queue.py"]
   ],
   "deps": [
     ["collections-defaultdict", "latest"]
