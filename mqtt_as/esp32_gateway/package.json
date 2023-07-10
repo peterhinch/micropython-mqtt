@@ -3,7 +3,7 @@
     ["gateway/gateway.py", "github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/gateway.py"],
     ["gateway/gwconfig.py", "github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/gwconfig.py"],
     ["gateway/mqtt_as.py", "github:peterhinch/micropython-mqtt/mqtt_as/mqtt_as.py"],
-    ["gateway/mqtt_local.py", "github:peterhinch/micropython-mqtt/mqtt_as/mqtt_local.py"],
+    ["gateway/mqtt_local.py", "github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/mqtt_local.py"],
     ["gateway/primitives/__init__.py", "github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/primitives/__init__.py"],
     ["gateway/primitives/ringbuf_queue.py", "github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/primitives/ringbuf_queue.py"]
   ],

@@ -23,10 +23,10 @@ import time
 import uasyncio as asyncio
 from ubinascii import hexlify, unhexlify
 
-from mqtt_as import MQTTClient
-from mqtt_local import config  # Config for mqtt_as client
-from gwconfig import gwcfg  # Config for gateway.
-from primitives import RingbufQueue
+from .mqtt_as import MQTTClient
+from .mqtt_local import config  # Config for mqtt_as client
+from .gwconfig import gwcfg  # Config for gateway.
+from .primitives import RingbufQueue
 
 def printid(iface):
     a = iface.config('mac')
