@@ -133,10 +133,10 @@ Select the hardware to become the gateway. ESP32 or S2 and S3 variants may be
 employed, however I have found a standard ESP32 to suffer fewer communications
 problems than an S3 with SPIRAM. 
 
-Install with
+On the gateway device, connect to WiFi and install with
 ```python
 import mip
-mip.install("github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/package.json")
+mip.install("github:peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/package.json")
 ```
 Edit the file `mqtt_local.py` on the device as per the `mqtt_as` docs to include
 the correct WiFi credentials and broker IP address. Verify thet `mqtt_as` is

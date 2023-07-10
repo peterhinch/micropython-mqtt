@@ -8,7 +8,8 @@
     ["primitives/ringbuf_queue.py", "github:peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/primitives/ringbuf_queue.py"]
   ],
   "deps": [
-    ["collections-defaultdict", "latest"]
+    ["collections-defaultdict", "latest"],
+    ["aioespnow", "latest"]
   ],
   "version": "0.1"
 }
