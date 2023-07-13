@@ -138,25 +138,71 @@ On the gateway device, connect to WiFi and install with
 import mip
 mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway")
 ```
-Edit the file `mqtt_local.py` on the device as per the `mqtt_as` docs to include
-the correct WiFi credentials and broker IP address. Verify thet `mqtt_as` is
-working by running one of the demos e.g. `range.py`.
+Edit the file `lib/gateway/mqtt_local.py` on the device to include the correct
+WiFi credentials and broker IP address. This file is as follows:
+```python
+from sys import platform, implementation
+from .mqtt_as import config
 
-## 4.3 Gateway setup
+# Entries must be edited for local conditions
+config['server'] = '192.168.0.10'  # Broker
+#  config['server'] = 'test.mosquitto.org'
 
-The gateway starts on issuing `import gateway`. On startup it reports its ID as
-an ASCII hex string e.g.
-`b'2462abe6b0b5'`. The file `nodes/common.py` should be edited to refelect this
+config['ssid'] = 'your_network_name'
+config['wifi_pw'] = 'your_password'
+```
+### Gateway test
+
+The following tests verify communication between the gateway and the broker.
+Assuming that the broker is on 192.168.0.10, open a terminal and issue
+```bash
+$ mosquitto_sub -h 192.168.0.10 -t gw_status
+```
+Start the gateway by issuing the import at the device REPL - the following
+output should ensue:
+```python
+>>> import gateway.gateway
+ESPNow ID: b'70041dad8f15'
+Checking WiFi integrity.
+Got reliable connection
+Connecting to broker.
+Connected to broker.
+Gateway b'70041dad8f15' connected to broker 192.168.0.10.
+```
+The terminal running `mosquitto_sub` should show
+```bash
+12/7/2023 16:52:13 Gateway b'70041dad8f15' connected to broker 192.168.0.10.
+```
+A further check is to open another terminal window and issue
+```bash
+$ mosquitto_pub -h 192.168.0.10 -t gw_query -m "hello"
+```
+`mosquitto_sub` should produce a response. Currently this is
+```bash
+12/7/2023 16:52:58 Status request not yet implemented
+```
+but any response proves that the gateway is handling publication and
+subscription. Keep a record of the gateway ID (`b'70041dad8f15'` in the above
+example). This is its MAC address in hex format and is required by the nodes.
+
+## 4.3 Node setup
+
+The following two lines in `nodes/common.py` should be edited to reflect the
+gateway ID and the WiFi channel number. The latter can be set to `None` to scan
+for channels, but this option currently does not work.
 ```python
 gateway = unhexlify(b'2462abe6b0b5')
+channel = 3  # Router channel or None to scan
 ```
-Note that this ID is dependent on the `"use_ap_if"` entry in `gwconfig.py`.
+Note that the gateway ID is dependent on the `"use_ap_if"` entry in
+`gwconfig.py`.
 
-## 4.4 Testing
+The file `common.py` should be copied to the root of all nodes, along with test
+script `synctx.py`.
 
-On an ESP32, ensure that the file `nodes/common.py` has the correct gateway ID
-and WiFi channel number. Copy the files `common.py` and `synctx.py` to the
-device. With the gateway running, run
+## 4.4 Node Testing
+
+With the gateway running, on a node with `common.py` and `synctx.py`, run
 ```python
 import synctx
 ```

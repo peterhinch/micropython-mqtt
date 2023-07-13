@@ -28,9 +28,6 @@ from .mqtt_local import config  # Config for mqtt_as client
 from .gwconfig import gwcfg  # Config for gateway.
 from .primitives import RingbufQueue
 
-def printid(iface):
-    a = iface.config('mac')
-    print(f"ESPNow ID: {hexlify(a)}")
 
 class Gateway:
     def __init__(self):
@@ -59,7 +56,8 @@ class Gateway:
             iface.active(True)
         else:
             iface = self.client._sta_if
-        printid(iface)
+        self.gwid = hexlify(iface.config('mac'))
+        print(f"ESPNow ID: {self.gwid}")
 
     async def run(self):
         try:
@@ -101,9 +99,11 @@ class Gateway:
             await client.up.wait()
             client.up.clear()
             self.connected = True
-            self.pub_status("Gateway connected to broker.")
+            self.pub_status(f"Gateway {self.gwid} connected to broker {config['server']}.")
             for topic in self.topics:
                 await client.subscribe(topic, self.topics[topic][0])
+            sr = gwcfg["statreq"]
+            await client.subscribe(sr.topic, sr.qos)
 
     # Send an ESPNOW message. Return True on success. Failure can occur because
     # node is OOR, powered down or failed. Other failure causes are
@@ -151,7 +151,7 @@ class Gateway:
             except ValueError:  # Not a publication
                 self.debug and self.pub_status(f"Ping or unformatted message from node {node}")
                 continue  # no response required
-            #print(f"ESPnow {mac} node {node} message: {message} msg: {msg}")
+            # print(f"ESPnow {mac} node {node} message: {message} msg: {msg}")
             if node not in self.queues:  # First contact. Initialise.
                 self.queues[node] = RingbufQueue(self.qlen)  # Create a message queue
                 try:
