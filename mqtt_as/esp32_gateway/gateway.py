@@ -19,14 +19,43 @@
 # subscribed. In that way messages may be directed to any subset of nodes.
 
 import json
-import time
+from time import gmtime, localtime
 import uasyncio as asyncio
-from ubinascii import hexlify, unhexlify
+from machine import RTC
+import socket
+import struct
+import select
 
 from .mqtt_as import MQTTClient
 from .mqtt_local import config  # Config for mqtt_as client
 from .gwconfig import gwcfg  # Config for gateway.
 from .primitives import RingbufQueue
+
+
+NTP_DELTA = 3155673600 if gmtime(0)[0] == 2000 else 2208988800
+
+
+def ntp_time(host, offset):  # Local time offset in hrs relative to UTC
+    NTP_QUERY = bytearray(48)
+    NTP_QUERY[0] = 0x1B
+    try:
+        addr = socket.getaddrinfo(host, 123)[0][-1]
+    except OSError:
+        return 0
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    poller = select.poll()
+    poller.register(s, select.POLLIN)
+    try:
+        s.sendto(NTP_QUERY, addr)
+        if poller.poll(1000):  # time in milliseconds
+            msg = s.recv(48)
+            val = struct.unpack("!I", msg[40:44])[0]  # Can return 0
+            return max(val - NTP_DELTA + offset * 3600, 0)
+    except OSError:
+        pass  # LAN error
+    finally:
+        s.close()
+    return 0  # Timeout or LAN error occurred
 
 
 class Gateway:
@@ -56,7 +85,7 @@ class Gateway:
             iface.active(True)
         else:
             iface = self.client._sta_if
-        self.gwid = hexlify(iface.config('mac'))
+        self.gwid = bytes.hex(iface.config('mac'))
         print(f"ESPNow ID: {self.gwid}")
 
     async def run(self):
@@ -79,7 +108,7 @@ class Gateway:
     # Pubish to a PubOut named tuple
     def pub(self, dest, msg):
         self.debug and print(msg)
-        t = time.localtime()
+        t = localtime()
         mesg = f"{t[2]}/{t[1]}/{t[0]} {t[3]:02d}:{t[4]:02d}:{t[5]:02d} {msg}"  # Prepend timestamp
         if dest is not None:
             asyncio.create_task(self.client.publish(dest.topic, mesg, dest.retain, dest.qos))
@@ -95,6 +124,7 @@ class Gateway:
 
     async def up(self):
         client = self.client
+        st = None
         while True:
             await client.up.wait()
             client.up.clear()
@@ -104,6 +134,23 @@ class Gateway:
                 await client.subscribe(topic, self.topics[topic][0])
             sr = gwcfg["statreq"]
             await client.subscribe(sr.topic, sr.qos)
+            if localtime()[0] == 2000 and st is None and gwcfg["ntp_host"] is not False:
+                st = asyncio.create_task(self.set_time())
+                
+    async def set_time(self):
+        rtc = RTC()
+        offset = gwcfg["ntp_offset"]
+        offset = 0 if offset is None else offset
+        host = gwcfg["ntp_host"]
+        host = "pool.ntp.org" if host is None else host
+        while True:
+            if self.connected:
+                t = ntp_time(host, offset)
+                if t:  # NTP lookup succeeded
+                    y, m, d, hr, min, sec, wday, yday = localtime(t)
+                    rtc.datetime((y, m, d, wday, hr, min, sec, 0))
+                    return
+            await asyncio.sleep(300)
 
     # Send an ESPNOW message. Return True on success. Failure can occur because
     # node is OOR, powered down or failed. Other failure causes are
@@ -113,7 +160,7 @@ class Gateway:
         try:
             return await espnow.asend(mac, msg)
         except OSError as e:
-            self.pub_error(f"ESPNow send to {hexlify(mac)} raised {e}")
+            self.pub_error(f"ESPNow send to {bytes.hex(mac)} raised {e}")
             return False
 
     # If no messages are queued try to send an ESPNow message. If this fails,
@@ -129,7 +176,7 @@ class Gateway:
             except IndexError:
                 self.pub_status(f"Gateway:  node {node_id} queue full")  # Overwrite oldest when full
         else:  # No queued messages. May be awake.
-            mac = unhexlify(node_id)
+            mac = bytes.fromhex(node_id)
             if not await self.do_send(mac, ms):  # If send fails queue the message
                 queue.put_nowait(ms)  # Empty so can't overflow
 
@@ -145,7 +192,7 @@ class Gateway:
         client = self.client
         espnow = client._espnow
         async for mac, msg in espnow:
-            node = hexlify(mac)  # MAC as hex bytes
+            node = bytes.hex(mac)  # MAC as hex bytes
             try:
                 message = json.loads(msg)
             except ValueError:  # Not a publication
@@ -157,7 +204,7 @@ class Gateway:
                 try:
                     espnow.add_peer(mac)
                 except OSError as e:
-                    self.pub_error(f"ESPNow add_peer: {hexlify(mac)} raised {e}")
+                    self.pub_error(f"ESPNow add_peer: {bytes.hex(mac)} raised {e}")
                 self.topics[self.puball.topic][1].add(node)  # Add to default "all nodes" topic
             if len(message) == 2:  # It's a subscription.
                 topic, qos = message
@@ -192,7 +239,7 @@ class Gateway:
                 if await self.do_send(mac, ms):  # Message was successfully sent
                     queue.get_nowait()  # so remove from queue
                 else:
-                    self.pub_error(f"Peer {hexlify(mac)} not responding")
+                    self.pub_error(f"Peer {bytes.hex(mac)} not responding")
                     break  # Leave on queue. Don't send more. Try again on next incoming.
 
     # Manage message queues for each node.

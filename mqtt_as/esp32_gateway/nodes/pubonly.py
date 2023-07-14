@@ -13,23 +13,23 @@ mosquitto_sub -h 192.168.0.10 -t light
 
 import json
 from machine import deepsleep, ADC, Pin
-from common import gateway, sta, espnow
+from common import link
+
 breakout = Pin(8, Pin.IN, Pin.PULL_UP)
 if not breakout():  # Debug exit to REPL
     import sys
     sys.exit()
 
-def publish(espnow, topic, msg, retain, qos):
+def publish(topic, msg, retain, qos):
     message = json.dumps([topic, msg, retain, qos])
     try:
-        espnow.send(gateway, message)
+        link.send(message)
     except OSError:  # Radio communications with gateway down.
         pass
 
 adc = ADC(Pin(4), atten = ADC.ATTN_11DB)
 msg = str(adc.read_u16())
-publish(espnow, "light", msg, False, 0)
-espnow.active(False)
-sta.active(False)
+publish("light", msg, False, 0)
+link.close()
 deepsleep(3_000)
 # Now effectively does a hard reset

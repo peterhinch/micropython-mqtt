@@ -19,7 +19,7 @@ mosquitto_pub -h 192.168.0.10 -t foo_topic -m "green" -q 1
 import json
 from machine import deepsleep, Pin
 from neopixel import NeoPixel
-from common import gateway, sta, espnow, subscribe
+from common import link
 from time import sleep_ms
 
 np = NeoPixel(Pin(40), 1)  # 1 LED
@@ -30,15 +30,15 @@ if not breakout():  # Debug exit to REPL after boot
     import sys
     sys.exit()
 
-def trigger(espnow):
+def trigger():
     message = json.dumps(["dummy", "dummy", False, 0])
     try:
-        espnow.send(gateway, message)
+        link.send(message)
     except OSError:  #   # Radio communications with gateway down.
         return
     msg = None
     while True:  # Discard all but last pending message
-        mac, content = espnow.recv(200)
+        mac, content = link.recv(200)
         if mac is None:  # Timeout: no pending message from gateway
             break
         msg = content
@@ -50,12 +50,11 @@ def trigger(espnow):
     np.write()
     sleep_ms(500)  # Not micropower but let user see LED
 
-subscribe("foo_topic", 1)
+link.subscribe("foo_topic", 1)
 #while True:
-    #trigger(espnow)
+    #trigger()
     #sleep_ms(3000)
-trigger(espnow)
-espnow.active(False)
-sta.active(False)
+trigger()
+link.close()
 deepsleep(3_000)
 # Now effectively does a hard reset

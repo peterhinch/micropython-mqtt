@@ -17,3 +17,5 @@ gwcfg["pub_all"] = PubIn("allnodes", 1)  # Publish to all nodes
 gwcfg["errors"] = PubOut("gw_errors", False, 1)  # Gateway publishes any errors.
 gwcfg["status"] = PubOut("gw_status", False, 0)  # Status report
 gwcfg["statreq"] = PubIn("gw_query", 0)  # Status request (not yet implemented)
+gwcfg["ntp_host"] = "192.168.0.10"
+gwcfg["ntp_offset"] = 1

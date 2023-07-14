@@ -48,9 +48,11 @@ where connectivity between the node and gateway is temporarily lost.
 
 This module is under development. The API may change. Areas under discussion
 and not currently supported:
- 1. Support for access points with non-fixed WiFi channel numbers.
- 2. ESPNow message encryption.
- 3. Gateway status reporting.
+ 1. ESPNow message encryption.
+ 2. Gateway status reporting.
+
+Support for AP's with variable channel numbers is implemented but not yet
+documented.
 
 # 2. Files
 
@@ -251,8 +253,8 @@ gwcfg["lpmode"] = True  # Set True if all nodes are micropower: messages are que
 # and only forwarded to the node after it has published.
 # If False the gateway will attempt to send the message on receipt, only queuing
 # it on failure.
-gwcfg["use_ap_if"] = True  # Enable ESP8266 nodes by using AP interface
-# This has the drawback of visibility. If all nodes are ESP32 this may be set False
+gwcfg["use_ap_if"] = True  # Enable ESP8266 nodes by using AP interface. This has
+# the drawback of advertising an AP. If all nodes are ESP32 this may be set False
 # enebling station mode to be used. Note that this affects the gateway ID.
 gwcfg["pub_all"] = PubIn("allnodes", 1)  # Publish to all nodes
 
@@ -260,6 +262,8 @@ gwcfg["pub_all"] = PubIn("allnodes", 1)  # Publish to all nodes
 gwcfg["errors"] = PubOut("gw_errors", False, 1)  # Gateway publishes any errors.
 gwcfg["status"] = PubOut("gw_status", False, 0)  # Destination for status reports.
 gwcfg["statreq"] = PubIn("gw_query", 0)  # Status request (not yet implemented)
+# gwcfg["ntp_host"] = "192.168.0.10"  # Override internet timeserver with local
+gwcfg["ntp_offset"] = 1  # Local time = utc + offset
 ```
 `PubIn` objects refer to topics to which the gateway will respond. `PubOut`
 topics are those to which the gateway may publish. If an error occurs the
@@ -267,6 +271,11 @@ gateway will publish it to the topic defined in "errors". If "debug" is `True`
 it will also print it.
 
 Gateway publications may be prevented by omitting the optional `PubOut` key. 
+
+Gateway error and status reports have a timestamp. The module will attempt to
+set the ESP32 RTC from an NTP timeserver. If the NTP daemon is run on a local
+host the host's IP may be specified. Alternatively time setting may be disabled
+by setting `gwcfg["ntp_host"] = False`.
 
 ## 5.2 Publications from a node
 

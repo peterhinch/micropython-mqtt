@@ -3,113 +3,69 @@
 # (C) Copyright Peter Hinch 2023
 # Released under the MIT licence.
 
-# scan and set_channel functions written by Glenn Moloney @glenn20
-# micropython-espnow-utils:
-# https://github.com/glenn20/micropython-espnow-utils/tree/main
+# Where there are ESP8266 devices the gateway communicates in ap mode.
+# Nodes, whether ESP32 or ESP8266, use station mode.
 
 import network
 import espnow
-from ubinascii import unhexlify
 import json
 import sys
+from time import sleep_ms
 
-# Adapt these two lines
-gateway = unhexlify(b'2462abe6b0b5')  # ESP reference clone AP I/F
-#gateway = unhexlify(b'2462abe6b0b4')  # ESP reference clone Sta I/F
-channel = 3  # Router channel or None to scan
+# Adapt these lines
+gateway = bytes.fromhex(b'2462abe6b0b5')  # ESP reference clone AP I/F
+#gateway = bytes.fromhex(b'2462abe6b0b4')  # ESP reference clone Sta I/F
+channel = 3  # Router channel or None to use connect
+#credentials = ('ssid', 'password')  # Only required if channel is unknown
+DEBUG = True
 
+class Link:
+    def __init__(self):
+        self.reconn = False
+        self.channel = channel
+        self.reconnect()
 
-def set_channel(channel):
-    if sta.isconnected():
-        raise OSError("can not set channel when connected to wifi network.")
-    if ap.isconnected():
-        raise OSError("can not set channel when clients are connected to AP.")
-    if sta.active() and sys.platform != "esp8266":
-        sta.config(channel=channel)  # On ESP32 use STA interface FAIL with RuntimeError: Wifi Unknown Error 0x0102
-        return sta.config("channel")
-    else:
-        # On ESP8266, use the AP interface to set the channel of the STA interface
-        ap_save = ap.active()
-        ap.active(True)
-        ap.config(channel=channel)
-        ap.active(ap_save)
-        return ap.config("channel")
+    def reconnect(self):
+        DEBUG and print("connect", self.reconn)
+        if self.reconn and (channel is not None or sys.platform == "esp8266"):
+            return  # Nothing to do if channel is fixed. ESP8266 auto-reconnects.
+        sta = network.WLAN(network.STA_IF)
+        sta.active(False)
+        ap = network.WLAN(network.AP_IF)
+        ap.active(False)
+        sta.active(True)
+        while not sta.active():
+            sleep_ms(100)
+        if channel is None:
+            sta.connect(*credentials)  # set channel by connecting to AP
+            DEBUG and print("connecting")
+            while not sta.isconnected():
+                sleep_ms(100)
+            DEBUG and print("connected")
+        else:
+            sta.config(channel=channel)
+        sta.config(pm = sta.PM_NONE)  # No power management
+        esp = espnow.ESPNow()  # Returns ESPNow object
+        esp.active(True)
+        try:
+            esp.add_peer(gateway)
+        except OSError:
+            pass  # Already registered
+        self.reconn = True
+        self.esp = esp
+        self.sta = sta
 
+    def send(self, msg):
+        return self.esp.send(gateway, msg)
 
-def scan(peer, retries=5):
-    """Scan the wifi channels to find the given espnow peer device.
+    def recv(self, timeout_ms):
+        return self.esp.recv(timeout_ms)
 
-    If the peer is found, the channel will be printed and the channel number
-    returned.
-    Will:
-        - scan using the STA_IF;
-        - turn off the AP_IF when finished (on esp8266); and
-        - leave the STA_IF running on the selected channel of the peer.
+    def subscribe(self, topic, qos):
+        return self.send(json.dumps([topic, qos]))
 
-    Args:
-        peer (bytes): The MAC address of the peer device to find.
-        retries (int, optional):
-            Number of times to attempt to send for each channel. Defaults to 5.
+    def close(self):
+        self.esp.active(False)
+        self.sta.active(False)
 
-    Returns:
-        int: The channel number of the peer (or 0 if not found)
-    """
-    enow = espnow.ESPNow()
-    enow.active(True)
-    try:
-        enow.add_peer(peer)  # If user has not already registered peer
-    except OSError:
-        pass
-    found = []
-    for channel in range(1, 15):
-        set_channel(channel)
-        for _ in range(retries):
-            if enow.send(peer, b'ping'):
-                found.append(channel)
-                print(f"Found peer {peer} on channel {channel}.")
-                break
-                # return channel
-    if not found:
-        return 0
-    # Because of channel cross-talk we expect more than one channel to be found
-    # If 3 channels found, select the middle one
-    # If 2 channels found: select first one if it is channel 1 else second
-    # If 1 channels found, select it
-    count = len(found)
-    index = 0 if count == 1 or (count == 2 and found[0] == 1) else 1
-    channel = found[index]
-    print(f"Setting wifi channel to {channel}")
-    set_channel(channel)
-    return channel
-
-sta = network.WLAN(network.STA_IF); sta.active(False)
-ap = network.WLAN(network.AP_IF); ap.active(False)
-sta.active(True)
-while not sta.active():
-    time.sleep(0.1)
-if sys.platform == "esp8266":
-    sta.disconnect()
-    while sta.isconnected():
-        time.sleep(0.1)
-    ap.active(True)
-    if channel is None:
-        scan(gateway)
-    else:
-        ap.config(channel=channel)
-    ap.config(pm = sta.PM_NONE)  # No power management
-    ap.active(True)
-else:
-    if channel is None:
-        scan(gateway)
-    else:
-        sta.config(channel=channel)
-    sta.config(pm = sta.PM_NONE)  # No power management
-    sta.active(True)
-espnow = espnow.ESPNow()  # Returns ESPNow object
-espnow.active(True)
-espnow.add_peer(gateway)  # ESP8266 FAIL here if channel was set by scanning.
-def subscribe(topic, qos):
-    espnow.send(gateway, json.dumps([topic, qos]))
-# TODO ping gateway. On fail, scan for it.
-# Also need to ping and optionally scan after WiFi outage
-
+link = Link()
