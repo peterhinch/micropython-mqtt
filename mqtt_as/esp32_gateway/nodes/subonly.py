@@ -2,59 +2,36 @@
 # (C) Copyright Peter Hinch 2023
 # Released under the MIT licence.
 
-# Demonstrate a "subscribe only" micropower application on a UM Feather S3 board.
-# Note a publish must be done to trigger reception of any messages. Demo can
-# receive "red", "green" or "blue" flashing the NeoPixel accordingly before sleeping
-# for 3s.
-
-# Requires AP/router to use a fixed channel, otherwise communications may be lost
-# if the AP channel changes after an AP power cycle.
+# Demonstrate a "subscribe only" micropower application on any ESPx target
+# Echo any incoming message to "shed"
+# Can operate in micropower mode
 '''
 To test need something like
 mosquitto_pub -h 192.168.0.10 -t allnodes -m "red" -q 1
 or
 mosquitto_pub -h 192.168.0.10 -t foo_topic -m "green" -q 1
+and
+mosquitto_sub -h 192.168.0.10 -t shed
 '''
 
-import json
 from machine import deepsleep, Pin
-from neopixel import NeoPixel
-from common import link
+from link import link
 from time import sleep_ms
 
-np = NeoPixel(Pin(40), 1)  # 1 LED
-colors = {"red": (255, 0, 0), "green": (0, 255, 0), "blue": (0, 0, 255)}
+# In micropower mode need a means of getting back to the REPL
+# Check the pin number for your harwdware!
+#link.breakout(Pin(15, Pin.IN, Pin.PULL_UP))  # Pull down for REPL.
 
-breakout = Pin(8, Pin.IN, Pin.PULL_UP)
-if not breakout():  # Debug exit to REPL after boot
-    import sys
-    sys.exit()
+def echo(topic, message, retained):
+    link.publish("shed", message)
 
-def trigger():
-    message = json.dumps(["dummy", "dummy", False, 0])
-    try:
-        link.send(message)
-    except OSError:  #   # Radio communications with gateway down.
-        return
-    msg = None
-    while True:  # Discard all but last pending message
-        mac, content = link.recv(200)
-        if mac is None:  # Timeout: no pending message from gateway
-            break
-        msg = content
-    try:
-        message = json.loads(msg)
-    except (ValueError, TypeError):
-        return  # No message or bad message
-    np[0] = colors[message[1]]
-    np.write()
-    sleep_ms(500)  # Not micropower but let user see LED
 
 link.subscribe("foo_topic", 1)
-#while True:
-    #trigger()
-    #sleep_ms(3000)
-trigger()
-link.close()
-deepsleep(3_000)
-# Now effectively does a hard reset
+while True:
+    if not link.get(echo):
+       print("Comms fail")
+    sleep_ms(3000)
+#link.get(echo)  # Get any pending messages
+#link.close()
+#deepsleep(3_000)
+# Now effectively does a hard reset: main.py restarts the application.

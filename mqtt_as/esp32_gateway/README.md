@@ -67,15 +67,17 @@ This is normally installed with `mip`. Files are listed for reference.
 
 ## 2.2 Nodes
 
-The only required file is `common.py` which should be copied from the `nodes`
-directory to the device root. Note that this file requires customisation before
-copying to identify the gateway and WiFi channel. See [section 4.3](./GATEWAY.md#43-gateway-setup).
+Required files are `link.py` and `link_setup.py` which should be copied from
+the `nodes` directory to the device root. Note that `link_setup.py` requires
+customisation before copying to identify the gateway and either WiFi channel
+or WiFi credentials. See [section 4.3](./GATEWAY.md#43-gateway-setup).
 
-The following demos are optional:
+The following demos are optional. The first two assume a UM FeatherS3 host:
  1. `pubonly.py` Demo of a fixed channel micropower publish-only application.
  2. `subonly.py` As above but subscribe-only.
  3. `synctx` Example of an application which runs continuously, publishing,
- handling incoming messages and doing WiFi/broker outage detection.
+ handling incoming messages and doing WiFi/broker outage detection. Runs on
+ any ESP32 or ESP8266.
 
 # 3. Overview
 
@@ -83,23 +85,16 @@ If the AP channel is fixed, a low power publish-only application can be simple.
 The following publishes a reading once per minute from the ambient light sensor
 of a [FeatherS3 board](https://esp32s3.com/):
 ```python
-import json
 from machine import deepsleep, ADC, Pin
-from common import gateway, sta, espnow  # Boilerplate common to all nodes
-
-def publish(espnow, topic, msg, retain, qos):
-    message = json.dumps([topic, msg, retain, qos])
-    try:
-        espnow.send(gateway, message)
-    except OSError:  # No connectivity with gateway.
-        pass  # Try again next time we wake
+from link import link
+import time
+link.breakout(Pin(8, Pin.IN, Pin.PULL_UP))  # Pull down for debug exit to REPL
 
 adc = ADC(Pin(4), atten = ADC.ATTN_11DB)
 msg = str(adc.read_u16())
-publish(espnow, "light", msg, False, 0)
-espnow.active(False)
-sta.active(False)
-deepsleep(60_000)  # When the ESP32 wakes, main.py restarts the application
+link.publish("light", msg, False, 0)
+link.close()
+deepsleep(60_000)  # main.py runs the app again when deepsleep ends.
 ```
 The gateway forwards the publication to the broker which may be local or on the
 internet.
@@ -270,6 +265,8 @@ topics are those to which the gateway may publish. If an error occurs the
 gateway will publish it to the topic defined in "errors". If "debug" is `True`
 it will also print it.
 
+TODO
+
 Gateway publications may be prevented by omitting the optional `PubOut` key. 
 
 Gateway error and status reports have a timestamp. The module will attempt to
@@ -403,49 +400,30 @@ debugged using a UART and an FTDI adapter.
 An example of a micropower publish-only application is `pubonly.py` and is
 listed in [section 3](./GATEWAY.md#3-overview). A subscribe-only application
 is `subonly.py`, listed below. Note that because a node is deaf when sleeping,
-incoming messages are only received after a publication. A dummy publication
-is used to provoke the gateway into sending any pending messages.
+incoming messages are only received either after a publication or after
+`link.get()`.
 ```python
-import json
 from machine import deepsleep, Pin
-from neopixel import NeoPixel
-from common import gateway, sta, espnow, subscribe
+from link import link
 from time import sleep_ms
 
-np = NeoPixel(Pin(40), 1)  # 1 LED
-colors = {"red": (255, 0, 0), "green": (0, 255, 0), "blue": (0, 0, 255)}
+# In micropower mode need a means of getting back to the REPL
+# Check the pin number for your harwdware!
+#link.breakout(Pin(15, Pin.IN, Pin.PULL_UP))  # Pull down for REPL.
 
-breakout = Pin(8, Pin.IN, Pin.PULL_UP)
-if not breakout():  # Debug exit to REPL after boot
-    import sys
-    sys.exit()
+def echo(topic, message, retained):
+    link.publish("shed", message)
 
-def trigger(espnow):
-    message = json.dumps(["dummy", "dummy", False, 0])
-    try:
-        espnow.send(gateway, message)
-    except OSError:  #   # Radio communications with gateway down.
-        return
-    msg = None
-    while True:  # Discard all but last pending message
-        mac, content = espnow.recv(200)
-        if mac is None:  # Timeout: no pending message from gateway
-            break
-        msg = content
-    try:
-        message = json.loads(msg)
-    except (ValueError, TypeError):
-        return  # No message or bad message
-    np[0] = colors[message[1]]
-    np.write()
-    sleep_ms(500)  # Not micropower but let user see LED
 
-subscribe("foo_topic", 1)
-trigger(espnow)
-espnow.active(False)
-sta.active(False)
-deepsleep(3_000)
-# Now effectively does a hard reset
+link.subscribe("foo_topic", 1)
+while True:
+    if not link.get(echo):
+       print("Comms fail")
+    sleep_ms(3000)
+#link.get(echo)  # Get any pending messages
+#link.close()
+#deepsleep(3_000)
+# Now effectively does a hard reset: main.py restarts the application.
 ```
 This enables an MQTT client to flash the LED on a UM FeatherS3 board with a
 message like
@@ -470,13 +448,10 @@ with messages arriving with minimal latency.
 
 ## 6.3 Case where WiFi channel varies
 
-This is addressed by, in `common.py`, setting `channel = None`. This prompts
-the gateway to scan for channels on startup. A `common.scan()` method is
-available which enables the application to re-scan if communications fail.
-
-Currently this **does not work**.
-
-**TODO** Consult with @glenn20
+This is addressed by, in `link.py`, setting `channel = None`. This prompts
+the gateway to briefly connect to WiFi which sets the channel. The `link`
+instance has a `reconnect` method which provides a means of forcing this if the
+application determines that communications have stopped for a period.
 
 # 7. MQTT - the finer points
 

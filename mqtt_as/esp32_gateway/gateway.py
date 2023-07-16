@@ -180,6 +180,19 @@ class Gateway:
             if not await self.do_send(mac, ms):  # If send fails queue the message
                 queue.put_nowait(ms)  # Empty so can't overflow
 
+    async def qsend(self, node, mac):  # Try to send all a node's queued messages
+        queue = self.queues[node]  # Queue for current node
+        while queue.qsize():
+            ms = queue.peek()  # Retrieve oldest message without removal
+            self.debug and self.pub_status(f"Sending to {node} message {ms}")
+            # Relay any subs back to mac. Note asend can be pessimistic so can get dupes
+            if await self.do_send(mac, ms):  # Message was successfully sent
+                queue.get_nowait()  # so remove from queue
+            else:
+                self.pub_error(f"Peer {bytes.hex(mac)} not responding")
+                break  # Leave on queue. Don't send more. Try again when next poked.
+
+
     # On an incoming ESPNOW message, publish it. Then relay any stored subscribed messages
     # back. Incoming messages are a JSON encoded 4-list:
     # [topic:str, message:str, retain:bool, qos:int]
@@ -195,8 +208,8 @@ class Gateway:
             node = bytes.hex(mac)  # MAC as hex bytes
             try:
                 message = json.loads(msg)
-            except ValueError:  # Not a publication
-                self.debug and self.pub_status(f"Ping or unformatted message from node {node}")
+            except ValueError:  # Messages must be a JSON formatted list.
+                self.debug and self.pub_status(f"Unformatted message {msg} from node {node}")
                 continue  # no response required
             # print(f"ESPnow {mac} node {node} message: {message} msg: {msg}")
             if node not in self.queues:  # First contact. Initialise.
@@ -206,6 +219,10 @@ class Gateway:
                 except OSError as e:
                     self.pub_error(f"ESPNow add_peer: {bytes.hex(mac)} raised {e}")
                 self.topics[self.puball.topic][1].add(node)  # Add to default "all nodes" topic
+            if len(message) == 1:  # Command
+                if message[0] == "get":
+                    await self.qsend(node, mac)  # Send queued messages to node
+                continue  # Ignore pings
             if len(message) == 2:  # It's a subscription.
                 topic, qos = message
                 if topic in self.topics:  # topic is already a client subscription
@@ -231,16 +248,7 @@ class Gateway:
                 asyncio.create_task(client.publish(*message))
             else:  # Discard message, send outage response
                 await self.do_send(mac, outage)
-            queue = self.queues[node]  # Queue for current node
-            while queue.qsize():  # Handle all queued messages for that node
-                ms = queue.peek()  # Retrieve oldest message without removal
-                self.debug and self.pub_status(f"Sending to {node} message {ms}")
-                # Relay any subs back to mac. Note asend can be pessimistic so can get dupes
-                if await self.do_send(mac, ms):  # Message was successfully sent
-                    queue.get_nowait()  # so remove from queue
-                else:
-                    self.pub_error(f"Peer {bytes.hex(mac)} not responding")
-                    break  # Leave on queue. Don't send more. Try again on next incoming.
+            await self.qsend(node, mac)  # Send queued messages to node
 
     # Manage message queues for each node.
     # Both ESPNow and mqtt_as use bytes objects. json.dumps() returns strings.
