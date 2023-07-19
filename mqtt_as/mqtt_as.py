@@ -100,8 +100,8 @@ config = {
     "ssid": None,
     "wifi_pw": None,
     "queue_len": 0,
-    "gwtopic" : None,
-}  # "gwtopic": called from gateway. See docs.
+    "gateway" : False,
+}
 
 
 class MQTTException(Exception):

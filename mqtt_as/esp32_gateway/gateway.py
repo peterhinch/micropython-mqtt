@@ -193,15 +193,10 @@ class Gateway:
                 break  # Leave on queue. Don't send more. Try again when next poked.
 
 
-    # On an incoming ESPNOW message, publish it. Then relay any stored subscribed messages
-    # back. Incoming messages are a JSON encoded 4-list:
-    # [topic:str, message:str, retain:bool, qos:int]
-    # outages: Incoming ESPNow messages are discarded. The response is an outage message
-    # plus any subs that were queued before the outage. Node periodically polls by sending
-    # a message.
+    # On an incoming ESPNOW "publish" message, publish it. Such messages are a JSON encoded
+    # 4-list: [topic:str, message:str, retain:bool, qos:int]
+    # The response to a publish message is a single string: "NAK" or "ACK"
     async def do_esp(self):
-        ack = json.dumps(["ACK", "ACK"])
-        outage = json.dumps(["OUT", "OUT"])
         client = self.client
         espnow = client._espnow
         async for mac, msg in espnow:
@@ -220,9 +215,15 @@ class Gateway:
                     self.pub_error(f"ESPNow add_peer: {bytes.hex(mac)} raised {e}")
                 self.topics[self.puball.topic][1].add(node)  # Add to default "all nodes" topic
             if len(message) == 1:  # Command
-                if message[0] == "get":
+                cmd = message[0]
+                if cmd == "get":
                     await self.qsend(node, mac)  # Send queued messages to node
-                continue  # Ignore pings
+                elif cmd == "ping":
+                    asyncio.sleep_ms(0)  #
+                    await self.do_send(mac, "ACK" if self.connected else "NAK")
+                else:
+                    self.pub_error(f"Warning: unknown command {cmd} from node {node}")
+                continue  # All done
             if len(message) == 2:  # It's a subscription.
                 topic, qos = message
                 if topic in self.topics:  # topic is already a client subscription
@@ -238,17 +239,13 @@ class Gateway:
                 continue
             # args topic, message, retain, qos
             #print(f"Node {node} topic {message[0]} message {message[1]} retain {message[2]} qos {message[3]}")
-            if message[3] & 4:  # Bit 2 (qos==5) indicates ACK
-                await self.do_send(mac, ack)  # Don't care if this fails, app will retry
-                message[3] &= 3
             # Try to ensure .connected is current. Aim is to avoid many pending .publish tasks.
             asyncio.sleep_ms(0)
             if self.connected:  # Run asynchronously to ensure fast response to ESPNow
-                #print("Publish")
                 asyncio.create_task(client.publish(*message))
+                await self.do_send(mac, "ACK")  # Don't care if this fails, app will retry
             else:  # Discard message, send outage response
-                await self.do_send(mac, outage)
-            await self.qsend(node, mac)  # Send queued messages to node
+                await self.do_send(mac, "NAK")
 
     # Manage message queues for each node.
     # Both ESPNow and mqtt_as use bytes objects. json.dumps() returns strings.
