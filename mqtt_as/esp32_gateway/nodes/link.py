@@ -1,4 +1,4 @@
-# common.py Common settings for all nodes
+# link.py An ESPNow link for synchronous nodes
 
 # (C) Copyright Peter Hinch 2023
 # Released under the MIT licence.
@@ -10,11 +10,9 @@ import network
 import json
 import sys
 from time import sleep_ms
+import espnow
 from link_setup import *  # Configuration
-import uasyncio as asyncio
 from primitives import RingbufQueue
-from threadsafe import Message
-import aioespnow
 
 
 class Link:
@@ -22,7 +20,7 @@ class Link:
     PING = json.dumps(["ping"])
 
     def __init__(self, gateway, channel, credentials, debug):
-        self.esp = aioespnow.AIOESPNow()
+        self.esp = espnow.ESPNow()
         debug and print("Link init.")
         self.reconn = False
         self.channel = channel
@@ -30,11 +28,10 @@ class Link:
         self.credentials = credentials
         self.debug = debug
         self.queue = RingbufQueue(10)
-        self.msg_ack = Message()
         self.reconnect()
 
     def reconnect(self):
-        self.debug and print("connect", self.reconn)
+        self.debug and print(f"{'Reconnectig' if self.reconn else 'Connecting'}")
         if self.reconn and (channel is not None or sys.platform == "esp8266"):
             return  # Nothing to do if channel is fixed. ESP8266 auto-reconnects.
         sta = network.WLAN(network.STA_IF)
@@ -58,10 +55,11 @@ class Link:
                 ap.active(False)
             else:
                 sta.config(channel=self.channel)
-        self.debug and print(f"connected on channel {sta.config("channel")}")
+        self.debug and print(f"connected on channel {sta.config('channel')}")
         sta.config(pm=sta.PM_NONE)  # No power management
         # For FeatherS3 https://github.com/orgs/micropython/discussions/12017
-        sta.config(txpower=17)
+        if "ESP32-S3" in sys.implementation._machine:
+            sta.config(txpower=17)
         self.esp.active(True)
         try:
             self.esp.add_peer(self.gateway)
@@ -140,47 +138,5 @@ class Link:
         if not pin():
             sys.exit(0)
 
-    async def _request(self, latency=1000):
-        while True:
-            self.send(Link.GET)
-            await asyncio.sleep_ms(latency)
 
-    async def run(self, latency):  # Launched by application. Handles incoming
-        asyncio.create_task(self._request(latency))
-        async for mac, msg in self.esp:
-            if msg in (b"ACK", b"NAK"):
-                self.msg_ack.set(msg)
-            else:
-                try:
-                    self.queue.put_nowait(msg)
-                except IndexError:
-                    pass  # Message loss will occur if app does not remove them promptly
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        while True:
-            msg = await self.queue.get()
-            try:
-                message = json.loads(msg)
-            except ValueError:
-                continue
-            return message
-
-    async def apublish(self, topic, msg, retain=False, qos=0):
-        message = json.dumps([topic, msg, retain, qos])
-        try:
-            self.msg_ack.clear()
-            if not await self.asend(message):
-                return False
-            try:
-                msg = asyncio.wait_for_ms(self.msg_ack.wait(), 500)
-            except asyncio.TimeoutError:
-                return False
-            return msg == b"ACK"
-        except OSError:  # Radio communications with gateway down.
-            pass
-        return False
-
-gwlink = Link(gateway, channel, credentials, debug)  # From node_setup.py
+gwlink = Link(gateway, channel, credentials, debug)

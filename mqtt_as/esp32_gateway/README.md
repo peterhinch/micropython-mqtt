@@ -46,10 +46,8 @@ where connectivity between the node and gateway is temporarily lost.
 
 ## Under development
 
-This module is under development. The API may change. Areas under discussion
-and not currently supported:
- 1. ESPNow message encryption.
- 2. Gateway status reporting.
+This module is under development and the documentation is a long way behind the
+code. Please wait until I can release a stable, documented version.
 
 Support for AP's with variable channel numbers is implemented but not yet
 documented.
