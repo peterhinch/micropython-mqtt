@@ -103,7 +103,7 @@ class Link:
         if self.send(Link.PING):
             mac, msg = self.recv(200)
             if mac is not None:
-                return msg  # b"ACK" or b"NAK" depending on broker status
+                return msg  # b"UP" or b"DOWN" depending on broker status
         return b"FAIL"  # ESPNow comms fail
 
     def get(self, subs):
