@@ -16,7 +16,7 @@ mosquitto_sub -h 192.168.0.10 -t gw_status
 '''
 
 import time, gc
-from link import gwlink 
+from .link import gwlink 
 
 def subs(topic, message, retained):  # Handle subscriptions
     print(f'Got subscription   topic: "{topic}" message: "{message}" retained {retained}')

@@ -10,7 +10,7 @@ mosquitto_sub -h 192.168.0.10 -t shed
 '''
 
 from machine import deepsleep, ADC, Pin
-from link import gwlink
+from .link import gwlink
 from esp32 import NVS
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!

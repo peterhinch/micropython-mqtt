@@ -11,8 +11,8 @@ import json
 import sys
 from time import sleep_ms
 import espnow
-from link_setup import *  # Configuration
-from primitives import RingbufQueue
+from .link_setup import *  # Configuration
+from .primitives import RingbufQueue
 
 
 class Link:

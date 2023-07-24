@@ -15,7 +15,7 @@ mosquitto_sub -h 192.168.0.10 -t shed
 '''
 
 from machine import deepsleep, Pin
-from link import gwlink
+from .link import gwlink
 from time import sleep_ms
 
 # In micropower mode need a means of getting back to the REPL

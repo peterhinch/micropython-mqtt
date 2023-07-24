@@ -19,9 +19,9 @@ import time
 import gc
 from machine import Pin
 from neopixel import NeoPixel
-from link import gwlink 
 import uasyncio as asyncio
-from primitives import Delay_ms
+from .link import gwlink 
+from .primitives import Delay_ms
 
 black = (0, 0, 0)
 red = (255, 0, 0)

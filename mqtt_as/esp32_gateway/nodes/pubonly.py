@@ -10,7 +10,7 @@ mosquitto_sub -h 192.168.0.10 -t light
 '''
 
 from machine import deepsleep, ADC, Pin
-from link import gwlink
+from .link import gwlink
 from neopixel import NeoPixel
 import time
 # In micropower mode need a means of getting back to the REPL

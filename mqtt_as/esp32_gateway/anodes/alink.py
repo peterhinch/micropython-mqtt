@@ -9,8 +9,8 @@
 import network
 import json
 import sys
-from link_setup import *  # Configuration
-from primitives import RingbufQueue
+from .link_setup import *  # Configuration
+from .primitives import RingbufQueue
 import uasyncio as asyncio
 import aioespnow
 
