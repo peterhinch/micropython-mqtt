@@ -42,8 +42,9 @@ class ALink:
         self.queue = RingbufQueue(10)
 
     async def reconnect(self):
+        esp8266 = sys.platform == "esp8266"
         self.debug and print("connect", self.reconn)
-        if self.reconn and (channel is not None or sys.platform == "esp8266"):
+        if self.reconn and (channel is not None or esp8266):
             return  # Nothing to do if channel is fixed. ESP8266 auto-reconnects.
         sta = network.WLAN(network.STA_IF)
         sta.active(False)
@@ -58,7 +59,7 @@ class ALink:
             while not sta.isconnected():
                 await asyncio.sleep_ms(100)
         else:
-            if sys.platform == "esp8266":
+            if esp8266:
                 ap.active(True)
                 while not ap.active():
                     await asyncio.sleep_ms(100)
@@ -66,7 +67,9 @@ class ALink:
                 ap.active(False)
             else:
                 sta.config(channel=self.channel)
-        self.debug and print(f"connected on channel {sta.config('channel')}")
+        if  self.debug:
+            dev = ap if esp8266 else sta
+            print(f"connected on channel {dev.config('channel')}")
         sta.config(pm=sta.PM_NONE)  # No power management
         # For FeatherS3 https://github.com/orgs/micropython/discussions/12017
         if "ESP32-S2" in sys.implementation._machine:
