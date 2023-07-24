@@ -15,7 +15,6 @@ mosquitto_sub -h 192.168.0.10 -t gw_errors
 mosquitto_sub -h 192.168.0.10 -t gw_status
 '''
 
-import time
 import gc
 from machine import Pin
 from neopixel import NeoPixel

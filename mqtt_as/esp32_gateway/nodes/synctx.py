@@ -30,8 +30,10 @@ while True:
     while not gwlink.publish("shed", f"Count {n} Response fails {nr_count} mem_free {gc.mem_free()}", qos=1):
         nr_count += 1  # Radio connectivity/Gateway/AP/broker is down.
         nfails += 1
+        print('fail', nfails)
         time.sleep(10)  # A real app might deeplsleep for a while
         if nfails > 5:  # There is a real outage, channel may have changed
+            print('GH about to reconnect')
             gwlink.reconnect()
             nfails = 0  # Don't keep reconnecting frequently
     else:

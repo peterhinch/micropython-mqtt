@@ -44,8 +44,8 @@ class ALink:
     async def reconnect(self):
         esp8266 = sys.platform == "esp8266"
         self.debug and print("connect", self.reconn)
-        if self.reconn and (channel is not None or esp8266):
-            return  # Nothing to do if channel is fixed. ESP8266 auto-reconnects.
+        if self.reconn and channel is not None:
+            return  # Nothing to do if channel is fixed.
         sta = network.WLAN(network.STA_IF)
         sta.active(False)
         ap = network.WLAN(network.AP_IF)

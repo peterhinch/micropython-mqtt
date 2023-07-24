@@ -1,5 +1,4 @@
 # mqtt_local.py Local configuration for gateway.
-from sys import platform, implementation
 from .mqtt_as import config
 
 # Entries must be edited for local conditions

@@ -37,16 +37,16 @@ supports only basic publish and subscribe MQTT operations, whereas the
 
 The `qos==1` guarantee is honoured for publications from the node. Messages to
 the node are dependent on the reliability of the ESPNow interface. In testing
-no failures have been observed but it is not possible to guarantee that a
-`qos==1` message will be received.
+no failures have been observed but it is not possible to provide an absolute
+guarantee that a `qos==1` message will be received.
 
 Handling of broker outages and WiFi channel changes is automatic in an
-`mqtt_as` client. Continuously running nodes with asynchronous code behave
-similarly. Synchronous nodes need some simple application support to re-connect
-after an outage.
+`mqtt_as` client. Applications running on nodes need application support to
+re-connect after an outage, however this is very simple.
 
 On the plus side code is small and can be run on an ESP8266 without special
-precautions. Achieving long term battery opertaion is easy.
+precautions with over 25K of free RAM. Achieving long term battery opertaion is
+easy.
 
 ## 1.2 Hardware
 
@@ -58,8 +58,7 @@ with recommendations from a hardware manufacturer.
 
 ## Under development
 
-This module is under development and may have bugs. Asynchronous node support
-is particularly unstable and should be avoided pending testing.
+This module is under development. Code should be considered beta quality.
 
 # 2. Overview
 
@@ -74,7 +73,7 @@ from link import gwlink
 import time
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!
-# gwlink.breakout(Pin(8, Pin.IN, Pin.PULL_UP))  # Pull down for debug exit to REPL
+gwlink.breakout(Pin(8, Pin.IN, Pin.PULL_UP))  # Pull down for debug exit to REPL
 
 adc = ADC(Pin(4), atten = ADC.ATTN_11DB)
 msg = str(adc.read_u16())
@@ -87,6 +86,8 @@ internet.
 
 ## 2.2 Micropower subscribe-only applications
 
+The following script wakes every 10s, receives any messages published to
+"foo_topic" or "allnodes" and re-publishes them to "shed".
 ```python
 from machine import deepsleep, Pin
 from link import gwlink
@@ -140,7 +141,6 @@ mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway")
 Edit the file `lib/gateway/mqtt_local.py` on the device to include the correct
 WiFi credentials and broker IP address. This file is as follows:
 ```python
-from sys import platform, implementation
 from .mqtt_as import config
 
 # Entries must be edited for local conditions
@@ -198,10 +198,14 @@ creates the following variables:
  3. `channel` Set to channel number if fixed, else `None`.
  4. `credentials` Set to `None` if channel is fixed else `('ssid', 'password')`.
 
-Thus if the channel is fixed the following edits would be made:
+The following edit is required in all cases:
 ```python
-gateway = bytes.fromhex(b'2462abe6b0b5')
+gateway = bytes.fromhex(b'2462abe6b0b5')  # Your gateway MAC
+```
+If the AP channel is fixed the following edits would be made:
+```python
 channel = 3  # Router channel or None to scan
+credentials = None
 ```
 If the channel number is unknown or may vary, use
 ```python
@@ -210,7 +214,7 @@ credentials = ('ssid', 'password')
 ```
 The following demos will be installed on the node:
  1. `synctx.py` General demo of publication and subscription.
- 2. `pubonly.py` Micropower publish-only demo.
+ 2. `pubonly.py` Micropower publish-only demo. Assumes a FeatherS3 board.
  3. `subonly.py` Micropower subscribe-only demo.
 
 ## 3.5 Synchronous Node Testing
