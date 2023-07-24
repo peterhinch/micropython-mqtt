@@ -20,7 +20,7 @@ import gc
 from machine import Pin
 from neopixel import NeoPixel
 import uasyncio as asyncio
-from .link import gwlink 
+from .alink import gwlink 
 from .primitives import Delay_ms
 
 black = (0, 0, 0)
@@ -58,7 +58,6 @@ async def broker(lk, np):
 
 # Publish blocks indefinitely on outage. Reconnect to WiFi to enable ESPNOW if it takes too long.
 async def main(lk):
-    global 
     np = NeoPixel(Pin(40), 1)
     asyncio.create_task(lk.run())
     asyncio.create_task(do_subs(lk))

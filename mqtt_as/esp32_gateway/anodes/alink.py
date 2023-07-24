@@ -112,7 +112,7 @@ class ALink:
     async def _poll(self):
         while True:
             t = self._poll_ms
-            if not await self._a_send(Link.AGET):
+            if not await self._a_send(ALink.AGET):
                 t *= 4  # Poll less frequently during an outage
             await asyncio.sleep_ms(t)
 
