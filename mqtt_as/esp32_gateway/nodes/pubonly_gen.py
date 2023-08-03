@@ -10,8 +10,11 @@ mosquitto_sub -h 192.168.0.10 -t shed
 '''
 
 from machine import deepsleep, ADC, Pin
-from .link import gwlink
 from esp32 import NVS
+from .link import Link
+from .link_setup import gateway, channel, credentials  # Args common to all nodes
+gwlink = Link(gateway, channel, credentials)
+
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!
 #gwlink.breakout(Pin(8, Pin.IN, Pin.PULL_UP))  # Pull down for debug exit to REPL

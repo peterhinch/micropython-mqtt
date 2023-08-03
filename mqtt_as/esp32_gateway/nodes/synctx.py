@@ -16,7 +16,9 @@ mosquitto_sub -h 192.168.0.10 -t gw_status
 '''
 
 import time, gc
-from .link import gwlink 
+from .link import Link, PUB_OK, BROKER_OUT, ESP_FAIL, PUB_FAIL
+from .link_setup import gateway, channel, credentials  # Common args
+gwlink = Link(gateway, channel, credentials)
 
 def subs(topic, message, retained):  # Handle subscriptions
     print(f'Got subscription   topic: "{topic}" message: "{message}" retained {retained}')
@@ -24,20 +26,21 @@ def subs(topic, message, retained):  # Handle subscriptions
 gwlink.subscribe("foo_topic", 1)
 n = 0  # Message count
 nr_count = 0  # Message failure count
+br_count = 0  # Broker fail count
+print("Actual channel", gwlink.get_channel())  # Demo means of querying channel of gateway
 while True:
-    nfails = 0  # Attempt to reconnect after 5 consecutive failures
     gc.collect()
-    while not gwlink.publish("shed", f"Count {n} Response fails {nr_count} mem_free {gc.mem_free()}", qos=1):
-        nr_count += 1  # Radio connectivity/Gateway/AP/broker is down.
-        nfails += 1
-        print('fail', nfails)
-        time.sleep(10)  # A real app might deeplsleep for a while
-        if nfails > 5:  # There is a real outage, channel may have changed
-            print('GH about to reconnect')
-            gwlink.reconnect()
-            nfails = 0  # Don't keep reconnecting frequently
-    else:
+    while gwlink.ping() != PUB_OK:
+        time.sleep(1)  # Wait for connectivity
+    args = ("shed", f"Count {n} ESPNow fails {nr_count} Broker fails {br_count} mem_free {gc.mem_free()}", False, 1)
+    if (res := gwlink.publish(*args)) == PUB_OK:
         gwlink.get(subs)
-        nfails = 0
-        time.sleep(3)
-    n += 1
+        n += 1
+    elif res == ESP_FAIL:  # ESPNow problem
+        nr_count += 1
+    elif res == BROKER_OUT:  # Pub queue is filling
+        br_count += 1
+    time.sleep(3)
+
+# No missed messages on broker out, but get dupes and queueing.
+# While WiFi out, miss incoming subs.

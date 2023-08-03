@@ -86,7 +86,10 @@ class Gateway:
         else:
             iface = self.client._sta_if
         self.gwid = bytes.hex(iface.config('mac'))
+        self.iface = iface
         print(f"ESPNow ID: {self.gwid}")
+        self.pubq = RingbufQueue(10)  # Publication queue
+        self.pub_threshold = 5  # Warn caller of q filling
 
     async def run(self):
         try:
@@ -97,7 +100,12 @@ class Gateway:
         asyncio.create_task(self.up())
         asyncio.create_task(self.down())
         asyncio.create_task(self.messages())
+        asyncio.create_task(self.publisher())
         await self.do_esp()  # Forever
+
+    async def publisher(self):
+        async for message in self.pubq:
+            await self.client.publish(*message)
 
     def pub_error(self, msg):
         self.pub(self.puberr, msg)
@@ -192,18 +200,6 @@ class Gateway:
                 self.pub_error(f"Peer {bytes.hex(mac)} not responding")
                 break  # Leave on queue. Don't send more. Try again when next poked.
 
-    async def ack_nak(self, mac):
-        await asyncio.sleep(2)  # TODO review this
-        await self.do_send(mac, "NAK")
-        self.connected = False
-
-    async def do_publish(self, message, mac):
-        an = asyncio.create_task(self.ack_nak(mac))  # Send NAK unless quickly cancelled
-        await self.client.publish(*message)
-        an.cancel()  # Cancel NAK (unless already sent)
-        await self.do_send(mac, "ACK")
-        self.connected = True
-
     # On an incoming ESPNOW "publish" message, publish it. Such messages are a JSON encoded
     # 4-list: [topic:str, message:str, retain:bool, qos:int]
     # The response to a publish message is a single string: "NAK" or "ACK"
@@ -225,14 +221,17 @@ class Gateway:
                 except OSError as e:
                     self.pub_error(f"ESPNow add_peer: {bytes.hex(mac)} raised {e}")
                 self.topics[self.puball.topic][1].add(node)  # Add to default "all nodes" topic
+            self.connected = self.client.isconnected()  # Ensure up to date
             if len(message) == 1:  # Command
                 cmd = message[0]
+                if cmd == "chan":
+                    await self.do_send(mac, str(self.iface.config("channel")))
+                    continue
                 if cmd == "ping" or cmd == "aget":
-                    await asyncio.sleep_ms(0)  # Ensure .connected is current
                     await self.do_send(mac, "UP" if self.connected else "DOWN")
                 if cmd == "get" or cmd == "aget":
                     await self.qsend(node, mac)  # Send queued messages to node
-                if cmd not in ("ping", "gat", "aget"):
+                if cmd not in ("ping", "get", "aget"):
                     self.pub_error(f"Warning: unknown command {cmd} from node {node}")
                 continue  # All done
             if len(message) == 2:  # It's a subscription.
@@ -251,7 +250,13 @@ class Gateway:
             # args topic, message, retain, qos
             #print(f"Node {node} topic {message[0]} message {message[1]} retain {message[2]} qos {message[3]}")
             # Publish asynchronously to ensure quick response to ESPNow
-            asyncio.create_task(self.do_publish(message, mac))
+            # Link gets immediate ACK/NAK response
+            if self.pubq.full():
+                reply = "BAD"  # Message loss
+            else:
+                self.pubq.put_nowait(message)
+                reply = "NAK" if self.pubq.qsize() > self.pub_threshold else "ACK"
+            await self.do_send(mac, reply)
 
     # Manage message queues for each node.
     # Both ESPNow and mqtt_as use bytes objects. json.dumps() returns strings.

@@ -69,8 +69,10 @@ reading once per minute from the ambient light sensor of a
 [FeatherS3 board](https://esp32s3.com/):
 ```python
 from machine import deepsleep, ADC, Pin
-from link import gwlink
 import time
+from .link import Link
+from .link_setup import gateway, channel, credentials  # Args common to all nodes
+gwlink = Link(gateway, channel, credentials)
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!
 gwlink.breakout(Pin(8, Pin.IN, Pin.PULL_UP))  # Pull down for debug exit to REPL
@@ -90,7 +92,9 @@ The following script wakes every 10s, receives any messages published to
 "foo_topic" or "allnodes" and re-publishes them to "shed".
 ```python
 from machine import deepsleep, Pin
-from link import gwlink
+from .link import Link
+from .link_setup import gateway, channel, credentials  # Args common to all nodes
+gwlink = Link(gateway, channel, credentials)
 
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!
@@ -193,7 +197,7 @@ mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/nodes")
 ```
 Node configuration is done by editing the file `lib/nodes/link_setup.py`. This
 creates the following variables:
- 1. `gateway` MAC address of the gateway as a 12 character bytestring.
+ 1. `gateway` MAC address of the gateway as a 12 character string.
  2. `debug` `True` to output debug messages.
  3. `channel` Set to channel number if fixed, else `None`.
  4. `credentials` Set to `None` if channel is fixed else `('ssid', 'password')`.
@@ -267,31 +271,39 @@ changing the IP address:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```
-# 5. The gwlink object
+# 5. The Link class
 
 There are two versions of this supporting synchronous and asynchronous code. It
 is instantiated when `link.py` or `alink.py` is imported.
 
 ## 5.1 Synchronous version
 
+Constructor args. These are normally defined in `link_setup.py` to enable the
+setup of mutiple nodes with common values.
+ 1. `gateway` 12 character string representing gateway ID e.g. '2462abe6b0b5'.
+ 2. `channel` Channel no. if known, else `None`
+ 3. `credentials` `('ssid', 'password')` if `channel == None` else `None`
+ 4. `debug=True`
+
 Public methods:
  1. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)`
  2. `subscribe(topic:str, qos:int)`
- 3. `reconnect()` This only needs to be called in continuously running
- applications and when the AP may change the channel. Call when a  long outage
- occurs.
- 4. `get(callback)` Receieve any pending messages. The callback will be run for
+ 3. `get(callback)` Receieve any pending messages. The callback will be run for
  each message. It takes args `topic:str, message:str, retained:bool`. The `get`
  method returns `True` on success, `False` on communications failure.
- 5. `ping()` Check the gateway status. Returns `b"UP"` on success, `b"DOWN"` on
+ 4. `ping()` Check the gateway status. Returns `b"UP"` on success, `b"DOWN"` on
  broker failure or `b"FAIL"` on ESPNow comms failure.
- 6. `close()` This should be run prior to `deepsleep`.
- 7. `breakout(Pin)` This is a convenience function for micropower applications.
+ 5. `close()` This should be run prior to `deepsleep`.
+ 6. `breakout(Pin)` This is a convenience function for micropower applications.
  It can be hard to get back to a REPL when `main.py` immediately restarts an
- application. Initialising this with a `Pin` instance defined with 
- `Pin.PULL_UP` allows the REPL to be regained by resetting the node with a link
- between the pin and gnd.
-
+ application. Initialising `breakout` with a `Pin` instance defined with 
+ `Pin.PULL_UP` allows the REPL to be regained: the node should be reset or
+ power cycled with a link between the pin and gnd.
+ 7. `get_channel()` Query the gateway's current channel. Returns an `int` or
+ `None` on fail.
+ 8. `reconnect()` Force a reconnection. Returns the channel number. See note
+ below.
+ 
 ## 5.2 Asynchronous version
 
 Public asynchronous methods: 
@@ -327,18 +339,12 @@ async def do_subs(lk):
     async for topic, message, retained in lk:
         print(f'Got subscription   topic: "{topic}" message: "{message}" retained {retained}')
 ```
-Handling channel changes:  
-If the AP changes channel, all ESPNow communications will fail. This may be
-handled using the `Event` instances or by using a
-[Delay_ms object](https://github.com/peterhinch/micropython-async/blob/master/v3/docs/TUTORIAL.md#38-delay_ms-class).
-In this code fragement `lk` is the `gwlink` instance:
-```python
-    lk_timeout = Delay_ms(lk.reconnect, duration = 30_000)
-    while True:
-        lk_timeout.trigger()
-        await lk.pubish(...)  # will block if channel has changed
-        # If it blocks longer than 30s .reconnect is launched
-```
+#### Handling channel changes - This is under review
+
+Continuously running applications started with `channel=None` automatically
+track changes in channel, albeit with some message duplication. The method of
+handling channel changes in micropower applications is under review.
+
 ## 5.3 Publication to all nodes
 
 There is a topic `"allnodes"`: if an external device publishes to this topic,
@@ -546,24 +552,26 @@ listed in [section 2.1](./GATEWAY.md#21-micropower-publish-only-applications).
 A subscribe-only application is `subonly.py`, listed below:
 ```python
 from machine import deepsleep, Pin
-from link import link
 from time import sleep_ms
+from .link import Link
+from .link_setup import gateway, channel, credentials  # Common args
+gwlink = Link(gateway, channel, credentials)
 
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!
 #link.breakout(Pin(15, Pin.IN, Pin.PULL_UP))  # Pull down for REPL.
 
 def echo(topic, message, retained):
-    link.publish("shed", message)
+    gwlink.publish("shed", message)
 
 
-link.subscribe("foo_topic", 1)
+gwlink.subscribe("foo_topic", 1)
 #while True:
-    #if not link.get(echo):
+    #if not gwlink.get(echo):
        #print("Comms fail")
     #sleep_ms(3000)
-link.get(echo)  # Get any pending messages
-link.close()
+gwlink.get(echo)  # Get any pending messages
+gwlink.close()
 deepsleep(3_000)
 # Now effectively does a hard reset: main.py restarts the application.
 ```
@@ -576,10 +584,15 @@ mosquitto_pub -h 192.168.0.10 -t allnodes -m "test message" -q 1
 ## 6.2 Continuous running - synchronous
 
 If power consumption is not a concern a node may be kept running continuously.
-If the AP is able to change the channel, communications will fail until
-`link.reconnect()` is called. The application should check for long periods of
-outage and issue `.reconnect()`. Outages may be detected by checking the return
-value of `link.publish()` or by periodically issuing `link.ping()`.
+If the AP is able to change the channel, communications will fail briefly
+before recovering. There is a high probability of duplicate publications from
+nodes: this seems to occur because ESPNow reports failure when the message has
+been successfully sent. The `False` value from `link.publish` causes the
+application to repeat the publication.
+
+Connectivity outages can occur, for example by a node moving out of range.
+These may be detected by checking the return value of `link.publish()` or by
+periodically issuing `link.ping()`.
 
 ## 6.3 Continuous running - asynchronous
 
