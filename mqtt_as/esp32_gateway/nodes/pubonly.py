@@ -2,6 +2,8 @@
 # (C) Copyright Peter Hinch 2023
 # Released under the MIT licence.
 
+# On ESP8266 need to connect GPIO16 to Rst to wake from deepsleep
+
 # A synchronous ESPNOW node publishes the reading of a Feather S3 ambient light sensor.
 # If a WiFi/broker outage occurs, messages are lost for the duration.
 '''
@@ -18,9 +20,12 @@ Need a mechanism where, if successive runs fail, the file is deleted.
 from machine import deepsleep, ADC, Pin
 from neopixel import NeoPixel
 import time
-from .link import Link
+from .link import Link, PUB_OK
 from .link_setup import gateway, channel, credentials  # Args common to all nodes
-gwlink = Link(gateway, channel, credentials)
+try:
+    gwlink = Link(gateway, channel, credentials)
+except OSError:
+    deepsleep(3_000)  # Failed to connect. Out of range?
 
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!
@@ -29,7 +34,7 @@ np = NeoPixel(Pin(40), 1)
 
 adc = ADC(Pin(4), atten = ADC.ATTN_11DB)
 msg = str(adc.read_u16())
-if not gwlink.publish("light", msg, False, 0):
+if gwlink.publish("light", msg, False, 0) != PUB_OK:
     np[0] = (255, 0, 0)
     np.write()
     time.sleep_ms(500)

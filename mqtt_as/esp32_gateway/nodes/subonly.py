@@ -18,7 +18,10 @@ from machine import deepsleep, Pin
 from time import sleep_ms
 from .link import Link
 from .link_setup import gateway, channel, credentials  # Args common to all nodes
-gwlink = Link(gateway, channel, credentials)
+try:
+    gwlink = Link(gateway, channel, credentials)
+except OSError:
+    deepsleep(3_000)  # Failed to connect. Out of range?
 
 # In micropower mode need a means of getting back to the REPL
 # Check the pin number for your harwdware!

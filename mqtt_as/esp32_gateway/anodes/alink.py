@@ -9,6 +9,7 @@
 import network
 import json
 import sys
+from time import ticks_ms, ticks_diff
 from .link_setup import *  # Configuration
 from .primitives import RingbufQueue
 import uasyncio as asyncio
@@ -16,13 +17,15 @@ import aioespnow
 
 
 class ALink:
-    GET = json.dumps(["get"])
     AGET = json.dumps(["aget"])
-    PING = json.dumps(["ping"])
+    txpower = None  # Set to 17 before instantiating for early FeatherS3 boards
 
     def __init__(self, gateway, channel, credentials, debug, poll_interval):
         self.esp = aioespnow.AIOESPNow()
-        debug and print("Link init.")
+        if isinstance(channel, int) or isinstance(credentials, tuple):
+            debug and print("Link init.")
+        else:
+            raise ValueError("Must supply channel or WiFi credentials.")
         self._evt_ack = asyncio.Event()
         self._poll_ms = poll_interval
         self._esp_connected = False
@@ -43,47 +46,51 @@ class ALink:
 
     async def reconnect(self):
         esp8266 = sys.platform == "esp8266"
-        self.debug and print("connect", self.reconn)
-        if self.reconn and channel is not None:
-            return  # Nothing to do if channel is fixed.
+        channel = self.channel
+        self.debug and print(f"reconnect chan {self.channel} creds {self.credentials}")
         sta = network.WLAN(network.STA_IF)
-        sta.active(False)
-        ap = network.WLAN(network.AP_IF)
-        ap.active(False)
+        self.sta = sta
         sta.active(True)
         while not sta.active():
             await asyncio.sleep_ms(100)
-        if self.channel is None:
-            sta.connect(*self.credentials)  # set channel by connecting to AP
-            self.debug and print("connecting")
+        ap = network.WLAN(network.AP_IF)
+        self.ap = ap
+        if esp8266:
+            ap.active(True)
+            while not ap.active():
+                await asyncio.sleep_ms(100)
+            dev = ap
+        else:
+            dev = sta
+            ap.active(False)
+
+        # Determine channel to use
+        if isinstance(channel, int):  # Channel is fixed
+            dev.config(channel=channel)
+        elif isinstance(credentials, tuple):  # Find chan by connect
+            sta.connect(*self.credentials)
+            self.debug and print("Link connecting to AP")
+            start = ticks_ms()
             while not sta.isconnected():
                 await asyncio.sleep_ms(100)
-        else:
-            if esp8266:
-                ap.active(True)
-                while not ap.active():
-                    await asyncio.sleep_ms(100)
-                ap.config(channel=self.channel)
-                ap.active(False)
-            else:
-                sta.config(channel=self.channel)
-        if  self.debug:
-            dev = ap if esp8266 else sta
-            print(f"connected on channel {dev.config('channel')}")
+                if ticks_diff(ticks_ms(), start) > 5_000:
+                    raise OSError("Wifi connect fail")
+
+        self.debug and print(f"connected on channel {dev.config('channel')}")
         sta.config(pm=sta.PM_NONE)  # No power management
-        # For FeatherS3 https://github.com/orgs/micropython/discussions/12017
-        if "ESP32-S2" in sys.implementation._machine:
-            sta.config(txpower=17)
+        if ALink.txpower is not None:
+            sta.config(txpower=self.txpower)
+        self.init_esp()
+        ap.active(False)
+
+    def init_esp(self):
         self.esp.active(True)
         try:
             self.esp.add_peer(self.gateway)
         except OSError:
             pass  # Already registered
-        self.reconn = True
-        self.sta = sta
 
-
-    async def subscribe(self, topic, qos):  # TODO should there be an a_send lock?
+    async def subscribe(self, topic, qos):
         return self._a_send(json.dumps([topic, qos]))
 
     def _esp_status(self, up):  # Update status of ESPNow interface
@@ -132,7 +139,7 @@ class ALink:
             if cmd in (b"UP", b"ACK"):
                 self.broker_up.set()
                 self._wifi_connected = True
-            elif cmd in (b"DOWN", b"NAK"):
+            elif cmd in (b"DOWN", b"NAK", b"BAD"):
                 self.broker_down.set()
                 self._wifi_connected = False
             else:
@@ -168,5 +175,4 @@ class ALink:
     def close(self):
         self.esp.active(False)
         self.sta.active(False)
-
-gwlink = ALink(gateway, channel, credentials, debug, poll_interval)  # From link_setup.py
+        self.ap.active(False)

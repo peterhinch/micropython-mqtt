@@ -9,7 +9,7 @@
 import network
 import json
 import sys
-from time import sleep_ms
+from time import sleep_ms, ticks_ms, ticks_diff
 import espnow
 from .link_setup import *  # Configuration
 from .primitives import RingbufQueue
@@ -19,69 +19,87 @@ BROKER_OUT = const(1)
 ESP_FAIL = const(2)
 PUB_FAIL = const(3)
 
+# For FeatherS3 see https://github.com/orgs/micropython/discussions/12017
+# Board releases prior to P8 or U8 set txpower=17
+
+# Micropower apps either set channel=N if known else set channel=None and credentials=None
+# In this case channel is found by testing each one for a response from gateway.
+# Strategies include initially setting channel=None, storing the outcome in RTC RAM.
+# Repeated errors provoke re-trying with None
+
 class Link:
     GET = json.dumps(["get"])
     PING = json.dumps(["ping"])
     CHAN = json.dumps(["chan"])
+    txpower = None  # Set to 17 before instantiating for early FeatherS3 boards
 
     def __init__(self, gateway, channel, credentials, debug=True):
         self.esp = espnow.ESPNow()
         debug and print("Link init.")
-        self.reconn = False
-        self.channel = channel
+        self.channel = channel  # Channel specified by ctor
         self.gateway = bytes.fromhex(gateway)
         self.credentials = credentials
         self.debug = debug
         self.queue = RingbufQueue(10)
-        self.last_channel = self.reconnect()  # Store actual channel for micropower apps
+        self.cur_chan = self.reconnect()  # Actual channel
 
     def reconnect(self):
         esp8266 = sys.platform == "esp8266"
         channel = self.channel
-        # Otherwise the passed channel
-        self.debug and print(f"{'Reconnecting' if self.reconn else 'Connecting'}")
-        if self.reconn and channel is not None:
-            return  # Nothing to do if channel is fixed.
+        self.debug and print(f"reconnect chan {self.channel} creds {self.credentials}")
         sta = network.WLAN(network.STA_IF)
-        sta.active(False)
-        ap = network.WLAN(network.AP_IF)
-        ap.active(False)
+        self.sta = sta
         sta.active(True)
         while not sta.active():
             sleep_ms(100)
-        if channel is None:
-            sta.connect(*self.credentials)  # set channel by connecting to AP
+        ap = network.WLAN(network.AP_IF)
+        self.ap = ap
+        if esp8266:
+            ap.active(True)
+            while not ap.active():
+                sleep_ms(100)
+            dev = ap
+        else:
+            dev = sta
+            ap.active(False)
+
+        # Determine channel to use
+        if isinstance(channel, int):  # Channel is fixed
+            dev.config(channel=channel)
+        elif isinstance(credentials, tuple):  # Find chan by connect
+            sta.connect(*self.credentials)
             self.debug and print("Link connecting to AP")
+            start = ticks_ms()
             while not sta.isconnected():
                 sleep_ms(100)
-        else:
-            if esp8266:
-                ap.active(True)
-                while not ap.active():
-                    sleep_ms(100)
-                ap.config(channel=channel)
-                ap.active(False)
-            else:
-                sta.config(channel=channel)
-        dev = ap if esp8266 else sta
-        chan = dev.config('channel')
+                if ticks_diff(ticks_ms(), start) > 5_000:
+                    raise OSError("Wifi connect fail")
+        else:  # Try all channels
+            self.debug and print("Testing channels")
+            channel = self.find_channel(dev)
+            if channel is None:
+                raise OSError("Connect fail")
         self.debug and print(f"connected on channel {dev.config('channel')}")
+
         sta.config(pm=sta.PM_NONE)  # No power management
-        # For FeatherS3 https://github.com/orgs/micropython/discussions/12017
-        # Testing P8 board variant
-        #if "ESP32-S3" in sys.implementation._machine:
-            #sta.config(txpower=17)
+        if Link.txpower is not None:
+            sta.config(txpower=self.txpower)
+        self.init_esp()
+        ap.active(False)
+        return channel
+
+    def init_esp(self):
         self.esp.active(True)
         try:
             self.esp.add_peer(self.gateway)
         except OSError:
             pass  # Already registered
-        self.reconn = True
-        self.sta = sta
-        return chan
 
     def send(self, msg):  # Should be a JSON encoded list of length 1, 2 or 4.
-        return self.esp.send(self.gateway, msg)
+        try:
+            return self.esp.send(self.gateway, msg)
+        except OSError as e:
+            return False
 
     def recv(self, timeout_ms):
         return self.esp.recv(timeout_ms)
@@ -129,6 +147,15 @@ class Link:
                 except ValueError:
                     pass
 
+    def find_channel(self, dev):
+        self.init_esp()
+        for channel in range(1, 14):
+            self.debug and print(f"Testing channel {channel}")
+            dev.config(channel=channel)
+            if (ch := self.get_channel()) is not None:
+                dev.config(channel=ch)  # Connect on returned channel
+                return ch  # Otherwise return None on failure
+
     def get(self, subs):
         if self.send(Link.GET):
             q = self.queue  # Handle any queued messages
@@ -156,6 +183,7 @@ class Link:
     def close(self):
         self.esp.active(False)
         self.sta.active(False)
+        self.ap.active(False)
 
     def breakout(self, pin):
         if not pin():

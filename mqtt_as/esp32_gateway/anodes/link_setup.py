@@ -3,7 +3,7 @@
 gateway = bytes.fromhex(b'2462abe6b0b5')  # ESP reference clone AP I/F
 debug = True
 # Case where WiFi AP channel is known
-channel = 9  # WiFi AP channel
+channel = 3  # WiFi AP channel
 credentials = None  # Fixed channel
 
 # If channel is unknown need

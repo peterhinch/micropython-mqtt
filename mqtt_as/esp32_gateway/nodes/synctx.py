@@ -15,10 +15,16 @@ mosquitto_sub -h 192.168.0.10 -t gw_errors
 mosquitto_sub -h 192.168.0.10 -t gw_status
 '''
 
-import time, gc
+import time
+import gc
+import sys
 from .link import Link, PUB_OK, BROKER_OUT, ESP_FAIL, PUB_FAIL
 from .link_setup import gateway, channel, credentials  # Common args
-gwlink = Link(gateway, channel, credentials)
+try:
+    gwlink = Link(gateway, channel, credentials)
+except OSError:
+    print(f"Failed to connect to {gateway}.")
+    sys.exit(0)
 
 def subs(topic, message, retained):  # Handle subscriptions
     print(f'Got subscription   topic: "{topic}" message: "{message}" retained {retained}')
