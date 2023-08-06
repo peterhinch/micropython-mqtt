@@ -91,7 +91,7 @@ The following script wakes every 10s, receives any messages published to
 ```python
 from machine import deepsleep, Pin
 from .link import Link
-gateway = "2462abe6b0b5"  # ESP reference clone AP I/F
+gateway = "2462abe6b0b5"  # Identity of gateway
 # Case where WiFi AP channel is not known and may vary
 channel = None  # Indicate unknown channel
 credentials = ("ssid", "password")  # WiFi access
@@ -257,28 +257,31 @@ This supports synchronous code including micropower applications.
 
 Constructor args. These are normally defined in `link_setup.py` to enable the
 setup of mutiple nodes with common values.
- 1. `gateway` 12 character string representing gateway ID e.g. '2462abe6b0b5'.
+ 1. `gateway:str` 12 character gateway ID e.g. "2462abe6b0b5".
  2. `channel` Channel no. if known, else `None`
- 3. `credentials` `('ssid', 'password')` else `None`. See section 5.1.
+ 3. `credentials` `('ssid', 'password')` else `None`. See
+ [section 5.1](./README.md#51-connection-algorithms).
  4. `debug=True`
-The constructor raises an `OSError` if credentials are passed and it fails to
+
+ The constructor raises an `OSError` if credentials are passed and it fails to
 connect to WiFi.
 
 Public methods:
- 1. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` See below for
- return values.
+ 1. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` See 
+ [below](./README.md#52-publish-and-ping-return-values) for return values.
  2. `subscribe(topic:str, qos:int)` Returns `True` unless ESPNow cannot connect
  to the gateway.
- 3. `get(callback)` Receieve any pending messages. The callback will be run for
+ 3. `get(callback)` Receive any pending messages. The callback will be run for
  each message. It takes args `topic:str, message:str, retained:bool`. The `get`
  method returns `True` on success, `False` on communications failure.
- 4. `ping()` Check the gateway status. Return values are as per `publish`.
- 5. `close()` This should be run prior to `deepsleep`.
+ 4. `ping()` Check the gateway status. Return values are as per `publish` -
+ see [below](./README.md#52-publish-and-ping-return-values).
+ 5. `close()` This should be run prior to `deepsleep` or application quit.
  6. `breakout(Pin)` This is a convenience function for micropower applications.
  It can be hard to get back to a REPL when `main.py` immediately restarts an
  application. Initialising `breakout` with a `Pin` instance defined with 
- `Pin.PULL_UP` allows the REPL to be regained: the node should be reset or
- power cycled with a link between the pin and gnd.
+ `Pin.PULL_UP` allows the REPL to be regained: the pin should be linked to gnd
+ and the node should be reset.
  7. `get_channel()` Query the gateway's current channel. Returns an `int` or
  `None` on fail.
  8. `reconnect()` Force a reconnection. Returns the channel number. It is not
@@ -290,26 +293,27 @@ Public bound variable:
  1. `txpower = None`. Certain ESP32-S3 boards are unreliable when running at
  low channel numbers. The default sets transmit power to maximum: on these
  boards a value of 17 improves reliability. The value should be set before
- instantiating.
+ instantiating. See appendix 2.
 
 ## 5.1 Connection algorithms
 
 The method of connection and of responding to AP channel changes depends on the
 `channel` and `credentials` constructor args.
- 1. Channel is fixed. This is the simplest case, addressed by setting the
- `channel` arg and setting `credentials=None`.
+ 1. Channel is fixed. This is the simplest case with lowest power consumption.
+ It is addressed by setting the `channel` arg and setting `credentials=None`.
  2. Acquire the channel using WiFi, achieved by setting `channel=None` and
- provideing SSID and password in `credentials`. Channel changes are tracked
+ providing SSID and password in `credentials`. Channel changes are tracked
  automatically. Some duplicate publications may occur while the channel change
- is being detected. Initial connection on power up is slow (a few seconds). In
+ is being detected. Initial connection on power up is slow (a few seconds); in
  micropower applications this equates to energy used.
  3. Acquire the channel by querying the gateway, achieved with `channel=None`
- and `credentials=None`. In a variable channel environment this offers the
- lowest power consumption, but the application needs to be designed to manage
- this. The `pubonly_gen.py` demo illustrates this. The channel is stored in
- nonvolatile RAM along with an error count. Normally the `Link` is instantiated
- with the stored channel, which is fast. If errors exceed a threshold, the
- `Link` is instantiated with `channel=None` prompting a query.
+ and `credentials=None`. In a variable channel environment this offers lower
+ power consumption. To minimise power the application can be designed to manage
+ connection. The `pubonly_gen.py` demo illustrates this. The channel is stored
+ in nonvolatile RAM along with an error count. Normally the `Link` is
+ instantiated with the stored channel, which is fast. If consecutive errors
+ exceed a threshold, the `Link` is instantiated with `channel=None` prompting a
+ gateway query.
 
 ## 5.2 Publish and ping return values
 
@@ -317,7 +321,8 @@ The `publish` method returns the following values, defined as constants in
 `link.py`.
  1. `PUB_OK` Success.
  2. `BROKER_OUT` Broker is down. Messages have not been lost but gateway queue
- is half full. The application should not send more until `ping` has succeeded.
+ is half full. The application should delay sending more until a `ping` has
+ succeeded.
  3. `ESP_FAIL` ESPNow communications are down. Message was not sent.
  4. `PUB_FAIL` Gateway queue is full, message was lost (publish only).
 
@@ -342,16 +347,10 @@ Public asynchronous methods:
  2. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` This will block
  in the absence of ESPNow and broker connectivity.
  3. `subscribe(topic:str, qos:int)`
- 4. `reconnect()` If there is a risk that the AP may change the channel this
- may be launched if a long outage occurs. See note below.
+ 4. `reconnect()` Forces a reconnection. Should not be required
 
-Public synchronous methods:
- 1. `close()` This should be run prior to `deepsleep`.
- 2. `breakout(Pin)` This is a convenience function for micropower applications.
- It can be hard to get back to a REPL when `main.py` immediately restarts an
- application. Initialising this with a `Pin` instance defined with 
- `Pin.PULL_UP` allows the REPL to be regained by resetting the node with a link
- between the pin and gnd.
+Public synchronous method:
+ 1. `close()` This should be run prior to application quit.
 
 Public `Event` instances:
  1. `broker_up` Set when gateway has connected to the broker.
@@ -365,7 +364,7 @@ Public bound variable:
  1. `txpower = None`. Certain ESP32-S3 boards are unreliable when running at
  low channel numbers. The default sets transmit power to maximum: on these
  boards a value of 17 improves reliability. The value should be set before
- instantiating.
+ instantiating. See appendix 2.
 
 Message retrieval:  
 An `ALink` instance is an asynchronous iterator. Messages are retrieved with
@@ -677,46 +676,3 @@ by using high channel numbers and reduced transmit power. See
 [this message](https://github.com/orgs/micropython/discussions/12017#discussioncomment-6465361)
 from a hardware manufacturer. Later releases of this particular board have
 addressed this issue.
-
-# 2. Files
-
-## 2.1 Gateway
-
-This is normally installed with `mip`. Files are listed for reference.
- 1. `mqtt_as.py` MQTT client module.
- 2. `mqtt_local.py` Customise to define WiFi credentials and broker IP address.
- 3. `gateway.py` ESPNow gateway.
- 4. `gwconfig.py` Configuration file for gateway.
- 5. `primitives` directory containing `__init__.py` and `ringbuf_queue.py`.
-
-## 2.2 Nodes
-
-Required files are `link.py` and `link_setup.py` which should be copied from
-the `nodes` directory to the device root. Note that `link_setup.py` requires
-customisation before copying to identify the gateway and either WiFi channel
-or WiFi credentials. See [section 4.3](./GATEWAY.md#43-gateway-setup).
-
-The following demos are optional. The first two assume a UM FeatherS3 host:
- 1. `pubonly.py` Demo of a fixed channel micropower publish-only application.
- 2. `subonly.py` As above but subscribe-only.
- 3. `synctx` Example of an application which runs continuously, publishing,
- handling incoming messages and doing WiFi/broker outage detection. Runs on
- any ESP32 or ESP8266.
-
-## 5.3 General
-
-Nodes can publish to any topic. If there is an outage of the WiFi AP or the
-broker a response is sent enabling the application to respond as required. It
-is possible to request an acknowledge to every message sent. This can be used
-to ensure adherence to the `qos==1` guarantee.
-
-The gateway subscribes to a default topic plus others created by nodes. When an
-external device publishes to one of those topics, the gateway checks the format
-of the message. Unless the message has a specific format, it is ignored.
-Correctly formatted messages are forwarded either to an individual node or to
-all nodes.
-
-If a node is awake and `lpmode` in `gwconfig.py` is `False` the message is
-forwarded immediately. If communications fail, the message is queued and will
-be sent the next time the node communicates with the gateway. This is the
-normal means of operation for micropower nodes.
