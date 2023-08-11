@@ -126,7 +126,8 @@ The ESPNow protocol requires that the WiFi channel does not change. Some access
 points or routers pick a channel on power up or may change channel in response
 to varying radio conditions. Ideally the AP should be set to use a fixed
 channel. This enables a rapid recovery from an outage and minimises power
-consumption of micropower nodes.
+consumption of micropower nodes. If a fixed channel is impractical the `Link`
+class provides means of adapting to variation.
 
 ## 3.2 Gateway installation
 
@@ -192,10 +193,11 @@ See [# 5. The Link class](./README.md#5-the-link-class) for full details.
 
 The following demos will be installed on the node:
  1. `synctx.py` General demo of publication and subscription.
- 2. `pubonly.py` Micropower publish-only demo. Assumes a FeatherS3 board.
- 3. `pubonly_gen.py` Micropower publish-only demo, runs on any ESPx. Shows a
- means of handling channel changes.
- 4. `subonly.py` Micropower subscribe-only demo.
+ 2. `pubonly.py` Micropower publish-only demo.
+ 3. `pubonly_gen.py` Micropower publish-only demo. Shows an efficient means of
+ handling channel changes.
+ 4. `slow_echo.py` Micropower demo which wakes periodically, re-publishing any
+ messages occurring during its sleep.
 
 ## 3.5 Synchronous Node Testing
 
@@ -209,7 +211,7 @@ following (changing the IP address to that of the broker):
 $ mosquitto_sub -h 192.168.0.10 -t shed
 ```
 This should receive the publications. To publish to the device run this, 
-changing the IP address:
+changing the IP address to match the broker:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```
@@ -285,8 +287,8 @@ Public methods:
  7. `get_channel()` Query the gateway's current channel. Returns an `int` or
  `None` on fail.
  8. `reconnect()` Force a reconnection. Returns the channel number. It is not
- normally needed: micropower instantiate a `Link` each time they run while
- continuously running applications handle outages and channel changes
+ normally needed: micropower applications instantiate a `Link` each time they
+ run while continuously running applications handle outages and channel changes
  automatically.
 
 Public bound variable:
@@ -347,7 +349,7 @@ Public asynchronous methods:
  2. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` This will block
  in the absence of ESPNow and broker connectivity.
  3. `subscribe(topic:str, qos:int)`
- 4. `reconnect()` Forces a reconnection. Should not be required
+ 4. `reconnect()` Forces a reconnection. Should not be required.
 
 Public synchronous method:
  1. `close()` This should be run prior to application quit.
@@ -580,34 +582,29 @@ debugged using a UART and an FTDI adapter.
 
 An example of a micropower publish-only application is `pubonly.py` and is
 listed in [section 2.1](./GATEWAY.md#21-micropower-publish-only-applications).
-A subscribe-only application is `subonly.py`, listed below:
+A micropower application handling subscriptions is `slow_echo.py`, listed
+below:
 ```python
-from machine import deepsleep, Pin
+from machine import deepsleep
 from time import sleep_ms
 from .link import Link
-from .link_setup import gateway, channel, credentials  # Common args
-gwlink = Link(gateway, channel, credentials)
-
-# In micropower mode need a means of getting back to the REPL
-# Check the pin number for your harwdware!
-#link.breakout(Pin(15, Pin.IN, Pin.PULL_UP))  # Pull down for REPL.
+from .link_setup import gateway, channel, credentials  # Args common to all nodes
+try:
+    gwlink = Link(gateway, channel, credentials)
+except OSError:
+    deepsleep(3_000)  # Failed to connect. Out of range?
 
 def echo(topic, message, retained):
     gwlink.publish("shed", message)
 
-
 gwlink.subscribe("foo_topic", 1)
-#while True:
-    #if not gwlink.get(echo):
-       #print("Comms fail")
-    #sleep_ms(3000)
 gwlink.get(echo)  # Get any pending messages
 gwlink.close()
 deepsleep(3_000)
 # Now effectively does a hard reset: main.py restarts the application.
 ```
 This echos any received message to the `"shed"` topic. Messages may be sent
-with
+by publishing to "foo_topic" or to "allnodes":
 ```bash
 mosquitto_pub -h 192.168.0.10 -t allnodes -m "test message" -q 1
 ```
@@ -616,10 +613,11 @@ mosquitto_pub -h 192.168.0.10 -t allnodes -m "test message" -q 1
 
 If power consumption is not a concern a node may be kept running continuously.
 If the AP is able to change the channel, communications will fail briefly
-before recovering. There is a high probability of duplicate publications from
-nodes: this seems to occur because ESPNow reports failure when the message has
-been successfully sent. The `False` value from `link.publish` causes the
-application to repeat the publication.
+before recovering. If a node publishes regularly and checks for success there
+is a likelihood of duplicate publications. This occurs because, when using an
+incorrect channel, ESPNow reports failure when the message has been
+successfully sent. The fail status from `link.publish` causes the application
+to repeat the publication.
 
 Connectivity outages can occur, for example by a node moving out of range.
 These may be detected by checking the return value of `link.publish()` or by
@@ -627,10 +625,11 @@ periodically issuing `link.ping()`.
 
 ## 9.3 Continuous running - asynchronous
 
-This is addressed by, in `link.py`, setting `channel = None`. This prompts
-the gateway to briefly connect to WiFi which sets the channel. The `link`
-instance has a `reconnect` method which provides a means of forcing this if the
-application determines that communications have stopped for a period.
+Asynchronous applications are assumed to be continuously running because
+asyncio has no `deepsleep` compatibility. Where the AP may change channels the
+preferred solution is, in `link_setup.py`, to set `channel=None` and to
+populate the `credentials` tuple. Channel changes are then tracked
+automatically.
 
 # 10. MQTT - the finer points
 
@@ -649,21 +648,34 @@ asynchronous.
 I have no plan to implement these.
 
 When a node publishes a message the `retain` flag works normally: the broker
-retains the message for future subscribers if `qos==1`. See the MQTT spec.
+retains the message for future subscribers if `qos==1`. See the MQTT spec. For
+publications to a node, `retain` does not work as it applies to the gateway
+rather than to the node. The gateway assumes that an absent node is asleep. All
+messages destined to it are queued and will be forwarded to the node when it
+wakes.
 
 # Appendix 1 Power saving
 
 Where a target has limited power available there are measures which can be
 taken to reduce the energy consumed each time it wakes from deepsleep.
 
-When a target wakes from deepsleep the MicroPython runtime starts. Execution
-of Python user code starts with `main.py`. Where code imports Python modules
-these are compiled to bytecode which is executed. Running the compiler takes
-time and consumes power. Compilation can be eliminated by precompiling files.
-At runtime these files need to be retrieved from the filesystem and put in
-RAM. This stage can be removed by using frozen bytecode with the code being
-directly executed from flash.
+In my testing any gains from precompiling to `.mpy` files are too small to
+measure. The [connection algorithms](./README.md#51-connection-algorithms) were
+tested by running the `pubonly` demo on an ESP32_S3 with the following results:
 
+| Algorithm     | Time (s) | Charge (mC) |
+|:--------------|:---------|:------------|
+| Fixed         | 1.8      | 112         |
+| Query (ch 12) | 2.2      | 153         |
+| WiFi          | 4.2      | 300         |
+
+To get a figure for battery consumption, consider a node with deepsleep current
+of 50μA publishing once per hour where the channel is fixed. There are ~8760
+hours in a year. A mC is a mA for 1s, hence 1/3600 of a mAH. Consumption in mAH
+over a year is thus:
+```
+8760*(50/1000 + 112/3600) = 710mAH
+```
 See [this repo](https://github.com/glenn20/upy-esp32-experiments) from @glenn20
 for a much more detailed exposition including ways to radically reduce energy
 used on boot.

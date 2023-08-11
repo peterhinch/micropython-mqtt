@@ -1,15 +1,16 @@
-# subonly.py
+# slow_echo.py
 # (C) Copyright Peter Hinch 2023
 # Released under the MIT licence.
 
-# Demonstrate a "subscribe only" micropower application on any ESPx target
-# Echo any incoming message to "shed"
-# Can operate in micropower mode
 '''
+Demonstrate a "subscribe only" micropower application on any ESPx target
+Echo any incoming message to "shed"
+If the AP uses a fixed channel, link_setup should specify the channel.
+Otherwise link_setup should provide WiFi credentials.
+See pubonly_gen.py for an alternative way to handle variable channels.
+
 To test need something like
-mosquitto_pub -h 192.168.0.10 -t allnodes -m "red" -q 1
-or
-mosquitto_pub -h 192.168.0.10 -t foo_topic -m "green" -q 1
+mosquitto_pub -h 192.168.0.10 -t foo_topic -m "test message" -q 1
 and
 mosquitto_sub -h 192.168.0.10 -t shed
 '''
@@ -30,13 +31,8 @@ except OSError:
 def echo(topic, message, retained):
     gwlink.publish("shed", message)
 
-
 gwlink.subscribe("foo_topic", 1)
-while True:
-    if not gwlink.get(echo):
-       print("Comms fail")
-    sleep_ms(3000)
-#gwlink.get(echo)  # Get any pending messages
-#gwlink.close()
-#deepsleep(3_000)
+gwlink.get(echo)  # Get any pending messages
+gwlink.close()
+deepsleep(3_000)
 # Now effectively does a hard reset: main.py restarts the application.

@@ -23,13 +23,12 @@ from .primitives import Delay_ms
 from .alink import ALink
 # Convenience file for distributing common constructor args to multiple nodes
 from .link_setup import gateway, channel, credentials, debug, poll_interval
+gwlink = ALink(gateway, channel, credentials, debug, poll_interval)  # From link_setup.py
 
 black = (0, 0, 0)
 red = (255, 0, 0)
 green = (0, 255, 0)
 blue = (0, 0, 255)
-
-gwlink = ALink(gateway, channel, credentials, debug, poll_interval)  # From link_setup.py
 
 async def do_subs(lk):
     await lk.subscribe("foo_topic", 1)
