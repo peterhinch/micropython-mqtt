@@ -680,6 +680,21 @@ See [this repo](https://github.com/glenn20/upy-esp32-experiments) from @glenn20
 for a much more detailed exposition including ways to radically reduce energy
 used on boot.
 
+For comparison I tested an ESP8266 Feather Huzzah: this board is suited for
+micropower use as it lacks a USB chip. Running the same demo on a fixed channel
+it used 71mC over 2s. Deepsleep current was 102μA. One year power was therefore:
+```
+8760*(102/1000 + 71/3600) = 1066mAH
+```
+The following images show the current profile for the three mens of channel
+definition. Fixed channel:  
+![Image](./images/ESP8266_pubonly.png)
+Seek to channel 3:  
+![Image](./images/ESP8266_SEEK3_pubonly.png)
+WiFi connect:  
+![Image](./images/ESP8266_WIFI_pubonly.png)
+WiFi connect takes a high current for 4s.
+
 # Appendix 2 The ESP32-S3
 
 This chip can suffer from erratic ESPNow behaviour owing to interference

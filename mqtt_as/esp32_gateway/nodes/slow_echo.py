@@ -2,6 +2,8 @@
 # (C) Copyright Peter Hinch 2023
 # Released under the MIT licence.
 
+# On ESP8266 need to connect GPIO16 to Rst to wake from deepsleep
+
 '''
 Demonstrate a "subscribe only" micropower application on any ESPx target
 Echo any incoming message to "shed"
