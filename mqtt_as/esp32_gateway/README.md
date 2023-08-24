@@ -688,11 +688,14 @@ it used 71mC over 2s. Deepsleep current was 102μA. One year power was therefore
 ```
 The following images show the current profile for the three mens of channel
 definition. Fixed channel:  
-![Image](./images/ESP8266_pubonly.png)
+![Image](./images/ESP8266_pubonly.png)  
+
 Seek to channel 3:  
-![Image](./images/ESP8266_SEEK3_pubonly.png)
+![Image](./images/ESP8266_SEEK3_pubonly.png)  
+
 WiFi connect:  
-![Image](./images/ESP8266_WIFI_pubonly.png)
+![Image](./images/ESP8266_WIFI_pubonly.png)  
+
 WiFi connect takes a high current for 4s.
 
 # Appendix 2 The ESP32-S3
