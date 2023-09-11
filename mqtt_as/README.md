@@ -55,6 +55,7 @@ application level.
  5. [Non standard applications](./README.md#5-non-standard-applications) Usage in specialist and micropower applications.  
   5.1 [deepsleep](./README.md#51-deepsleep)  
   5.2 [lightsleep and disconnect](./README.md#52-lightsleep-and-disconnect)  
+  5.3 [Ultra low power consumption](./README.md#53-ultra-low-power-consumption) For ESP8266 and ESP32.  
  6. [References](./README.md#6-references)  
  7. [Connect Error Codes](./README.md#7-connect-error-codes)  
  8. [Hive MQ](./README.md#8-hive-mq) A secure, free, broker.  
@@ -107,7 +108,7 @@ retransmissions will occur until the packet has successfully been transferred.
 If the WiFi fails (e.g. the device moves out out of range of the AP) the
 coroutine performing the publication will pause until connectivity resumes.
 
-The driver requires the `uasyncio` library and is intended for applications
+The driver requires the `asyncio` library and is intended for applications
 that use it. It uses nonblocking sockets and does not block the scheduler. The
 design is based on the official `umqtt` library but it has been substantially
 modified for resilience and for asynchronous operation.
@@ -129,6 +130,8 @@ Initial development was by Peter Hinch. Thanks are due to Kevin Köck for
 providing and testing a number of bugfixes and enhancements. Also to other
 contributors, some mentioned below.
 
+Note that in firmware prior to 1.21 `asyncio` was named `uasyncio`.
+
 12 Nov 2022 V0.7.0 Provide alternative callback-free Event interface.  
 2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.  
 8 Aug 2022 V0.6.6 Support unsubscribe (courtesy of Kevin Köck's fork).  
@@ -137,7 +140,7 @@ contributors, some mentioned below.
 could fail to be stopped on a brief outage. Subscription callbacks now receive
 bytearrays rather than bytes objects.  
 10 June 2022 Lowpower demo removed as it required an obsolete version of
-`uasyncio`. Improved handling of `clean_init` (issue #40).  
+`asyncio`. Improved handling of `clean_init` (issue #40).  
 21 May 2022 SSL/TLS ESP8266 support contributed by @SooOverpowered: see
 `tls8266.py`.  
 22 Apr 2022 Support added for Arduino Nano RP2040 Connect. See note below.  
@@ -284,7 +287,7 @@ and an asynchronous iterator. If a PC client publishes a message with the topic
 an incrementing count under the topic `result`.
 ```python
 from mqtt_as import MQTTClient, config
-import uasyncio as asyncio
+import asyncio
 
 # Local configuration
 config['ssid'] = 'your_network_name'  # Optional on ESP8266
@@ -330,7 +333,7 @@ broker).
 The alternative callback-based interface may be run as follows:
 ```python
 from mqtt_as import MQTTClient, config
-import uasyncio as asyncio
+import asyncio
 
 # Local configuration
 config['ssid'] = 'your_network_name'  # Optional on ESP8266
@@ -420,7 +423,7 @@ engaged. This replaces the callbacks defined below with a message queue and
 
 This interface is optional. It is retained for compatibility with existing
 code. In new designs please consider the event based interface which replaces
-callbacks with a more uasyncio-friendly approach.
+callbacks with a more asyncio-friendly approach.
 
 '**subs_cb**' [a null lambda function] Subscription callback. Runs when a message
 is received whose topic matches a subscription. The callback must take three
@@ -806,7 +809,7 @@ Also discussed [here](https://github.com/peterhinch/micropython-mqtt/issues/40).
 Normal operation of `mqtt_as` is based on attempting to keep the link up as
 much as possible. This assures minimum latency for subscriptions but implies
 power draw. The `machine` module supports two power saving modes: `lightsleep`
-and `deepsleep`. Currently `uasyncio` supports neither of these modes. The
+and `deepsleep`. Currently `asyncio` supports neither of these modes. The
 notes below may be relevant to any application which deliberately closes and
 re-opens the link to the broker.
 
@@ -857,7 +860,7 @@ before re-trying the connection.
 ## 5.2 lightsleep and disconnect
 
 The library is not designed for use in cases where the system goes into
-lightsleep. Firstly `uasyncio` does not support lightsleep on all platforms -
+lightsleep. Firstly `asyncio` does not support lightsleep on all platforms -
 notably on STM where the `ticks_ms` clock (crucial to task scheduling) stops
 for the duration of lightsleep.
 
@@ -865,11 +868,22 @@ Secondly the library has no mechanism to ensure all tasks are shut down cleanly
 after issuing `.disconnect`. This calls into question any application that
 issues `.disconnect` and then attempts to reconnect. This issue does not arise
 with `deepsleep` because the host effectively powers down. When the sleep
-ends, `uasyncio` and necessary tasks start as in a power up event.
+ends, `asyncio` and necessary tasks start as in a power up event.
 
 These problems have been resolved by users for specific applications with forks
-of the library. Given the limitations of `uasyncio` I do not plan to write a
+of the library. Given the limitations of `asyncio` I do not plan to write a
 general solution.
+
+## 5.3 Ultra low power consumption
+
+[This document](https://github.com/peterhinch/micropython-mqtt/tree/master/mqtt_as/esp32_gateway)
+describes an MQTT client for ESP32 or ESP8266 which uses ESPNOw to communicate
+with a gateway running `mqtt_as`. The client does not need to connect to WiFi
+each time it wakes, saving power. The gateway can be shared between multiple
+clients.
+
+Drawbacks are the need for an always-on gateway, and the fact that only a
+subset of MQTT capabilities is supported.
 
 ###### [Contents](./README.md#1-contents)
 
