@@ -82,3 +82,8 @@ implications of this should be investigated.
 
 The use of a `dict` to store MQTT parameters has been discussed in the past and
 should be reviewed.
+
+### Refs
+
+An alternative synchronous MQTT client.  
+[umqtt.robust2](https://github.com/fizista/micropython-umqtt.robust2/tree/master)
