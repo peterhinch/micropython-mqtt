@@ -488,6 +488,10 @@ Asynchronous.
 
 Keyword only arg:  
  * `quick=False` Setting `quick=True` saves power in some battery applications.
+ It does this on (re)connect by skipping the check on WiFi integrity. This check
+ is intended for mobile clients that may attempt to reconnect under conditions
+ of poor signal strength. In conditions of good signal strength this check may
+ be skipped.  
  See [Non standard applications](./README.md#5-non-standard-applications).
 
 Connects to the specified broker. The application should call `connect` once on
