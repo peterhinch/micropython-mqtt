@@ -6,7 +6,7 @@
 # Assumes an ESP32 including S2 or S3 variants. At time of writing  standard
 # ESP32 seems most reliable.
 
-# mip.install("github:com/peterhinch/micropython-mqtt/blob/master/mqtt_as/esp32_gateway/package.json")
+# mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/package.json")
 
 # Aim is to facilitate micropower nodes which spend most of the time in deepsleep.
 # They wake periodically to read sensors and transmit the data to the gateway. Any
