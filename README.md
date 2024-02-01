@@ -15,12 +15,10 @@ An effective PC client and server is [mosquitto](https://mosquitto.org/).
 
 # This repository
 
-This contains two separate projects:  
- 1. A "resilient" asynchronous non-blocking MQTT driver.
- 2. A means of using a cheap ESP8266 module to bring MQTT to MicroPython
- platforms which lack a WiFi interface. This is now obsolescent.
+This now contains one project, a driver providing a "resilient" asynchronous,
+non-blocking MQTT client.
 
-## 1. The "resilient" driver
+# The "resilient" driver
 
 This is an alternative to the official driver. It has been tested on the
 following platforms.
@@ -40,21 +38,4 @@ It has the drawback of increased code size which is an issue on the ESP8266.
 Run as frozen bytecode it uses about 50% of the RAM on the ESP8266. On ESP32
 and Pyboard D it may be run as a standard Python module.
 
-#### [mqtt_as documentation](./mqtt_as/README.md).
-
-## 2. MQTT bridge for generic MicroPython targets
-
-This is obsolescent. It dates from a time when the only WiFi capable MicroPython
-target was the ESP8266. For all new applications one of the many WiFi-capable
-targets should be used with [mqtt_as](./mqtt_as/README.md).
-
-This comprises an ESP8266 firmware image and a MicroPython driver. The target
-hardware is linked to an ESP8266 running the firmware image using a 5-wire
-interface. The driver runs on the target which can then access MQTT. The driver
-is non-blocking and is designed for applications using `uasyncio`.
-
-This library is in the `bridge` directory and is documented  
-### [here](./bridge/BRIDGE.md)
-
-It works and is supported, but its days are numbered unless someone reports a
-definite use case.
+## [mqtt_as documentation](./mqtt_as/README.md).
