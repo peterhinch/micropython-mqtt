@@ -136,18 +136,33 @@ On the gateway ESP32 device, connect to WiFi and install with
 import mip
 mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway")
 ```
-Edit the file `lib/gateway/mqtt_local.py` on the device to include the correct
-WiFi credentials and broker IP address. This file is as follows:
-```python
-from .mqtt_as import config
 
-# Entries must be edited for local conditions
-config["server"] = "192.168.0.10"  # Broker
-#  config["server"] = "test.mosquitto.org"
+Start the gateway like this:
 
-config["ssid"] = "your_network_name"
-config["wifi_pw"] = "your_password"
 ```
+from gateway.gateway import Gateway
+from gateway.mqtt_as import config as mqtt_config
+# correct WiFi credentials and broker IP address ..
+mqtt_config["server"] = "test.mosquitto.org"
+mqtt_config["ssid"] = "your_network_name"
+mqtt_config["wifi_pw"] = "your_password"
+from gateway.gwconfig import gwcfg
+
+gw = Gateway(gwcfg, mqtt_config) # create instance
+Gateway.run_instance(gw)
+```
+
+Output similar to the following should ensure that the GW is running:
+
+```python
+ESPNow ID: b"70041dad8f15"
+Checking WiFi integrity.
+Got reliable connection
+Connecting to broker.
+Connected to broker.
+Gateway b'70041dad8f15' connected to broker test.mosquitto.org.
+```
+
 ## 3.3 Gateway test
 
 The following tests verify communication between the gateway and the broker.
@@ -155,17 +170,7 @@ Assuming that the broker is on 192.168.0.10, open a terminal and issue
 ```bash
 $ mosquitto_sub -h 192.168.0.10 -t gw_status
 ```
-Start the gateway by issuing the import at the device REPL - output similar to
-the following should ensue:
-```python
->>> import gateway.gateway
-ESPNow ID: b"70041dad8f15"
-Checking WiFi integrity.
-Got reliable connection
-Connecting to broker.
-Connected to broker.
-Gateway b'70041dad8f15' connected to broker 192.168.0.10.
-```
+
 The terminal running `mosquitto_sub` should show
 ```bash
 12/7/2023 16:52:13 Gateway b'70041dad8f15' connected to broker 192.168.0.10.

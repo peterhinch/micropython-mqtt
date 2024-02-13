@@ -27,8 +27,6 @@ import struct
 import select
 
 from .mqtt_as import MQTTClient
-from .mqtt_local import config  # Config for mqtt_as client
-from .gwconfig import gwcfg  # Config for gateway.
 from .primitives import RingbufQueue
 
 
@@ -59,8 +57,10 @@ def ntp_time(host, offset):  # Local time offset in hrs relative to UTC
 
 
 class Gateway:
-    def __init__(self):
+    def __init__(self, gwcfg, mqttcfg):
         # Mandatory gwcfg keys
+        self.gwcfg = gwcfg
+        self.mqttcfg = mqttcfg
         self.debug = gwcfg["debug"]
         self.qlen = gwcfg["qlen"]
         self.lpmode = gwcfg["lpmode"]
@@ -75,10 +75,10 @@ class Gateway:
         self.connected = False
         # Define client configuration
         MQTTClient.DEBUG = self.debug  # Optional debug statements.
-        config["keepalive"] = 120
-        config["queue_len"] = 1  # Use event interface with default queue
-        config["gateway"] = True
-        self.client = MQTTClient(config)  # Start in gateway mode
+        mqttcfg["keepalive"] = 120
+        mqttcfg["queue_len"] = 1  # Use event interface with default queue
+        mqttcfg["gateway"] = True
+        self.client = MQTTClient(mqttcfg)  # Start in gateway mode
         if gwcfg["use_ap_if"]:
             import network
             iface = network.WLAN(network.AP_IF)
@@ -137,19 +137,19 @@ class Gateway:
             await client.up.wait()
             client.up.clear()
             self.connected = True
-            self.pub_status(f"Gateway {self.gwid} connected to broker {config['server']}.")
+            self.pub_status(f"Gateway {self.gwid} connected to broker {self.mqttcfg['server']}.")
             for topic in self.topics:
                 await client.subscribe(topic, self.topics[topic][0])
-            sr = gwcfg["statreq"]
+            sr = self.gwcfg["statreq"]
             await client.subscribe(sr.topic, sr.qos)
-            if localtime()[0] == 2000 and st is None and gwcfg["ntp_host"] is not False:
+            if localtime()[0] == 2000 and st is None and self.gwcfg["ntp_host"] is not False:
                 st = asyncio.create_task(self.set_time())
                 
     async def set_time(self):
         rtc = RTC()
-        offset = gwcfg["ntp_offset"]
+        offset = self.gwcfg["ntp_offset"]
         offset = 0 if offset is None else offset
-        host = gwcfg["ntp_host"]
+        host = self.gwcfg["ntp_host"]
         host = "pool.ntp.org" if host is None else host
         while True:
             if self.connected:
@@ -261,7 +261,7 @@ class Gateway:
     # Manage message queues for each node.
     # Both ESPNow and mqtt_as use bytes objects. json.dumps() returns strings.
     async def messages(self):
-        sr = gwcfg["statreq"]  # May be None
+        sr = self.gwcfg["statreq"]  # May be None
         async for topic, message, retained in self.client.queue:
             topic = topic.decode()  # Convert to strings
             message = message.decode()
@@ -280,10 +280,10 @@ class Gateway:
     def close(self):
         self.client.close()
 
-
-gw = Gateway()
-try:
-    asyncio.run(gw.run())
-finally:
-    gw.close()
-    _ = asyncio.new_event_loop()
+    @staticmethod
+    def run_instance(gw):
+        try:
+            asyncio.run(gw.run())
+        finally:
+            gw.close()
+            _ = asyncio.new_event_loop()
