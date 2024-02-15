@@ -12,6 +12,11 @@ application level.
 
 ###### [Main README](../README.md)
 
+### Warning: firmware >= V1.22.0
+
+V1.22.0 included a changed IDF version 5.0.4: `mqtt_as.py` should be replaced
+with the latest version, otherwise recovery from an outage may not occur.
+
 # 1. Contents
 
  1. [Contents](./README.md#1-contents)  
@@ -79,7 +84,7 @@ The official "robust" MQTT client has the following limitations.
  4. Its support for qos == 1 is partial. It does not support retransmission in
  the event of a publication acknowledge being lost. This can occur on a WiFi
  network especially near the limit of range or in the presence of interference.
- 
+
  5. Its partial qos == 1 support and inability reliably to resume after a WiFi
  outage places a limit on the usable WiFi range. To achieve reliable operation
  a client must be well within range of the access point (AP).
@@ -132,6 +137,7 @@ contributors, some mentioned below.
 
 Note that in firmware prior to 1.21 `asyncio` was named `uasyncio`.
 
+15 Feb 2024 V0.7.2 Make compliant with firmware V1.22.0 and later.
 12 Nov 2022 V0.7.0 Provide alternative callback-free Event interface.  
 2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.  
 8 Aug 2022 V0.6.6 Support unsubscribe (courtesy of Kevin Köck's fork).  
@@ -192,7 +198,7 @@ Avoid unrealistic expectations of performance: latency can be significant,
 especially when using a TLS connection to a broker located on the internet.
 With a non-encrypted connection to a local broker it is feasible to use one
 MicroPython client to control another. I haven't measured latency but I would
-guess at ~100ms. 
+guess at ~100ms.
 
 Some platforms - notably ESP32 - are unhelpful when dealing with gross errors
 such as incorrect WiFi credentials. Initial connection will only fail after a
@@ -455,7 +461,7 @@ If `clean` is `False` messages sent from the server with qos == 1 will be
 received when connectivity resumes. This is standard MQTT behaviour (MQTT spec
 section 3.1.2.4). If the outage is prolonged this can imply a substantial
 backlog. On the ESP8266 this can cause buffer overflows in the Espressif WiFi
-stack causing `LmacRxBlk:1` errors to appear. 
+stack causing `LmacRxBlk:1` errors to appear.
 [see this doc](http://docs.micropython.org/en/latest/esp8266/esp8266/general.html).
 
 `clean_init` should normally be `True`. If `False` the system will attempt to
@@ -511,7 +517,7 @@ operation.
 
 Args:
  1. `topic` A bytes or bytearray object. Or ASCII string as described above.
- 2. `msg` A bytes or bytearray object. 
+ 2. `msg` A bytes or bytearray object.
  3. `retain=False` Boolean.
  4. `qos=0` Integer.
 
