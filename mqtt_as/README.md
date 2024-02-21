@@ -236,6 +236,20 @@ The first two of these demonstrate the event interface. Others use callbacks.
  8. `tls8266.py` SSL/TLS connection for ESP8266. Shows how to use keys and
  certificates. For obvious reasons it requires editing to run.
 
+### Quick install
+
+ESP8266: please read [Installation](./README.md#22-installation). On other
+platforms the main module, demos 1 to 3 and the sample `mqtt_local.py` may be
+installed from a connected PC with :
+```bash
+$ mpremote mip install github:peterhinch/micropython-mqtt
+```
+or, at the REPL with WiFi connected:
+```python
+import mip
+mip.install("github:peterhinch/micropython-mqtt")
+```
+
 ### Configuration
 
 The MQTT client is configured using a dictionary. An instance named `config`
