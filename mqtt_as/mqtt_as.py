@@ -122,6 +122,51 @@ def qos_check(qos):
 
 # MQTT_base class. Handles MQTT protocol on the basis of a good connection.
 # Exceptions from connectivity failures are handled by MQTTClient subclass.
+def format_properties(properties: dict):
+    # We have to do some additional work to have effective memory allocation
+    # First calculate the length of the byte array + variable length encoding
+    properties_length = 0
+    for key, value in properties.items():
+        properties_length += 1  # key
+        properties_length += len(value)
+        if isinstance(value, str):
+            properties_length += 2  # For MQTT encoding
+
+    variable_length = 1
+    if properties_length > 127:
+        variable_length += 1
+    if properties_length > 16383:
+        variable_length += 1
+    if properties_length > 2097151:
+        variable_length += 1
+
+    # Now we can allocate the byte array
+    properties_bytes = bytearray(variable_length + properties_length)
+    view = memoryview(properties_bytes)
+
+    i = 0
+    while properties_length > 0x7f:
+        view[i] = (properties_length & 0x7f) | 0x80
+        properties_length >>= 7
+        i += 1
+
+    view[i] = properties_length
+    i += 1
+
+    for key, value in properties.items():
+        view[i] = key
+        i += 1
+        if isinstance(value, str):
+            view[i] = len(value) >> 8
+            view[i + 1] = len(value) & 0xFF
+            i += 2
+            value = value.encode('utf-8')
+        view[i:i + len(value)] = value
+        i += len(value)
+
+    return properties_bytes
+
+
 class MQTT_base:
     REPUB_COUNT = 0  # TEST
     DEBUG = False
@@ -182,6 +227,8 @@ class MQTT_base:
         self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = asyncio.Lock()
+
+        self.mqttv5 = config['mqttv5']
 
     def _set_last_will(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
@@ -257,12 +304,14 @@ class MQTT_base:
     async def _recv_len(self):
         n = 0
         sh = 0
+        i = 0
         while 1:
             res = await self._as_read(1)
+            i += 1
             b = res[0]
-            n |= (b & 0x7F) << sh
+            n |= (b & 0x7f) << sh
             if not b & 0x80:
-                return n
+                return n, i
             sh += 7
 
     async def _connect(self, clean):
@@ -280,7 +329,11 @@ class MQTT_base:
 
             self._sock = ussl.wrap_socket(self._sock, **self._ssl_params)
         premsg = bytearray(b"\x10\0\0\0\0\0")
-        msg = bytearray(b"\x04MQTT\x04\0\0\0")  # Protocol 3.1.1
+        msg = bytearray(b"\x04MQTT\x00\0\0\0")  # Protocol 3.1.1
+        if self.mqttv5:
+            msg[5] = 0x05
+        else:
+            msg[5] = 0x04
 
         sz = 10 + 2 + len(self._client_id)
         msg[6] = clean << 1
@@ -291,20 +344,30 @@ class MQTT_base:
             msg[7] |= self._keepalive >> 8
             msg[8] |= self._keepalive & 0x00FF
         if self._lw_topic:
-            sz += 2 + len(self._lw_topic) + 2 + len(self._lw_msg)
+            sz += 1 + 2 + len(self._lw_topic) + 2 + len(self._lw_msg)
             msg[6] |= 0x4 | (self._lw_qos & 0x1) << 3 | (self._lw_qos & 0x2) << 3
             msg[6] |= self._lw_retain << 5
 
+        if self.mqttv5:
+            # TODO: Calculate properties length
+            sz += 1
+
         i = 1
-        while sz > 0x7F:
-            premsg[i] = (sz & 0x7F) | 0x80
+        while sz > 0x7f:
+            premsg[i] = (sz & 0x7f) | 0x80
             sz >>= 7
             i += 1
         premsg[i] = sz
         await self._as_write(premsg, i + 2)
         await self._as_write(msg)
+        if self.mqttv5:
+            # TODO: Implement properties
+            await self._as_write(b'\x00')  # No properties
+
         await self._send_str(self._client_id)
         if self._lw_topic:
+            # We don't support will properties, so we send 0x00 for properties length
+            await self._as_write(b'\x00')
             await self._send_str(self._lw_topic)
             await self._send_str(self._lw_msg)
         if self._user:
@@ -312,13 +375,39 @@ class MQTT_base:
             await self._send_str(self._pswd)
         # Await CONNACK
         # read causes ECONNABORTED if broker is out; triggers a reconnect.
-        resp = await self._as_read(4)
-        self.dprint("Connected to broker.")  # Got CONNACK
-        if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:
-            # Bad CONNACK e.g. authentication fail.
-            raise OSError(
-                -1, f"Connect fail: 0x{(resp[0] << 8) + resp[1]:04x} {resp[3]} (README 7)"
-            )
+        del premsg, msg
+        packet_type = await self._as_read(1)
+        if packet_type[0] != 0x20:
+            raise OSError(-1, 'CONNACK not received')
+        # The connect packet has changed, so size might be different now. But
+        # we can still handle it the same for 3.1.1 and v5
+        sz, _ = await self._recv_len()
+        if not self.mqttv5:
+            if sz != 2:
+                raise OSError(-1, 'Invalid CONNACK packet')
+
+        # Only read the first 2 bytes, as properties have their own length
+        connack_resp = await self._as_read(2)
+
+        # Connect ack flags
+        if connack_resp[0] != 0:
+            raise OSError(-1, 'CONNACK flags not 0')
+        # Reason code
+        if connack_resp[1] != 0:
+            # On MQTTv5 Reason codes below 128 may need to be handled
+            # differently. For now, we just raise an error. Specc is a bit weird
+            # on this.
+            raise OSError(-1, 'CONNACK reason code %d' % connack_resp[1])
+
+        del connack_resp
+        if not self.mqttv5:
+            # If we are not on MQTTv5 we can stop here
+            return
+        connack_props_length, _ = await self._recv_len()
+        if connack_props_length > 0:
+            connack_props = await self._as_read(connack_props_length)
+            self.dprint('CONNACK properties: %s', connack_props)
+            # TODO: Implement properties handling???
 
     async def _ping(self):
         async with self.lock:
@@ -401,12 +490,12 @@ class MQTT_base:
 
     # qos == 1: coro blocks until wait_msg gets correct PID.
     # If WiFi fails completely subclass re-publishes with new PID.
-    async def publish(self, topic, msg, retain, qos):
+    async def publish(self, topic, msg, retain, qos, properties=None):
         pid = next(self.newpid)
         if qos:
             self.rcv_pids.add(pid)
         async with self.lock:
-            await self._publish(topic, msg, retain, qos, 0, pid)
+            await self._publish(topic, msg, retain, qos, 0, pid, properties)
         if qos == 0:
             return
 
@@ -422,12 +511,18 @@ class MQTT_base:
             count += 1
             self.REPUB_COUNT += 1
 
-    async def _publish(self, topic, msg, retain, qos, dup, pid):
+    async def _publish(self, topic, msg, retain, qos, dup, pid, properties=None):
         pkt = bytearray(b"\x30\0\0\0")
         pkt[0] |= qos << 1 | retain | dup << 3
         sz = 2 + len(topic) + len(msg)
         if qos > 0:
             sz += 2
+
+        if self.mqttv5:
+            if properties is not None:
+                properties = format_properties(properties)
+                sz += len(properties)
+
         if sz >= 2097152:
             raise MQTTException("Strings too long.")
         i = 1
@@ -441,6 +536,9 @@ class MQTT_base:
         if qos > 0:
             struct.pack_into("!H", pkt, 0, pid)
             await self._as_write(pkt, 2)
+        if self.mqttv5:
+            # No properties
+            await self._as_write(properties)
         await self._as_write(msg)
 
     # Can raise OSError if WiFi fails. Subclass traps.
@@ -448,10 +546,19 @@ class MQTT_base:
         pkt = bytearray(b"\x82\0\0\0")
         pid = next(self.newpid)
         self.rcv_pids.add(pid)
-        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, pid)
+        sz = 2 + 2 + len(topic) + 1
+        if self.mqttv5:
+            # TODO: Implement properties
+            sz += 1  # For properties (none for now)
+
+        struct.pack_into("!BH", pkt, 1, sz, pid)
         async with self.lock:
             await self._as_write(pkt)
+            if self.mqttv5:
+                # TODO: Implement properties
+                await self._as_write(b'\x00')
             await self._send_str(topic)
+            # TODO: Allow more and better subscription options than just QoS
             await self._as_write(qos.to_bytes(1, "little"))
 
         if not await self._await_pid(pid):
@@ -483,6 +590,7 @@ class MQTT_base:
                 await asyncio.sleep_ms(0)
                 return
             raise
+
         if res is None:
             return
         if res == b"":
@@ -493,38 +601,61 @@ class MQTT_base:
             return
         op = res[0]
 
+        print(op)
+
         if op == 0x40:  # PUBACK: save pid
-            sz = await self._as_read(1)
-            if sz != b"\x02":
-                raise OSError(-1, "Invalid PUBACK packet")
+            sz, _ = await self._recv_len()
+            if not self.mqttv5:
+                if sz != 2:
+                    raise OSError(-1, 'Invalid PUBACK packet')
             rcv_pid = await self._as_read(2)
             pid = rcv_pid[0] << 8 | rcv_pid[1]
+            # For some reason even on MQTTv5 reason code is optional
+            if sz != 2:
+                reason_code = await self._as_read(1)
+                self.dprint('PUBACK reason code: %s', reason_code)
+            if sz > 2:
+                puback_props_sz, _ = await self._recv_len()
+                if puback_props_sz > 0:
+                    puback_props = await self._as_read(puback_props_sz)
+                    self.dprint('PUBACK properties: %s', puback_props)
+
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
                 raise OSError(-1, "Invalid pid in PUBACK packet")
 
         if op == 0x90:  # SUBACK
-            resp = await self._as_read(4)
-            if resp[3] == 0x80:
-                raise OSError(-1, "Invalid SUBACK packet")
-            pid = resp[2] | (resp[1] << 8)
+            sz, _ = await self._recv_len()
+            rcv_pid = await self._as_read(2)
+            sz -= 2
+            pid = rcv_pid[0] << 8 | rcv_pid[1]
+            # Handle properties
+            if self.mqttv5:
+                suback_props_sz, sz_len = await self._recv_len()
+                sz -= sz_len
+                sz -= suback_props_sz
+                if suback_props_sz > 0:
+                    suback_props = await self._as_read(suback_props_sz)
+                    self.dprint('SUBACK properties: %s', suback_props)
+
+            if sz > 1:
+                raise OSError(-1, 'Got too many bytes')
+
+            reason_code = await self._as_read(sz)
+            reason_code = reason_code[0]
+            print('Reason code:', reason_code)
+            if reason_code > 0x80:
+                raise OSError(-1, 'SUBACK reason code failure')
+
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
-                raise OSError(-1, "Invalid pid in SUBACK packet")
+                raise OSError(-1, 'Invalid pid in SUBACK packet')
 
-        if op == 0xB0:  # UNSUBACK
-            resp = await self._as_read(3)
-            pid = resp[2] | (resp[1] << 8)
-            if pid in self.rcv_pids:
-                self.rcv_pids.discard(pid)
-            else:
-                raise OSError(-1)
-
-        if op & 0xF0 != 0x30:
+        if op & 0xf0 != 0x30:
             return
-        sz = await self._recv_len()
+        sz, _ = await self._recv_len()
         topic_len = await self._as_read(2)
         topic_len = (topic_len[0] << 8) | topic_len[1]
         topic = await self._as_read(topic_len)
@@ -533,6 +664,15 @@ class MQTT_base:
             pid = await self._as_read(2)
             pid = pid[0] << 8 | pid[1]
             sz -= 2
+        if self.mqttv5:
+            # TODO: Handle properties better
+            pub_props_sz, pub_props_sz_len = await self._recv_len()
+            sz -= pub_props_sz_len
+            sz -= pub_props_sz
+            if pub_props_sz > 0:
+                pub_props = await self._as_read(pub_props_sz)
+                self.dprint('PUB properties: %s', pub_props)
+
         msg = await self._as_read(sz)
         retained = op & 0x01
         if self._events:
