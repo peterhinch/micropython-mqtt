@@ -123,8 +123,8 @@ aiming to maintaining that link indefinitely. Applications which close and
 re-open the link (e.g. for power saving purposes) are subject to limitations
 detailed in [Non standard applications](./README.md#5-non-standard-applications).
 
-Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S2, Pico W and Arduino Nano
-RP2040 Connect.  
+Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S3, ESP32-S2, Pico W and
+Arduino Nano RP2040 Connect.  
 Firmware support: Official MicroPython firmware V1.19 or later.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
 Protocol: The module supports a subset of MQTT revision 3.1.1.
