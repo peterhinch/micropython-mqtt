@@ -8,7 +8,7 @@
 import gc
 import usocket as socket
 import ustruct as struct
-import utime
+import utime as time
 
 gc.collect()
 from ubinascii import hexlify
@@ -152,8 +152,8 @@ def format_properties(properties: dict):
     view = memoryview(properties_bytes)
 
     i = 0
-    while properties_length > 0x7f:
-        view[i] = (properties_length & 0x7f) | 0x80
+    while properties_length > 0x7F:
+        view[i] = (properties_length & 0x7F) | 0x80
         properties_length >>= 7
         i += 1
 
@@ -318,7 +318,7 @@ class MQTT_base:
             import aioespnow  # Set up ESPNOW
 
             while not (sta := self._sta_if).active():
-                utime.sleep(0.1)
+                time.sleep(0.1)
             sta.config(pm=sta.PM_NONE)  # No power management
             sta.active(True)
             self._espnow = aioespnow.AIOESPNow()  # Returns AIOESPNow enhanced with async support
@@ -412,7 +412,7 @@ class MQTT_base:
             res = await self._as_read(1)
             i += 1
             b = res[0]
-            n |= (b & 0x7f) << sh
+            n |= (b & 0x7F) << sh
             if not b & 0x80:
                 return n, i
             sh += 7
@@ -456,8 +456,8 @@ class MQTT_base:
             sz += len(properties)
 
         i = 1
-        while sz > 0x7f:
-            premsg[i] = (sz & 0x7f) | 0x80
+        while sz > 0x7F:
+            premsg[i] = (sz & 0x7F) | 0x80
             sz >>= 7
             i += 1
         premsg[i] = sz
@@ -783,7 +783,7 @@ class MQTT_base:
                 if reason_code >= 0x80:
                     raise OSError(-1, "DISCONNECT reason code 0x%x" % reason_code)
 
-        if op & 0xf0 != 0x30:
+        if op & 0xF0 != 0x30:
             return
 
         sz, _ = await self._recv_len()
@@ -796,6 +796,7 @@ class MQTT_base:
             pid = pid[0] << 8 | pid[1]
             sz -= 2
 
+        decoded_props = None
         if self.mqttv5:
             pub_props_sz, pub_props_sz_len = await self._recv_len()
             sz -= pub_props_sz_len
@@ -803,15 +804,20 @@ class MQTT_base:
             if pub_props_sz > 0:
                 pub_props = await self._as_read(pub_props_sz)
                 decoded_props = decode_properties(pub_props, pub_props_sz)
-                self.dprint("PUB properties %s", decoded_props)
-        # TODO: Evaluate what to do with properties
 
         msg = await self._as_read(sz)
         retained = op & 0x01
         if self._events:
-            self.queue.put(topic, msg, bool(retained))
+            if self.mqttv5:
+                self.queue.put(topic, msg, bool(retained), decoded_props)
+            else:
+                self.queue.put(topic, msg, bool(retained))
         else:
-            self._cb(topic, msg, bool(retained))
+            if self.mqttv5:
+                self._cb(topic, msg, bool(retained), decoded_props)
+            else:
+                self._cb(topic, msg, bool(retained))
+
         if op & 6 == 2:  # qos 1
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
