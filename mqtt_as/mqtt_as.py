@@ -447,7 +447,10 @@ class MQTT_base:
             msg[7] |= self._keepalive >> 8
             msg[8] |= self._keepalive & 0x00FF
         if self._lw_topic:
-            sz += 1 + 2 + len(self._lw_topic) + 2 + len(self._lw_msg)
+            sz += 2 + len(self._lw_topic) + 2 + len(self._lw_msg)
+            if self.mqttv5:
+                # Extra for the will properties
+                sz += 1
             msg[6] |= 0x4 | (self._lw_qos & 0x1) << 3 | (self._lw_qos & 0x2) << 3
             msg[6] |= self._lw_retain << 5
 
@@ -468,8 +471,9 @@ class MQTT_base:
 
         await self._send_str(self._client_id)
         if self._lw_topic:
-            # We don't support will properties, so we send 0x00 for properties length
-            await self._as_write(b"\x00")
+            if self.mqttv5:
+                # We don't support will properties, so we send 0x00 for properties length
+                await self._as_write(b"\x00")
             await self._send_str(self._lw_topic)
             await self._send_str(self._lw_msg)
         if self._user:
