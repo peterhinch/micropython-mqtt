@@ -200,6 +200,13 @@ def decode_string(props, offset):
     return value, offset
 
 
+def decode_string_pair(props, offset):
+    key, offset = decode_string(props, offset)
+    value, offset = decode_string(props, offset)
+    item = {key: value}
+    return item, offset
+
+
 def decode_binary(props, offset):
     data_length = struct.unpack_from("!H", props, offset)[0]
     offset += 2
@@ -242,7 +249,7 @@ decode_property_lookup = {
     0x23: decode_two_byte_int,        # Topic Alias
     0x24: decode_byte,                # Maximum QoS
     0x25: decode_byte,                # Retain Available
-    0x26: decode_string,              # User Property
+    0x26: decode_string_pair,         # User Property
     0x27: decode_four_byte_int,       # Maximum Packet Size
     0x28: decode_byte,                # Wildcard Subscription Available
     0x29: decode_byte,                # Subscription Identifiers Available
