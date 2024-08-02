@@ -26,6 +26,10 @@ import network
 gc.collect()
 from sys import platform
 
+# MQTT v5 support
+# Comment out this line to disable MQTT v5 support and save memory.
+from .mqtt_v5_properties import encode_properties, decode_properties
+
 VERSION = (0, 8, 0)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
@@ -122,157 +126,6 @@ def pid_gen():
 def qos_check(qos):
     if not (qos == 0 or qos == 1):
         raise ValueError("Only qos 0 and 1 are supported.")
-
-
-# MQTT_base class. Handles MQTT protocol on the basis of a good connection.
-# Exceptions from connectivity failures are handled by MQTTClient subclass.
-def format_properties(properties: dict):
-    # We have to do some additional work to have effective memory allocation
-    # First calculate the length of the byte array + variable length encoding
-    if properties in (None, {}):
-        return bytes(1)
-
-    properties_length = 0
-    for key, value in properties.items():
-        properties_length += 1  # key
-        properties_length += len(value)
-        if isinstance(value, str):
-            properties_length += 2  # For MQTT encoding
-
-    variable_length = 1
-    if properties_length > 127:
-        variable_length += 1
-    if properties_length > 16383:
-        variable_length += 1
-    if properties_length > 2097151:
-        variable_length += 1
-
-    # Now we can allocate the byte array
-    properties_bytes = bytearray(variable_length + properties_length)
-    view = memoryview(properties_bytes)
-
-    i = 0
-    while properties_length > 0x7F:
-        view[i] = (properties_length & 0x7F) | 0x80
-        properties_length >>= 7
-        i += 1
-
-    view[i] = properties_length
-    i += 1
-
-    for key, value in properties.items():
-        view[i] = key
-        i += 1
-        if isinstance(value, str):
-            view[i] = len(value) >> 8
-            view[i + 1] = len(value) & 0xFF
-            i += 2
-            value = value.encode("utf-8")
-        view[i:i + len(value)] = value
-        i += len(value)
-
-    return properties_bytes
-
-
-def decode_byte(props, offset):
-    value = props[offset]
-    offset += 1
-    return value, offset
-
-
-def decode_two_byte_int(props, offset):
-    value = struct.unpack_from("!H", props, offset)[0]
-    offset += 2
-    return value, offset
-
-
-def decode_four_byte_int(props, offset):
-    value = struct.unpack_from("!I", props, offset)[0]
-    offset += 4
-    return value, offset
-
-
-def decode_string(props, offset):
-    str_length = struct.unpack_from("!H", props, offset)[0]
-    offset += 2
-    value = props[offset:offset + str_length].decode("utf-8")
-    offset += str_length
-    return value, offset
-
-
-def decode_string_pair(props, offset):
-    key, offset = decode_string(props, offset)
-    value, offset = decode_string(props, offset)
-    item = {key: value}
-    return item, offset
-
-
-def decode_binary(props, offset):
-    data_length = struct.unpack_from("!H", props, offset)[0]
-    offset += 2
-    value = props[offset:offset + data_length]
-    offset += data_length
-    return value, offset
-
-
-def decode_variable_byte_int(props, offset):
-    value = 0
-    for i in range(4):
-        b = props[offset]
-        value |= (b & 0x7F) << (7 * i)
-        offset += 1
-        if not b & 0x80:
-            break
-    return value, offset
-
-
-decode_property_lookup = {
-    0x01: decode_byte,                # Payload Format Indicator
-    0x02: decode_four_byte_int,       # Message Expiry Interval
-    0x03: decode_string,              # Content Type
-    0x08: decode_string,              # Response Topic
-    0x09: decode_binary,              # Correlation Data
-    0x0B: decode_variable_byte_int,   # Subscription Identifier
-    0x11: decode_four_byte_int,       # Session Expiry Interval
-    0x12: decode_string,              # Assigned Client Identifier
-    0x13: decode_two_byte_int,        # Server Keep Alive
-    0x15: decode_string,              # Authentication Method
-    0x16: decode_binary,              # Authentication Data
-    0x17: decode_byte,                # Request Problem Information
-    0x18: decode_four_byte_int,       # Will Delay Interval
-    0x19: decode_byte,                # Request Response Information
-    0x1A: decode_string,              # Response Information
-    0x1C: decode_string,              # Server Reference
-    0x1F: decode_string,              # Reason String
-    0x21: decode_two_byte_int,        # Receive Maximum
-    0x22: decode_two_byte_int,        # Topic Alias Maximum
-    0x23: decode_two_byte_int,        # Topic Alias
-    0x24: decode_byte,                # Maximum QoS
-    0x25: decode_byte,                # Retain Available
-    0x26: decode_string_pair,         # User Property
-    0x27: decode_four_byte_int,       # Maximum Packet Size
-    0x28: decode_byte,                # Wildcard Subscription Available
-    0x29: decode_byte,                # Subscription Identifiers Available
-    0x2A: decode_byte,                # Shared Subscription Available
-}
-
-
-def decode_properties(props, properties_length):
-    offset = 0
-    properties = {}
-
-    while offset < properties_length:
-        property_identifier = props[offset]
-        offset += 1
-
-        if property_identifier in decode_property_lookup:
-            decode_function = decode_property_lookup[property_identifier]
-            value, offset = decode_function(props, offset)
-            properties[property_identifier] = value
-        else:
-            raise ValueError(f"Unknown property identifier: {property_identifier}")
-
-    return properties
 
 
 class MQTT_base:
@@ -462,7 +315,7 @@ class MQTT_base:
             msg[6] |= self._lw_retain << 5
 
         if self.mqttv5:
-            properties = format_properties(self.mqttv5_con_props)
+            properties = encode_properties(self.mqttv5_con_props)
             sz += len(properties)
 
         i = 1
@@ -635,7 +488,7 @@ class MQTT_base:
             sz += 2
 
         if self.mqttv5:
-            properties = format_properties(properties)
+            properties = encode_properties(properties)
             sz += len(properties)
 
         if sz >= 2097152:
@@ -662,7 +515,7 @@ class MQTT_base:
         self.rcv_pids.add(pid)
         sz = 2 + 2 + len(topic) + 1
         if self.mqttv5:
-            properties = format_properties(properties)
+            properties = encode_properties(properties)
             sz += len(properties)
 
         struct.pack_into("!BH", pkt, 1, sz, pid)
@@ -686,7 +539,7 @@ class MQTT_base:
         self.rcv_pids.add(pid)
         sz = 2 + 2 + len(topic)
         if self.mqttv5:
-            properties = format_properties(properties)
+            properties = encode_properties(properties)
             sz += len(properties)
 
         struct.pack_into("!BH", pkt, sz, pid)
