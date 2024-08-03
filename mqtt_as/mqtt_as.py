@@ -26,10 +26,6 @@ import network
 gc.collect()
 from sys import platform
 
-# MQTT v5 support
-# Comment out this line to disable MQTT v5 support and save memory.
-from .mqtt_v5_properties import encode_properties, decode_properties
-
 VERSION = (0, 8, 0)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
@@ -192,6 +188,9 @@ class MQTT_base:
         self.mqttv5 = config.get("mqttv5")
         self.mqttv5_con_props = config.get("mqttv5_con_props")
         self.topic_alias_maximum = 0
+
+        if self.mqttv5:
+            from .mqtt_v5_properties import encode_properties, decode_properties
 
     def _set_last_will(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
