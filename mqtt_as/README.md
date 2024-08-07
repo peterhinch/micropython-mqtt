@@ -50,6 +50,10 @@ with the latest version, otherwise recovery from an outage may not occur.
   3.3 [Class Variables](./README.md#33-class-variables)  
   3.4 [Module Attribute](./README.md#34-module-attribute)  
   3.5 [Event based interface](./README.md#35-event-based-interface)  
+  3.6 [MQTTv5 Support](./README.md#36-mqttv5-support)  
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.6.1 [Configuration and Migration from MQTTv3.1.1](./README.md#361-configuration-and-migration-from-mqttv311)  
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.6.2 [MQTTv5 Properties](./README.md#362-mqttv5-properties)  
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.6.3 [Unsupported Features](./README.md#363-unsupported-features)  
  4. [Notes](./README.md#4-notes)  
   4.1 [Connectivity](./README.md#41-connectivity)  
   4.2 [Client publications with qos == 1](./README.md#42-client-publications-with-qos-1)  
@@ -690,6 +694,125 @@ async def messages(client):
 ```
 In applications RAM is at a premium, in testing the callback-based interface
 offers somewhat (~1.3KiB) lower consumption than the minimal queue case.
+
+## 3.6 MQTTv5 Support
+### 3.6.1 Configuration and Migration from MQTTv3.1.1
+MQTTv5 is supported and can be configured by setting `mqttv5` to `True` in the
+the `config` dictionary. The default is `False`. Properties on connect
+are supported, these need to be passed in the configuration dictionary. See
+3.6.2 for more information on properties, and how to format them.
+
+
+```python
+from mqtt_as import MQTTClient, config
+config['mqttv5'] = True
+
+# Optional: Set the properties for the connection
+config['mqttv5_con_props'] = {
+    0x11: 3600,  # Session Expiry Interval
+}
+
+# The rest of the configuration
+...
+
+client = MQTTClient(config)
+
+```
+
+There are modifications to the API to support MQTTv5 features. The most
+significant is the addition of the `properties` argument that is provided as
+an additional argument to both the event and callback-based message handlers.
+
+```python
+# For MQTT 3.1.1 support
+def callback(topic, msg, retained):
+    print((topic, msg, retained))
+
+# For MQTT 5 and 3.1.1 support
+def callback(topic, msg, retained, properties=None):
+    print((topic, msg, retained, properties))
+```
+
+Allowing properties as an optional argument allows you to switch between
+MQTT 3.1.1 and MQTT 5 support without changing the callback signature.
+
+```python
+async def messages(client):
+    async for topic, msg, retained, properties in client.queue:
+        await asyncio.sleep(0)  # Allow other instances to be scheduled
+        # handle message
+```
+
+The `properties` argument is a dictionary that contains the properties of the
+message. The properties are defined in the MQTTv5 specification. If you 
+include properties in published messages, while using MQTTv3.1.1, the properties
+will be ignored.
+
+### 3.6.2 MQTTv5 Properties
+Properties are a new and important feature of MQTTv5. They are used to provide
+additional information about the message, and allow for more advanced features
+such as message expiry, user properties, and response information.
+
+Incoming properties are formatted as a dictionary using the property  identifier
+as the key. The property identifier is an integer that is defined in the MQTTv5
+there are no constants defined in the module for these values. The property
+identifier is defined in the [MQTTv5 specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html).
+
+Sending properties must be done in the right format. The MQTTv5 specification
+makes a distinction between binary and text properties. It is important to
+ensure that the properties are sent in the correct format. For reference, 
+refer to [section 2.2.2.2](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901029)
+of the MQTTv5 specification.
+
+```python
+properties = {
+    0x26: {'value': 'test'},       # User Property (UTF-8 string pair)
+    0x09: b'correlation_data',     # Correlation Data (binary)
+    0x08: 'response_topic',        # Response Topic (UTF-8 string)
+    0x02: 60,                      # Message Expiry Interval (integer)
+}
+
+await client.publish('topic/test', 'message', False, 0, properties=properties)
+```
+
+Received properties are formatted as a dictionary using the property identifier
+as the key. The property identifier is an integer that is defined in the MQTTv5
+specification.
+
+### 3.6.3 Unsupported Features
+In the interest of keeping the library lightweight and well tested, some
+features of MQTTv5 are not supported.
+1. Enhanced Authentication: [Enhanced Authentication](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901256) 
+is a new part of the MQTT specification that allows for more advanced
+authentication methods. This feature is not supported by the library. 
+`AUTH` packet is not implemented and is not handled.
+2. Will Properties: [Will Properties](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901060) 
+with the introduction of properties in MQTTv5 messages can now have properties.
+This includes the will message. This feature is NOT supported, so properties
+cannot be sent with the will message.
+3. Multiple User Properties: [User Properties](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901054) 
+the spec allows for multiple user properties to be sent with a message. In the
+current implementation, only one user property is supported. This applied to 
+both sending and receiving messages. When receiving messages, only the last user
+property is returned. If you include more than 1 key-value pair in the user
+properties dictionary when sending a message, only the first key-value pair will
+be sent.
+4. Subscription options: [Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169) 
+in MQTTv5 subscription options were introduced (in addition to the QoS level).
+These options cannot be set when subscribing to a topic. The following options
+are not available:
+    - No Local (NL)
+    - Retain As Published (RAP)
+    - Retain Handling
+5. Not all properties in the `CONNACK` packet are exposed.
+6. Properties on operations other than `CONNECT` and `PUBLISH` are not
+returned to the user. For more information, see this 
+[comment](https://github.com/peterhinch/micropython-mqtt/issues/127#issuecomment-2273742368)
+
+NOTE: Most of these features could be implemented with some effort. 
+These features were not implemented, to keep the current implementation simple
+and reduce the scope of testing required.
+
 
 ###### [Contents](./README.md#1-contents)
 
