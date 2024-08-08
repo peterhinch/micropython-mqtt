@@ -753,10 +753,10 @@ Properties are a new and important feature of MQTTv5. They are used to provide
 additional information about the message, and allow for more advanced features
 such as message expiry, user properties, and response information.
 
-Incoming properties are formatted as a dictionary using the property  identifier
+Incoming properties are formatted as a dictionary using the property identifier
 as the key. The property identifier is an integer that is defined in the MQTTv5
-there are no constants defined in the module for these values. The property
-identifier is defined in the [MQTTv5 specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html).
+specification, there are no constants defined in the module for these values. 
+The property identifier is defined in the [MQTTv5 specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html).
 
 Sending properties must be done in the right format. The MQTTv5 specification
 makes a distinction between binary and text properties. It is important to
