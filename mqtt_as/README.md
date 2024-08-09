@@ -29,6 +29,7 @@ with the latest version, otherwise recovery from an outage may not occur.
   1.7 [Arduino Nano RP2040 Connect](./README.md#17-arduino-nano-rp2040-connect)  
   1.8 [RP2 Pico W](./README.md#18-rp2-pico-w)  
   1.9 [Limitations](./README.md#19-limitations) Please read this.  
+  1.10 [MQTTv5](./README.md#110-mqttv5) Which version should you use?  
  2. [Getting started](./README.md#2-getting_started)  
   2.1 [Program files](./README.md#21-program-files)  
   2.2 [Installation](./README.md#22-installation)  
@@ -141,6 +142,7 @@ contributors, some mentioned below.
 
 Note that in firmware prior to 1.21 `asyncio` was named `uasyncio`.
 
+9 Aug 2024 V0.8.0 Partial MQTTv5 support contributed by Bob Veringa.
 15 Feb 2024 V0.7.2 Make compliant with firmware V1.22.0 and later.
 12 Nov 2022 V0.7.0 Provide alternative callback-free Event interface.  
 2 Nov 2022 Rename `config.py` to `mqtt_local.py`, doc improvements.  
@@ -208,6 +210,13 @@ Some platforms - notably ESP32 - are unhelpful when dealing with gross errors
 such as incorrect WiFi credentials. Initial connection will only fail after a
 one minute timeout. Other platforms enable an immediate bail-out.
 
+## 1.10 MQTTv5
+The addition of MQTTv5 support does not affect existing applications which will
+run unchanged. It is expected that most microcontroller users will continue with
+MQTT V3.1.1. The use of MQTTv5 uses additinal RAM (~3KiB) and requires some
+knowledge of the protocol. See [MQTTv5 Support](./README.md#36-mqttv5-support)
+for more details.
+
 ###### [Contents](./README.md#1-contents)
 
 # 2. Getting started
@@ -221,6 +230,10 @@ one minute timeout. Other platforms enable an immediate bail-out.
 ### Required by demo scripts
 
  1. `mqtt_local.py` Holds local configuration details such as WiFi credentials.
+
+### Required if using MQTTv5 mode
+
+ 1. `mqtt_v5_properties.py`
 
 ### Test/demo scripts
 
@@ -744,7 +757,7 @@ async def messages(client):
 ```
 
 The `properties` argument is a dictionary that contains the properties of the
-message. The properties are defined in the MQTTv5 specification. If you 
+message. The properties are defined in the MQTTv5 specification. If you
 include properties in published messages, while using MQTTv3.1.1, the properties
 will be ignored.
 
@@ -755,12 +768,12 @@ such as message expiry, user properties, and response information.
 
 Incoming properties are formatted as a dictionary using the property identifier
 as the key. The property identifier is an integer that is defined in the MQTTv5
-specification, there are no constants defined in the module for these values. 
+specification, there are no constants defined in the module for these values.
 The property identifier is defined in the [MQTTv5 specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html).
 
 Sending properties must be done in the right format. The MQTTv5 specification
 makes a distinction between binary and text properties. It is important to
-ensure that the properties are sent in the correct format. For reference, 
+ensure that the properties are sent in the correct format. For reference,
 refer to [section 2.2.2.2](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901029)
 of the MQTTv5 specification.
 
@@ -782,22 +795,22 @@ specification.
 ### 3.6.3 Unsupported Features
 In the interest of keeping the library lightweight and well tested, some
 features of MQTTv5 are not supported.
-1. Enhanced Authentication: [Enhanced Authentication](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901256) 
+1. Enhanced Authentication: [Enhanced Authentication](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901256)
 is a new part of the MQTT specification that allows for more advanced
-authentication methods. This feature is not supported by the library. 
+authentication methods. This feature is not supported by the library.
 `AUTH` packet is not implemented and is not handled.
-2. Will Properties: [Will Properties](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901060) 
+2. Will Properties: [Will Properties](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901060)
 with the introduction of properties in MQTTv5 messages can now have properties.
 This includes the will message. This feature is NOT supported, so properties
 cannot be sent with the will message.
-3. Multiple User Properties: [User Properties](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901054) 
+3. Multiple User Properties: [User Properties](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901054)
 the spec allows for multiple user properties to be sent with a message. In the
-current implementation, only one user property is supported. This applied to 
+current implementation, only one user property is supported. This applied to
 both sending and receiving messages. When receiving messages, only the last user
 property is returned. If you include more than 1 key-value pair in the user
 properties dictionary when sending a message, only the first key-value pair will
 be sent.
-4. Subscription options: [Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169) 
+4. Subscription options: [Subscription Options](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901169)
 in MQTTv5 subscription options were introduced (in addition to the QoS level).
 These options cannot be set when subscribing to a topic. The following options
 are not available:
@@ -806,10 +819,10 @@ are not available:
     - Retain Handling
 5. Not all properties in the `CONNACK` packet are exposed.
 6. Properties on operations other than `CONNECT` and `PUBLISH` are not
-returned to the user. For more information, see this 
+returned to the user. For more information, see this
 [comment](https://github.com/peterhinch/micropython-mqtt/issues/127#issuecomment-2273742368)
 
-NOTE: Most of these features could be implemented with some effort. 
+NOTE: Most of these features could be implemented with some effort.
 These features were not implemented, to keep the current implementation simple
 and reduce the scope of testing required.
 
