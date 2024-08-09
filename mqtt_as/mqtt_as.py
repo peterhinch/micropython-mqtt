@@ -8,6 +8,7 @@
 import gc
 import usocket as socket
 import ustruct as struct
+import utime as time
 
 gc.collect()
 from ubinascii import hexlify
@@ -25,7 +26,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 7, 2)
+VERSION = (0, 8, 0)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -44,6 +45,7 @@ else:
 
 ESP8266 = platform == "esp8266"
 PYBOARD = platform == "pyboard"
+
 
 # Default "do little" coro for optional user replacement
 async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
@@ -101,6 +103,8 @@ config = {
     "wifi_pw": None,
     "queue_len": 0,
     "gateway": False,
+    "mqttv5": False,
+    "mqttv5_con_props": None,
 }
 
 
@@ -120,8 +124,6 @@ def qos_check(qos):
         raise ValueError("Only qos 0 and 1 are supported.")
 
 
-# MQTT_base class. Handles MQTT protocol on the basis of a good connection.
-# Exceptions from connectivity failures are handled by MQTTClient subclass.
 class MQTT_base:
     REPUB_COUNT = 0  # TEST
     DEBUG = False
@@ -182,6 +184,13 @@ class MQTT_base:
         self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = asyncio.Lock()
+
+        self.mqttv5 = config.get("mqttv5")
+        self.mqttv5_con_props = config.get("mqttv5_con_props")
+        self.topic_alias_maximum = 0
+
+        if self.mqttv5:
+            from .mqtt_v5_properties import encode_properties, decode_properties
 
     def _set_last_will(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
@@ -257,12 +266,14 @@ class MQTT_base:
     async def _recv_len(self):
         n = 0
         sh = 0
+        i = 0
         while 1:
             res = await self._as_read(1)
+            i += 1
             b = res[0]
             n |= (b & 0x7F) << sh
             if not b & 0x80:
-                return n
+                return n, i
             sh += 7
 
     async def _connect(self, clean):
@@ -283,7 +294,11 @@ class MQTT_base:
 
             self._sock = ssl.wrap_socket(self._sock, **self._ssl_params)
         premsg = bytearray(b"\x10\0\0\0\0\0")
-        msg = bytearray(b"\x04MQTT\x04\0\0\0")  # Protocol 3.1.1
+        msg = bytearray(b"\x04MQTT\x00\0\0\0")
+        if self.mqttv5:
+            msg[5] = 0x05
+        else:
+            msg[5] = 0x04
 
         sz = 10 + 2 + len(self._client_id)
         msg[6] = clean << 1
@@ -295,8 +310,15 @@ class MQTT_base:
             msg[8] |= self._keepalive & 0x00FF
         if self._lw_topic:
             sz += 2 + len(self._lw_topic) + 2 + len(self._lw_msg)
+            if self.mqttv5:
+                # Extra for the will properties
+                sz += 1
             msg[6] |= 0x4 | (self._lw_qos & 0x1) << 3 | (self._lw_qos & 0x2) << 3
             msg[6] |= self._lw_retain << 5
+
+        if self.mqttv5:
+            properties = encode_properties(self.mqttv5_con_props)
+            sz += len(properties)
 
         i = 1
         while sz > 0x7F:
@@ -306,8 +328,14 @@ class MQTT_base:
         premsg[i] = sz
         await self._as_write(premsg, i + 2)
         await self._as_write(msg)
+        if self.mqttv5:
+            await self._as_write(properties)
+
         await self._send_str(self._client_id)
         if self._lw_topic:
+            if self.mqttv5:
+                # We don't support will properties, so we send 0x00 for properties length
+                await self._as_write(b"\x00")
             await self._send_str(self._lw_topic)
             await self._send_str(self._lw_msg)
         if self._user:
@@ -315,13 +343,41 @@ class MQTT_base:
             await self._send_str(self._pswd)
         # Await CONNACK
         # read causes ECONNABORTED if broker is out; triggers a reconnect.
-        resp = await self._as_read(4)
-        self.dprint("Connected to broker.")  # Got CONNACK
-        if resp[3] != 0 or resp[0] != 0x20 or resp[1] != 0x02:
-            # Bad CONNACK e.g. authentication fail.
-            raise OSError(
-                -1, f"Connect fail: 0x{(resp[0] << 8) + resp[1]:04x} {resp[3]} (README 7)"
-            )
+        del premsg, msg
+        packet_type = await self._as_read(1)
+        if packet_type[0] != 0x20:
+            raise OSError(-1, "CONNACK not received")
+        # The connect packet has changed, so size might be different now. But
+        # we can still handle it the same for 3.1.1 and v5
+        sz, _ = await self._recv_len()
+        if not self.mqttv5:
+            if sz != 2:
+                raise OSError(-1, "Invalid CONNACK packet")
+
+        # Only read the first 2 bytes, as properties have their own length
+        connack_resp = await self._as_read(2)
+
+        # Connect ack flags
+        if connack_resp[0] != 0:
+            raise OSError(-1, "CONNACK flags not 0")
+        # Reason code
+        if connack_resp[1] != 0:
+            # On MQTTv5 Reason codes below 128 may need to be handled
+            # differently. For now, we just raise an error. Spec is a bit weird
+            # on this.
+            raise OSError(-1, "CONNACK reason code 0x%x" % connack_resp[1])
+
+        del connack_resp
+        if not self.mqttv5:
+            # If we are not on MQTTv5 we can stop here
+            return
+
+        connack_props_length, _ = await self._recv_len()
+        if connack_props_length > 0:
+            connack_props = await self._as_read(connack_props_length)
+            decoded_props = decode_properties(connack_props, connack_props_length)
+            self.dprint("CONNACK properties: %s", decoded_props)
+            self.topic_alias_maximum = decoded_props.get(0x22, 0)
 
     async def _ping(self):
         async with self.lock:
@@ -329,8 +385,8 @@ class MQTT_base:
 
     # Check internet connectivity by sending DNS lookup to Google's 8.8.8.8
     async def wan_ok(
-        self,
-        packet=b"$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01",
+            self,
+            packet=b"$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01",
     ):
         if not self.isconnected():  # WiFi is down
             return False
@@ -404,12 +460,12 @@ class MQTT_base:
 
     # qos == 1: coro blocks until wait_msg gets correct PID.
     # If WiFi fails completely subclass re-publishes with new PID.
-    async def publish(self, topic, msg, retain, qos):
+    async def publish(self, topic, msg, retain, qos, properties=None):
         pid = next(self.newpid)
         if qos:
             self.rcv_pids.add(pid)
         async with self.lock:
-            await self._publish(topic, msg, retain, qos, 0, pid)
+            await self._publish(topic, msg, retain, qos, 0, pid, properties)
         if qos == 0:
             return
 
@@ -421,16 +477,22 @@ class MQTT_base:
             if count >= self._max_repubs or not self.isconnected():
                 raise OSError(-1)  # Subclass to re-publish with new PID
             async with self.lock:
-                await self._publish(topic, msg, retain, qos, dup=1, pid=pid)  # Add pid
+                # Add pid
+                await self._publish(topic, msg, retain, qos, dup=1, pid=pid, properties=properties)
             count += 1
             self.REPUB_COUNT += 1
 
-    async def _publish(self, topic, msg, retain, qos, dup, pid):
+    async def _publish(self, topic, msg, retain, qos, dup, pid, properties=None):
         pkt = bytearray(b"\x30\0\0\0")
         pkt[0] |= qos << 1 | retain | dup << 3
         sz = 2 + len(topic) + len(msg)
         if qos > 0:
             sz += 2
+
+        if self.mqttv5:
+            properties = encode_properties(properties)
+            sz += len(properties)
+
         if sz >= 2097152:
             raise MQTTException("Strings too long.")
         i = 1
@@ -444,30 +506,49 @@ class MQTT_base:
         if qos > 0:
             struct.pack_into("!H", pkt, 0, pid)
             await self._as_write(pkt, 2)
+        if self.mqttv5:
+            await self._as_write(properties)
         await self._as_write(msg)
 
     # Can raise OSError if WiFi fails. Subclass traps.
-    async def subscribe(self, topic, qos):
+    async def subscribe(self, topic, qos, properties=None):
         pkt = bytearray(b"\x82\0\0\0")
         pid = next(self.newpid)
         self.rcv_pids.add(pid)
-        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, pid)
+        sz = 2 + 2 + len(topic) + 1
+        if self.mqttv5:
+            properties = encode_properties(properties)
+            sz += len(properties)
+
+        struct.pack_into("!BH", pkt, 1, sz, pid)
         async with self.lock:
             await self._as_write(pkt)
+            if self.mqttv5:
+                await self._as_write(properties)
             await self._send_str(topic)
+            # Only QoS is supported other features such as:
+            # (NL) No Local, (RAP) Retain As Published and Retain Handling.
+            # Are not supported.
             await self._as_write(qos.to_bytes(1, "little"))
 
         if not await self._await_pid(pid):
             raise OSError(-1)
 
     # Can raise OSError if WiFi fails. Subclass traps.
-    async def unsubscribe(self, topic):
+    async def unsubscribe(self, topic, properties=None):
         pkt = bytearray(b"\xa2\0\0\0")
         pid = next(self.newpid)
         self.rcv_pids.add(pid)
-        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic), pid)
+        sz = 2 + 2 + len(topic)
+        if self.mqttv5:
+            properties = encode_properties(properties)
+            sz += len(properties)
+
+        struct.pack_into("!BH", pkt, sz, pid)
         async with self.lock:
             await self._as_write(pkt)
+            if self.mqttv5:
+                await self._as_write(properties)
             await self._send_str(topic)
 
         if not await self._await_pid(pid):
@@ -486,6 +567,7 @@ class MQTT_base:
                 await asyncio.sleep_ms(0)
                 return
             raise
+
         if res is None:
             return
         if res == b"":
@@ -497,37 +579,80 @@ class MQTT_base:
         op = res[0]
 
         if op == 0x40:  # PUBACK: save pid
-            sz = await self._as_read(1)
-            if sz != b"\x02":
-                raise OSError(-1, "Invalid PUBACK packet")
+            sz, _ = await self._recv_len()
+            if not self.mqttv5:
+                if sz != 2:
+                    raise OSError(-1, "Invalid PUBACK packet")
             rcv_pid = await self._as_read(2)
             pid = rcv_pid[0] << 8 | rcv_pid[1]
+            # For some reason even on MQTTv5 reason code is optional
+            if sz != 2:
+                reason_code = await self._as_read(1)
+                reason_code = reason_code[0]
+                if reason_code >= 0x80:
+                    raise OSError(-1, "PUBACK reason code 0x%x" % reason_code)
+
+            if sz > 2:
+                puback_props_sz, _ = await self._recv_len()
+                if puback_props_sz > 0:
+                    puback_props = await self._as_read(puback_props_sz)
+                    decoded_props = decode_properties(puback_props, puback_props_sz)
+                    self.dprint("PUBACK properties %s", decoded_props)
+
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
                 raise OSError(-1, "Invalid pid in PUBACK packet")
 
         if op == 0x90:  # SUBACK
-            resp = await self._as_read(4)
-            if resp[3] == 0x80:
-                raise OSError(-1, "Invalid SUBACK packet")
-            pid = resp[2] | (resp[1] << 8)
+            sz, _ = await self._recv_len()
+            rcv_pid = await self._as_read(2)
+            sz -= 2
+            pid = rcv_pid[0] << 8 | rcv_pid[1]
+            # Handle properties
+            if self.mqttv5:
+                suback_props_sz, sz_len = await self._recv_len()
+                sz -= sz_len
+                sz -= suback_props_sz
+                if suback_props_sz > 0:
+                    suback_props = await self._as_read(suback_props_sz)
+                    decoded_props = decode_properties(suback_props, suback_props_sz)
+                    self.dprint("SUBACK properties %s", decoded_props)
+
+            if sz > 1:
+                raise OSError(-1, "Got too many bytes")
+
+            reason_code = await self._as_read(sz)
+            reason_code = reason_code[0]
+            if reason_code >= 0x80:
+                raise OSError(-1, "SUBACK reason code 0x%x" % reason_code)
+
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:
                 raise OSError(-1, "Invalid pid in SUBACK packet")
 
-        if op == 0xB0:  # UNSUBACK
-            resp = await self._as_read(3)
-            pid = resp[2] | (resp[1] << 8)
-            if pid in self.rcv_pids:
-                self.rcv_pids.discard(pid)
-            else:
-                raise OSError(-1)
+        if op == 0xE0:  # DISCONNECT
+            if self.mqttv5:
+                sz, _ = await self._recv_len()
+                reason_code = await self._as_read(1)
+                reason_code = reason_code[0]
+
+                sz -= 1
+                if sz > 0:
+                    dis_props_sz, dis_len = await self._recv_len()
+                    sz -= dis_len
+                    disconnect_props = await self._as_read(dis_props_sz)
+                    decoded_props = decode_properties(disconnect_props, dis_props_sz)
+                    self.dprint("DISCONNECT properties %s", decoded_props)
+
+                if reason_code >= 0x80:
+                    raise OSError(-1, "DISCONNECT reason code 0x%x" % reason_code)
 
         if op & 0xF0 != 0x30:
             return
-        sz = await self._recv_len()
+
+        sz, _ = await self._recv_len()
         topic_len = await self._as_read(2)
         topic_len = (topic_len[0] << 8) | topic_len[1]
         topic = await self._as_read(topic_len)
@@ -536,12 +661,29 @@ class MQTT_base:
             pid = await self._as_read(2)
             pid = pid[0] << 8 | pid[1]
             sz -= 2
+
+        decoded_props = None
+        if self.mqttv5:
+            pub_props_sz, pub_props_sz_len = await self._recv_len()
+            sz -= pub_props_sz_len
+            sz -= pub_props_sz
+            if pub_props_sz > 0:
+                pub_props = await self._as_read(pub_props_sz)
+                decoded_props = decode_properties(pub_props, pub_props_sz)
+
         msg = await self._as_read(sz)
         retained = op & 0x01
         if self._events:
-            self.queue.put(topic, msg, bool(retained))
+            if self.mqttv5:
+                self.queue.put(topic, msg, bool(retained), decoded_props)
+            else:
+                self.queue.put(topic, msg, bool(retained))
         else:
-            self._cb(topic, msg, bool(retained))
+            if self.mqttv5:
+                self._cb(topic, msg, bool(retained), decoded_props)
+            else:
+                self._cb(topic, msg, bool(retained))
+
         if op & 6 == 2:  # qos 1
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
             struct.pack_into("!H", pkt, 2, pid)
@@ -578,21 +720,18 @@ class MQTTClient(MQTT_base):
             s.active(True)
             s.connect()  # ESP8266 remembers connection.
             for _ in range(60):
-                if (
-                    s.status() != network.STAT_CONNECTING
-                ):  # Break out on fail or success. Check once per sec.
+                # Break out on fail or success. Check once per sec.
+                if s.status() != network.STAT_CONNECTING:
                     break
                 await asyncio.sleep(1)
-            if (
-                s.status() == network.STAT_CONNECTING
-            ):  # might hang forever awaiting dhcp lease renewal or something else
+            # might hang forever awaiting dhcp lease renewal or something else
+            if s.status() == network.STAT_CONNECTING:
                 s.disconnect()
                 await asyncio.sleep(1)
             if not s.isconnected() and self._ssid is not None and self._wifi_pw is not None:
                 s.connect(self._ssid, self._wifi_pw)
-                while (
-                    s.status() == network.STAT_CONNECTING
-                ):  # Break out on fail or success. Check once per sec.
+                # Break out on fail or success. Check once per sec.
+                while s.status() == network.STAT_CONNECTING:
                     await asyncio.sleep(1)
         else:
             s.active(True)
@@ -640,19 +779,23 @@ class MQTTClient(MQTT_base):
             self._addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self._in_connect = True  # Disable low level ._isconnected check
         try:
+            is_clean = self._clean
             if not self._has_connected and self._clean_init and not self._clean:
-                # Power up. Clear previous session data but subsequently save it.
-                # Issue #40
-                await self._connect(True)  # Connect with clean session
-                try:
-                    async with self.lock:
-                        self._sock.write(b"\xe0\0")  # Force disconnect but keep socket open
-                except OSError:
-                    pass
-                self.dprint("Waiting for disconnect")
-                await asyncio.sleep(2)  # Wait for broker to disconnect
-                self.dprint("About to reconnect with unclean session.")
-            await self._connect(self._clean)
+                if self.mqttv5:
+                    is_clean = True
+                else:
+                    # Power up. Clear previous session data but subsequently save it.
+                    # Issue #40
+                    await self._connect(True)  # Connect with clean session
+                    try:
+                        async with self.lock:
+                            self._sock.write(b"\xe0\0")  # Force disconnect but keep socket open
+                    except OSError:
+                        pass
+                    self.dprint("Waiting for disconnect")
+                    await asyncio.sleep(2)  # Wait for broker to disconnect
+                    self.dprint("About to reconnect with unclean session.")
+            await self._connect(is_clean)
         except Exception:
             self._close()
             self._in_connect = False  # Caller may run .isconnected()
@@ -723,6 +866,7 @@ class MQTTClient(MQTT_base):
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
             return True
+
         if self._isconnected and not self._sta_if.isconnected():  # It's going down.
             self._reconnect()
         return self._isconnected
@@ -773,31 +917,31 @@ class MQTTClient(MQTT_base):
                     self._isconnected = False
         self.dprint("Disconnected, exited _keep_connected")
 
-    async def subscribe(self, topic, qos=0):
+    async def subscribe(self, topic, qos=0, properties=None):
         qos_check(qos)
         while 1:
             await self._connection()
             try:
-                return await super().subscribe(topic, qos)
+                return await super().subscribe(topic, qos, properties)
             except OSError:
                 pass
             self._reconnect()  # Broker or WiFi fail.
 
-    async def unsubscribe(self, topic):
+    async def unsubscribe(self, topic, properties=None):
         while 1:
             await self._connection()
             try:
-                return await super().unsubscribe(topic)
+                return await super().unsubscribe(topic, properties)
             except OSError:
                 pass
             self._reconnect()  # Broker or WiFi fail.
 
-    async def publish(self, topic, msg, retain=False, qos=0):
+    async def publish(self, topic, msg, retain=False, qos=0, properties=None):
         qos_check(qos)
         while 1:
             await self._connection()
             try:
-                return await super().publish(topic, msg, retain, qos)
+                return await super().publish(topic, msg, retain, qos, properties)
             except OSError:
                 pass
             self._reconnect()  # Broker or WiFi fail.
