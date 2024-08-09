@@ -124,6 +124,10 @@ def qos_check(qos):
         raise ValueError("Only qos 0 and 1 are supported.")
 
 
+encode_properties = None
+decode_properties = None
+
+
 class MQTT_base:
     REPUB_COUNT = 0  # TEST
     DEBUG = False
@@ -190,7 +194,8 @@ class MQTT_base:
         self.topic_alias_maximum = 0
 
         if self.mqttv5:
-            from .mqtt_v5_properties import encode_properties, decode_properties
+            global encode_properties, decode_properties
+            from .mqtt_v5_properties import encode_properties, decode_properties  # noqa
 
     def _set_last_will(self, topic, msg, retain=False, qos=0):
         qos_check(qos)
