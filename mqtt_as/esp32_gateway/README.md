@@ -17,7 +17,7 @@ hardware use ESPNow to publish and to receive MQTT messages targeted on them.
 ![Image](./images/block_diagram.png)
 
 Nodes may run synchronous or asynchronous code. They can run continuously or
-operate in micropower mode where they spend most of the time in deepsleep. 
+operate in micropower mode where they spend most of the time in deepsleep.
 ESPNow enables substantial power saving compared to a normal `mqtt_as` client.
 While an `mqtt_as` client can be put into deepsleep between publications,
 re-establishing a WiFi connection and re-connecting to the broker takes time
@@ -136,6 +136,10 @@ On the gateway ESP32 device, connect to WiFi and install with
 import mip
 mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway")
 ```
+Alternatively, with no need to connect the target to WiFi:
+```bash
+$ mpremote mip install github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway
+```
 Edit the file `lib/gateway/mqtt_local.py` on the device to include the correct
 WiFi credentials and broker IP address. This file is as follows:
 ```python
@@ -210,7 +214,7 @@ following (changing the IP address to that of the broker):
 ```bash
 $ mosquitto_sub -h 192.168.0.10 -t shed
 ```
-This should receive the publications. To publish to the device run this, 
+This should receive the publications. To publish to the device run this,
 changing the IP address to match the broker:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
@@ -248,7 +252,7 @@ following (changing the IP address to that of the broker):
 ```bash
 $ mosquitto_sub -h 192.168.0.10 -t shed
 ```
-This should receive the publications. To publish to the device run this, 
+This should receive the publications. To publish to the device run this,
 changing the IP address:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
@@ -269,7 +273,7 @@ setup of mutiple nodes with common values.
 connect to WiFi.
 
 Public methods:
- 1. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` See 
+ 1. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` See
  [below](./README.md#52-publish-and-ping-return-values) for return values.
  2. `subscribe(topic:str, qos:int)` Returns `True` unless ESPNow cannot connect
  to the gateway.
@@ -281,7 +285,7 @@ Public methods:
  5. `close()` This should be run prior to `deepsleep` or application quit.
  6. `breakout(Pin)` This is a convenience function for micropower applications.
  It can be hard to get back to a REPL when `main.py` immediately restarts an
- application. Initialising `breakout` with a `Pin` instance defined with 
+ application. Initialising `breakout` with a `Pin` instance defined with
  `Pin.PULL_UP` allows the REPL to be regained: the pin should be linked to gnd
  and the node should be reset.
  7. `get_channel()` Query the gateway's current channel. Returns an `int` or
@@ -343,7 +347,7 @@ setup of mutiple nodes with common values.
  messages. A short interval reduces incoming message latency at the cost of
  increasing the load on the gateway.
 
-Public asynchronous methods: 
+Public asynchronous methods:
  1. `run()` This should be run on application start. Raises `OSError` if
  credentials are passed and it cannot connect to WiFi.
  2. `publish(topic:str, msg:str, retain:bool=False, qos:int=0)` This will block
@@ -454,7 +458,7 @@ responds with `"UP"` or `"DOWN"`.
 
 ## 8.3 Publications from a node
 
-Each node sends the gateway a message comprising a json-encoded 4-list. 
+Each node sends the gateway a message comprising a json-encoded 4-list.
 Elements are:
  1. `topic:str`
  2. `message:str`

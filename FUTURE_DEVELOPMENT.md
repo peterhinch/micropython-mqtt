@@ -19,7 +19,9 @@ should be able to use any radio or wired hardware. Notable candidates are
 wired Ethernet, LoraWan, point-to-point Lora, or radios like NRF24L01. It
 should be possible to add new communications modules to the basic client as
 they become available. A modular design should keep the size of the client
-module within bounds.
+module within bounds. In this context "unreliable" means prone to outages. The
+integrity of a received message must be ensured by a lower level protocol
+layer. 
 
 By contrast, `mqtt_as` is strictly socket-based.
 
