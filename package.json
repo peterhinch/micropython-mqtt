@@ -1,9 +1,10 @@
 {
   "urls": [
-    ["mqtt_as.py", "github:peterhinch/micropython-mqtt/mqtt_as/mqtt_as.py"],
-    ["range.py", "github:peterhinch/micropython-mqtt/mqtt_as/range.py"],
-    ["range_ex.py", "github:peterhinch/micropython-mqtt/mqtt_as/range_ex.py"],
-    ["clean.py", "github:peterhinch/micropython-mqtt/mqtt_as/clean.py"],
+    ["mqtt_as/__init__.py", "github:peterhinch/micropython-mqtt/mqtt_as/__init__.py"],
+    ["mqtt_as/mqtt_v5_properties.py", "github:peterhinch/micropython-mqtt/mqtt_as/mqtt_v5_properties.py"],
+    ["mqtt_as/range.py", "github:peterhinch/micropython-mqtt/mqtt_as/range.py"],
+    ["mqtt_as/range_ex.py", "github:peterhinch/micropython-mqtt/mqtt_as/range_ex.py"],
+    ["mqtt_as/clean.py", "github:peterhinch/micropython-mqtt/mqtt_as/clean.py"],
     ["mqtt_local.py", "github:peterhinch/micropython-mqtt/mqtt_as/mqtt_local.py"]
   ],
   "version": "0.1"

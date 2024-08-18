@@ -1,9 +1,9 @@
 #! /bin/bash
-
+# mosquitto_sub -h 192.168.0.10 -t result
 while :
 do
-    mosquitto_pub -h 192.168.0.10 -t green -m on
+    mosquitto_pub -h 192.168.0.10 -t foo_topic -m "gordon bennett" -q 1
     sleep 5
-    mosquitto_pub -h 192.168.0.10 -t green -m off
+    mosquitto_pub -h 192.168.0.10 -t foo_topic -m "pete was here" -q 1
     sleep 5
 done

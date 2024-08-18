@@ -7,11 +7,11 @@
 
 # Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
 
-# This demo is for wireless range tests. If OOR the red WiFi ON LED will go out.
+# This demo is for wireless range tests. If OOR the red LED will light.
 # In range the blue LED will pulse for each received message.
 # Uses clean sessions to avoid backlog when OOR.
 
-# red LED: ON == WiFi OK
+# red LED: ON == WiFi fail
 # blue LED pulse == message received
 # Publishes connection statistics.
 

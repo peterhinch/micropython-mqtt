@@ -26,7 +26,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 8, 0)
+VERSION = (0, 8, 1)
 
 # Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
 _DEFAULT_MS = const(20)
@@ -390,8 +390,8 @@ class MQTT_base:
 
     # Check internet connectivity by sending DNS lookup to Google's 8.8.8.8
     async def wan_ok(
-            self,
-            packet=b"$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01",
+        self,
+        packet=b"$\x1a\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x01\x00\x01",
     ):
         if not self.isconnected():  # WiFi is down
             return False
@@ -596,14 +596,12 @@ class MQTT_base:
                 reason_code = reason_code[0]
                 if reason_code >= 0x80:
                     raise OSError(-1, "PUBACK reason code 0x%x" % reason_code)
-
-            if sz > 2:
+            if sz > 3:
                 puback_props_sz, _ = await self._recv_len()
                 if puback_props_sz > 0:
                     puback_props = await self._as_read(puback_props_sz)
                     decoded_props = decode_properties(puback_props, puback_props_sz)
                     self.dprint("PUBACK properties %s", decoded_props)
-
             if pid in self.rcv_pids:
                 self.rcv_pids.discard(pid)
             else:

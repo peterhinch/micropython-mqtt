@@ -1,0 +1,23 @@
+#! /bin/bash
+# mosquitto_sub -h 192.168.0.10 -t foo_topic  -V 5 -F "Properties %P payload %p"
+IPADDR=192.168.0.10
+while :
+do
+    mosquitto_pub -h $IPADDR -t foo_topic -m "User property" -D PUBLISH user-property key value -V 5
+    sleep 5
+    mosquitto_pub -h $IPADDR -t foo_topic -m "Content type" -D PUBLISH content-type my_type -V 5
+    sleep 5
+    mosquitto_pub -h $IPADDR -t foo_topic -m "Correlation data" -D PUBLISH correlation-data my_data -V 5
+    sleep 5
+    mosquitto_pub -h $IPADDR -t foo_topic -m "Response topic" -D PUBLISH response-topic my_topic -V 5
+    sleep 5
+    mosquitto_pub -h $IPADDR -t foo_topic -m "Payload format indicator" -D PUBLISH payload-format-indicator 1 -V 5
+    sleep 5
+    mosquitto_pub -h $IPADDR -t foo_topic -m "Message expiry interval 300s" -D PUBLISH message-expiry-interval 300 -V 5
+    sleep 5
+    # mosquitto_pub -h $IPADDR -t foo_topic -m "Topic alias 1" -q 1 -D PUBLISH topic-alias 1 -V 5
+    #sleep 5
+    # The following does not work: not even received by mosquitto_sub
+    # mosquitto_pub -h $IPADDR -t "" -m "Sent using alias" -D PUBLISH topic-alias 1 -V 5
+    #sleep 5
+done
