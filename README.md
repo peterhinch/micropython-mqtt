@@ -888,6 +888,7 @@ Properties relevant to `client.subscribe()`:
 |:------|:------------|:-------------------------|:---------------------|
 | 0x0B  | int         | Subscription Identifier  | See below            |
 | 0x26  | string pair | user property            | Application defined  |
+
 The subscription identifier enables a client application to pass its current
 state to the broker: responses to that subscription will include that state. See
 spec [section 3.8.4](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901170)
@@ -1188,7 +1189,7 @@ general solution.
 
 ## 5.3 Ultra low power consumption
 
-[This document](https://github.com/peterhinch/micropython-mqtt/tree/master/mqtt_as/esp32_gateway)
+[This document](./GATEWAY.md)
 describes an MQTT client for ESP32 or ESP8266 which uses ESPNOw to communicate
 with a gateway running `mqtt_as`. The client does not need to connect to WiFi
 each time it wakes, saving power. The gateway can be shared between multiple

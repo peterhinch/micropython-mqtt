@@ -1,0 +1,16 @@
+{
+  "urls": [
+    ["nodes/link.py", "github:peterhinch/micropython-mqtt/gateway/nodes/link.py"],
+    ["nodes/link_setup.py", "github:peterhinch/micropython-mqtt/gateway/nodes/link_setup.py"],
+    ["nodes/pubonly.py", "github:peterhinch/micropython-mqtt/gateway/nodes/pubonly.py"],
+    ["nodes/pubonly_gen.py", "github:peterhinch/micropython-mqtt/gateway/nodes/pubonly_gen.py"],
+    ["nodes/slow_echo.py", "github:peterhinch/micropython-mqtt/gateway/nodes/slow_echo.py"],
+    ["nodes/synctx.py", "github:peterhinch/micropython-mqtt/gateway/nodes/synctx.py"],
+    ["nodes/primitives/__init__.py", "github:peterhinch/micropython-mqtt/gateway/nodes/primitives/__init__.py"],
+    ["nodes/primitives/ringbuf_queue.py", "github:peterhinch/micropython-mqtt/gateway/nodes/primitives/ringbuf_queue.py"]
+  ],
+  "deps": [
+    ["aioespnow", "latest"]
+  ],
+  "version": "0.1"
+}

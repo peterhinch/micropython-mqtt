@@ -1,0 +1,15 @@
+{
+  "urls": [
+    ["gateway/gateway.py", "github:peterhinch/micropython-mqtt/gateway/gateway.py"],
+    ["gateway/gwconfig.py", "github:peterhinch/micropython-mqtt/gateway/gwconfig.py"],
+    ["mqtt_as/__init__.py", "github:peterhinch/micropython-mqtt/mqtt_as/__init__.py"],
+    ["gateway/mqtt_local.py", "github:peterhinch/micropython-mqtt/gateway/mqtt_local.py"],
+    ["gateway/primitives/__init__.py", "github:peterhinch/micropython-mqtt/gateway/primitives/__init__.py"],
+    ["gateway/primitives/ringbuf_queue.py", "github:peterhinch/micropython-mqtt/gateway/primitives/ringbuf_queue.py"]
+  ],
+  "deps": [
+    ["collections-defaultdict", "latest"],
+    ["aioespnow", "latest"]
+  ],
+  "version": "0.1"
+}

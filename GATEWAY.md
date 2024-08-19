@@ -54,9 +54,9 @@ The gateway requires an ESP32, preferably a standard ESP32 with or without
 SPIRAM. Nodes may be ESP32, ESP8266, or ESP32 variants. Some ESP32-S3 boards
 have had issues: see Appendix 2.
 
-## Under development
+## 1.3 MQTT version
 
-This module is under development. Code should be considered beta quality.
+Messages between the gateway and the broker conform to MQTT V3.1.1.
 
 # 2. Overview
 
@@ -134,11 +134,11 @@ class provides means of adapting to variation.
 On the gateway ESP32 device, connect to WiFi and install with
 ```python
 import mip
-mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway")
+mip.install("github:peterhinch/micropython-mqtt/gateway")
 ```
 Alternatively, with no need to connect the target to WiFi:
 ```bash
-$ mpremote mip install github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway
+$ mpremote mip install github:peterhinch/micropython-mqtt/gateway
 ```
 Edit the file `lib/gateway/mqtt_local.py` on the device to include the correct
 WiFi credentials and broker IP address. This file is as follows:
@@ -162,7 +162,7 @@ $ mosquitto_sub -h 192.168.0.10 -t gw_status
 Start the gateway by issuing the import at the device REPL - output similar to
 the following should ensue:
 ```python
->>> import gateway.gateway
+>>> import gateway
 ESPNow ID: b"70041dad8f15"
 Checking WiFi integrity.
 Got reliable connection
@@ -182,7 +182,7 @@ is its MAC address in hex format and is required by the nodes.
 On the node device, connect to WiFi and install with
 ```python
 import mip
-mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/nodes")
+mip.install("github:peterhinch/micropython-mqtt/gateway/nodes")
 ```
 Configuration may be done by editing the file `lib/nodes/link_setup.py`. This
 creates the following variables which are the constructor arguments for the
@@ -227,7 +227,7 @@ Asynchronous applications are assumed to be continuously running: there is no
 micropower support. On the node device, connect to WiFi and install with:
 ```python
 import mip
-mip.install("github:peterhinch/micropython-mqtt/mqtt_as/esp32_gateway/anodes")
+mip.install("github:peterhinch/micropython-mqtt/gateway/anodes")
 ```
 Node configuration is done by editing the file `lib/anodes/link_setup.py`. This
 is as per synchronous mode, but adds one variable:
@@ -296,7 +296,7 @@ Public methods:
  automatically.
 
 Public bound variable:
- 1. `txpower = None`. Certain ESP32-S3 boards are unreliable when running at
+ 1. `txpower=None`. Certain ESP32-S3 boards are unreliable when running at
  low channel numbers. The default sets transmit power to maximum: on these
  boards a value of 17 improves reliability. The value should be set before
  instantiating. See appendix 2.
@@ -364,7 +364,7 @@ Public `Event` instances:
  3. `esp_up` Set when an ESPNow message is successfully sent to the gateway.
  4. `esp_down` Set when an ESPNow message has failed.
 
-An appication using any of these events should clear them.
+An application using any of these events should clear them.
 
 Public bound variable:
  1. `txpower = None`. Certain ESP32-S3 boards are unreliable when running at
@@ -449,7 +449,7 @@ subscription and four a publication. Other lengths are ignored and an error
 message published to the gateway error topic.
 
 In the event of a broker outage, the client's publish method will block. The
-gateway snds an `"ACK"` message to the node when publication is complete. This
+gateway sends an `"ACK"` message to the node when publication is complete. This
 enables the link to provide feedback to the application preventing message
 loss.
 
@@ -515,7 +515,7 @@ The gateway will continue trying until the outage ends, when it sends `"ACK"`.
 In the event of a `"NAK"` the behaviour of the link depends on whether the
 synchronous or asynchronous version is running. The asynchronous `publish`
 pauses until publication is complete. The synchronous version returns `False`.
-The synchronous appication can keep trying to send the next message until a
+The synchronous application can keep trying to send the next message until a
 `True` value occurs.
 
 The gateway will publish status messages indicating connection state.
@@ -607,7 +607,7 @@ gwlink.close()
 deepsleep(3_000)
 # Now effectively does a hard reset: main.py restarts the application.
 ```
-This echos any received message to the `"shed"` topic. Messages may be sent
+This echoes any received message to the `"shed"` topic. Messages may be sent
 by publishing to "foo_topic" or to "allnodes":
 ```bash
 mosquitto_pub -h 192.168.0.10 -t allnodes -m "test message" -q 1
