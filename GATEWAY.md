@@ -184,6 +184,10 @@ On the node device, connect to WiFi and install with
 import mip
 mip.install("github:peterhinch/micropython-mqtt/gateway/nodes")
 ```
+Or, on the PC run
+```bash
+$ mpremote mip install github:peterhinch/micropython-mqtt/gateway/nodes
+```
 Configuration may be done by editing the file `lib/nodes/link_setup.py`. This
 creates the following variables which are the constructor arguments for the
 `Link` class. Using a file simplifies distributing common args to multiple
@@ -205,17 +209,30 @@ The following demos will be installed on the node:
 
 ## 3.5 Synchronous Node Testing
 
-With the gateway running issue
+With the gateway running issue `import nodes.synctx`. The following is typical
+output, with the response to two publications from `mosquitto_pub`:
 ```python
-import nodes.synctx
+>>> import nodes.synctx
+Link init.
+reconnect chan 3 creds None
+connected on channel 3
+Actual channel 3
+Got subscription   topic: "allnodes" message: "hello there pete" retained False
+Got subscription   topic: "foo_topic" message: "hello" retained False
 ```
 It should report publications at three second intervals. On a PC run the
-following (changing the IP address to that of the broker):
+following (changing the IP address to that of the broker). Note the expected
+output:
 ```bash
 $ mosquitto_sub -h 192.168.0.10 -t shed
+Count 0 ESPNow fails 0 Broker fails 0 mem_free 8182272
+Count 1 ESPNow fails 0 Broker fails 0 mem_free 8182160
+Count 2 ESPNow fails 0 Broker fails 0 mem_free 8182160
+Count 3 ESPNow fails 0 Broker fails 0 mem_free 8182160
+Count 4 ESPNow fails 0 Broker fails 0 mem_free 8182160
+Count 5 ESPNow fails 0 Broker fails 0 mem_free 8182160
 ```
-This should receive the publications. To publish to the device run this,
-changing the IP address to match the broker:
+To publish to the device run this, changing the IP address to match the broker:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```
@@ -228,6 +245,10 @@ micropower support. On the node device, connect to WiFi and install with:
 ```python
 import mip
 mip.install("github:peterhinch/micropython-mqtt/gateway/anodes")
+```
+Or, on the PC run
+```bash
+$ mpremote mip install github:peterhinch/micropython-mqtt/gateway/anodes
 ```
 Node configuration is done by editing the file `lib/anodes/link_setup.py`. This
 is as per synchronous mode, but adds one variable:
@@ -243,17 +264,29 @@ The following demo will be installed on the node:
 
 ## 3.7 Asynchronous Node Testing
 
-With the gateway running issue
+With the gateway running issue `import anodes.asynctx`. The following is typical
+output, with the response to two publications using mosquitto_pub (see below):
 ```python
-import anodes.asynctx
+>>> import anodes.asynctx
+Link init.
+reconnect chan 3 creds None
+connected on channel 3
+Waiting for down
+Got subscription   topic: "foo_topic" message: "hello" retained False
+Got subscription   topic: "allnodes" message: "hello there pete" retained False
 ```
 It should report publications at three second intervals. On a PC run the
-following (changing the IP address to that of the broker):
+following (changing the IP address to that of the broker). Note the expected
+output:
 ```bash
 $ mosquitto_sub -h 192.168.0.10 -t shed
+Count 0 Response fails 0 mem_free 8176656
+Count 1 Response fails 0 mem_free 8175200
+Count 2 Response fails 0 mem_free 8175088
+Count 3 Response fails 0 mem_free 8175088
+Count 4 Response fails 0 mem_free 8175168
 ```
-This should receive the publications. To publish to the device run this,
-changing the IP address:
+To publish to the device run this, changing the IP address:
 ```bash
 $ mosquitto_pub -h 192.168.0.10 -t allnodes -m "hello" -q 1
 ```

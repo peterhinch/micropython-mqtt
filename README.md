@@ -925,7 +925,6 @@ Incoming message:
 | 0x08  | string      | publisher  | Response Topic           | Request/response     |
 | 0x09  | bytes       | publisher  | Correlation Data         | Request/response     |
 | 0x0B  | int         | publisher  | Subscription Identifier  |
-| 0x23  | int         | broker     | topic alias              |                      |
 | 0x26  | string pair | publisher  | user property            | Application defined  |
 
 Other packets received from the broker may contain properties. Apart from
@@ -941,7 +940,10 @@ publication is made with the full topic name with the topic alias set to a
 nonzero  integer. Subsequent publications may pass a topic of `""` with the
 topic alias property set to that integer. It is essential that the broker
 receives the message setting the alias as it can disconnect if an unknown alias
-is received. Please study
+is received. A problem also arises if an outage occurs while publishing aliased
+messages. It seems that the broker does not store aliases after an outage. It is
+the responsibility of the application to re-establish any aliases on reconnect.
+Please study
 [the spec](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901113)
 before using this feature.
 
