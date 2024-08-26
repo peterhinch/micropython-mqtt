@@ -26,11 +26,10 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 8, 1)
-
-# Default short delay for good SynCom throughput (avoid sleep(0) with SynCom).
-_DEFAULT_MS = const(20)
-_SOCKET_POLL_DELAY = const(5)  # 100ms added greatly to publish latency
+VERSION = (0, 8, 2)
+# Default initial size for input messge buffer. Increase this if large messages
+# are expected, but rarely, to avoid big runtime allocations
+IBUFSIZE = 100
 
 # Legitimate errors while waiting on a socket. See uasyncio __init__.py open_connection().
 ESP32 = platform == "esp32"
@@ -49,7 +48,7 @@ PYBOARD = platform == "pyboard"
 
 # Default "do little" coro for optional user replacement
 async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
-    await asyncio.sleep_ms(_DEFAULT_MS)
+    await asyncio.sleep_ms(0)
 
 
 class MsgQueue:
@@ -188,6 +187,8 @@ class MQTT_base:
         self.rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = asyncio.Lock()
+        self._ibuf = bytearray(IBUFSIZE)
+        self, _mvbuf = memoryview(self._ibuf)
 
         self.mqttv5 = config.get("mqttv5")
         self.mqttv5_con_props = config.get("mqttv5_con_props")
@@ -216,11 +217,13 @@ class MQTT_base:
     async def _as_read(self, n, sock=None):  # OSError caught by superclass
         if sock is None:
             sock = self._sock
-        # Declare a byte array of size n. That space is needed anyway, better
-        # to just 'allocate' it in one go instead of appending to an
-        # existing object, this prevents reallocation and fragmentation.
-        data = bytearray(n)
-        buffer = memoryview(data)
+        # Ensure input buffer is big enough to hold data. It keeps the new size
+        oflow = n - len(self._ibuf)
+        if oflow > 0:  # Grow the buffer and re-create the memoryview
+            # Avoid too frequent small allocations by adding some extra bytes
+            self._ibuf.extend(bytearray(oflow + 50))
+            self._mvbuf = memoryview(self._ibuf)
+        buffer = self._mvbuf
         size = 0
         t = ticks_ms()
         while size < n:
@@ -238,7 +241,7 @@ class MQTT_base:
                 size += msg_size
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
-            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
+            await asyncio.sleep_ms(0)
         return data
 
     async def _as_write(self, bytes_wr, length=0, sock=None):
@@ -262,7 +265,7 @@ class MQTT_base:
             if n:
                 t = ticks_ms()
                 bytes_wr = bytes_wr[n:]
-            await asyncio.sleep_ms(_SOCKET_POLL_DELAY)
+            await asyncio.sleep_ms(0)
 
     async def _send_str(self, s):
         await self._as_write(struct.pack("!H", len(s)))
@@ -289,7 +292,7 @@ class MQTT_base:
         except OSError as e:
             if e.args[0] not in BUSY_ERRORS:
                 raise
-        await asyncio.sleep_ms(_DEFAULT_MS)
+        await asyncio.sleep_ms(0)
         self.dprint("Connecting to broker.")
         if self._ssl:
             try:
@@ -830,7 +833,7 @@ class MQTTClient(MQTT_base):
             while self.isconnected():
                 async with self.lock:
                     await self.wait_msg()  # Immediate return if no message
-                await asyncio.sleep_ms(_DEFAULT_MS)  # Let other tasks get lock
+                await asyncio.sleep_ms(0)  # Let other tasks get lock
 
         except OSError:
             pass
