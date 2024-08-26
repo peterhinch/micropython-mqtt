@@ -242,7 +242,7 @@ class MQTT_base:
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
             await asyncio.sleep_ms(0)
-        return data
+        return buffer
 
     async def _as_write(self, bytes_wr, length=0, sock=None):
         if sock is None:
