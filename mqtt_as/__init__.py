@@ -188,7 +188,7 @@ class MQTT_base:
         self.last_rx = ticks_ms()  # Time of last communication from broker
         self.lock = asyncio.Lock()
         self._ibuf = bytearray(IBUFSIZE)
-        self, _mvbuf = memoryview(self._ibuf)
+        self._mvbuf = memoryview(self._ibuf)
 
         self.mqttv5 = config.get("mqttv5")
         self.mqttv5_con_props = config.get("mqttv5_con_props")
@@ -242,7 +242,7 @@ class MQTT_base:
                 t = ticks_ms()
                 self.last_rx = ticks_ms()
             await asyncio.sleep_ms(0)
-        return buffer
+        return buffer[:n]
 
     async def _as_write(self, bytes_wr, length=0, sock=None):
         if sock is None:
@@ -662,6 +662,7 @@ class MQTT_base:
         topic_len = await self._as_read(2)
         topic_len = (topic_len[0] << 8) | topic_len[1]
         topic = await self._as_read(topic_len)
+        topic = bytes(topic)  # Copy before re-using the read buffer
         sz -= topic_len + 2
         if op & 6:
             pid = await self._as_read(2)
@@ -678,6 +679,10 @@ class MQTT_base:
                 decoded_props = decode_properties(pub_props, pub_props_sz)
 
         msg = await self._as_read(sz)
+        # An option would be to make copying optional. We return either a
+        # memoryview or a bytes object
+        # if self.msg_is_bytes:
+        #     msg = bytes(msg)
         retained = op & 0x01
         if self._events:
             if self.mqttv5:
