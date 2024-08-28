@@ -403,16 +403,17 @@ class MQTT_base:
         s.setblocking(False)
         s.connect(("8.8.8.8", 53))
         await asyncio.sleep(1)
-        try:
-            await self._as_write(packet, sock=s)
-            await asyncio.sleep(2)
-            res = await self._as_read(length, s)
-            if len(res) == length:
-                return True  # DNS response size OK
-        except OSError:  # Timeout on read: no connectivity.
-            return False
-        finally:
-            s.close()
+        async with self.lock:
+            try:
+                await self._as_write(packet, sock=s)
+                await asyncio.sleep(2)
+                res = await self._as_read(length, s)
+                if len(res) == length:
+                    return True  # DNS response size OK
+            except OSError:  # Timeout on read: no connectivity.
+                return False
+            finally:
+                s.close()
         return False
 
     async def broker_up(self):  # Test broker connectivity
