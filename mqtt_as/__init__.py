@@ -680,17 +680,19 @@ class MQTT_base:
                 decoded_props = decode_properties(pub_props, pub_props_sz)
 
         msg = await self._as_read(sz)
-        # An option would be to make copying optional. We return either a
-        # memoryview or a bytes object
-        # if self.msg_is_bytes:
-        #     msg = bytes(msg)
         retained = op & 0x01
         if self._events:
+            # We must copy the message otherwise .queue contents will be wrong:
+            # every entry would contain the same message.
+            msg = bytes(msg)
             if self.mqttv5:
                 self.queue.put(topic, msg, bool(retained), decoded_props)
             else:
                 self.queue.put(topic, msg, bool(retained))
         else:
+            # Not copying the message is OK so long as the callback is purely
+            # synchronous. Overruns can't occur because of the lock.
+            # msg = bytes(msg)
             if self.mqttv5:
                 self._cb(topic, msg, bool(retained), decoded_props)
             else:
