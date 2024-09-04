@@ -1,6 +1,7 @@
 {
   "urls": [
-    ["mqtt_as/v5/basic.py", "github:peterhinch/micropython-mqtt/mqtt_as/v5/basic.py"]
+    ["mqtt_as/v5/basic.py", "github:peterhinch/micropython-mqtt/mqtt_as/v5/basic.py"],
+    ["mqtt_as/v5/cbtest.py", "github:peterhinch/micropython-mqtt/mqtt_as/v5/cbtest.py"]
   ],
   "version": "0.1"
 }

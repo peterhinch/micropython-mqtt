@@ -29,7 +29,10 @@ from sys import platform
 VERSION = (0, 8, 2)
 # Default initial size for input messge buffer. Increase this if large messages
 # are expected, but rarely, to avoid big runtime allocations
-IBUFSIZE = 100
+IBUFSIZE = 50
+# By default the callback interface returns and incoming message as bytes.
+# For performance reasons with large messages it may return a memoryview.
+MSG_BYTES = True
 
 # Legitimate errors while waiting on a socket. See uasyncio __init__.py open_connection().
 ESP32 = platform == "esp32"
@@ -159,6 +162,7 @@ class MQTT_base:
             self.up = asyncio.Event()
             self.down = asyncio.Event()
             self.queue = MsgQueue(config["queue_len"])
+            self._cb = self.queue.put
         else:  # Callbacks
             self._cb = config["subs_cb"]
             self._wifi_handler = config["wifi_coro"]
@@ -285,6 +289,7 @@ class MQTT_base:
             sh += 7
 
     async def _connect(self, clean):
+        mqttv5 = self.mqttv5  # Cache local
         self._sock = socket.socket()
         self._sock.setblocking(False)
         try:
@@ -303,7 +308,7 @@ class MQTT_base:
             self._sock = ssl.wrap_socket(self._sock, **self._ssl_params)
         premsg = bytearray(b"\x10\0\0\0\0\0")
         msg = bytearray(b"\x04MQTT\x00\0\0\0")
-        if self.mqttv5:
+        if mqttv5:
             msg[5] = 0x05
         else:
             msg[5] = 0x04
@@ -318,13 +323,13 @@ class MQTT_base:
             msg[8] |= self._keepalive & 0x00FF
         if self._lw_topic:
             sz += 2 + len(self._lw_topic) + 2 + len(self._lw_msg)
-            if self.mqttv5:
+            if mqttv5:
                 # Extra for the will properties
                 sz += 1
             msg[6] |= 0x4 | (self._lw_qos & 0x1) << 3 | (self._lw_qos & 0x2) << 3
             msg[6] |= self._lw_retain << 5
 
-        if self.mqttv5:
+        if mqttv5:
             properties = encode_properties(self.mqttv5_con_props)
             sz += len(properties)
 
@@ -336,12 +341,12 @@ class MQTT_base:
         premsg[i] = sz
         await self._as_write(premsg, i + 2)
         await self._as_write(msg)
-        if self.mqttv5:
+        if mqttv5:
             await self._as_write(properties)
 
         await self._send_str(self._client_id)
         if self._lw_topic:
-            if self.mqttv5:
+            if mqttv5:
                 # We don't support will properties, so we send 0x00 for properties length
                 await self._as_write(b"\x00")
             await self._send_str(self._lw_topic)
@@ -358,9 +363,8 @@ class MQTT_base:
         # The connect packet has changed, so size might be different now. But
         # we can still handle it the same for 3.1.1 and v5
         sz, _ = await self._recv_len()
-        if not self.mqttv5:
-            if sz != 2:
-                raise OSError(-1, "Invalid CONNACK packet")
+        if not mqttv5 and sz != 2:
+            raise OSError(-1, "Invalid CONNACK packet")
 
         # Only read the first 2 bytes, as properties have their own length
         connack_resp = await self._as_read(2)
@@ -376,7 +380,7 @@ class MQTT_base:
             raise OSError(-1, "CONNACK reason code 0x%x" % connack_resp[1])
 
         del connack_resp
-        if not self.mqttv5:
+        if not mqttv5:
             # If we are not on MQTTv5 we can stop here
             return
 
@@ -569,6 +573,7 @@ class MQTT_base:
     # messages processed internally.
     # Immediate return if no data available. Called from ._handle_msg().
     async def wait_msg(self):
+        mqttv5 = self.mqttv5  # Cache local
         try:
             res = self._sock.read(1)  # Throws OSError on WiFi fail
         except OSError as e:
@@ -589,9 +594,8 @@ class MQTT_base:
 
         if op == 0x40:  # PUBACK: save pid
             sz, _ = await self._recv_len()
-            if not self.mqttv5:
-                if sz != 2:
-                    raise OSError(-1, "Invalid PUBACK packet")
+            if not mqttv5 and sz != 2:
+                raise OSError(-1, "Invalid PUBACK packet")
             rcv_pid = await self._as_read(2)
             pid = rcv_pid[0] << 8 | rcv_pid[1]
             # For some reason even on MQTTv5 reason code is optional
@@ -617,7 +621,7 @@ class MQTT_base:
             sz -= 2
             pid = rcv_pid[0] << 8 | rcv_pid[1]
             # Handle properties
-            if self.mqttv5:
+            if mqttv5:
                 suback_props_sz, sz_len = await self._recv_len()
                 sz -= sz_len
                 sz -= suback_props_sz
@@ -640,7 +644,7 @@ class MQTT_base:
                 raise OSError(-1, "Invalid pid in SUBACK packet")
 
         if op == 0xE0:  # DISCONNECT
-            if self.mqttv5:
+            if mqttv5:
                 sz, _ = await self._recv_len()
                 reason_code = await self._as_read(1)
                 reason_code = reason_code[0]
@@ -671,7 +675,7 @@ class MQTT_base:
             sz -= 2
 
         decoded_props = None
-        if self.mqttv5:
+        if mqttv5:
             pub_props_sz, pub_props_sz_len = await self._recv_len()
             sz -= pub_props_sz_len
             sz -= pub_props_sz
@@ -680,23 +684,17 @@ class MQTT_base:
                 decoded_props = decode_properties(pub_props, pub_props_sz)
 
         msg = await self._as_read(sz)
-        retained = op & 0x01
-        if self._events:
-            # We must copy the message otherwise .queue contents will be wrong:
-            # every entry would contain the same message.
+        # In event mode we must copy the message otherwise .queue contents will be wrong:
+        # every entry would contain the same message.
+        # In callback mode not copying the message is OK so long as the callback is purely
+        # synchronous. Overruns can't occur because of the lock.
+        if self._events or MSG_BYTES:
             msg = bytes(msg)
-            if self.mqttv5:
-                self.queue.put(topic, msg, bool(retained), decoded_props)
-            else:
-                self.queue.put(topic, msg, bool(retained))
-        else:
-            # Not copying the message is OK so long as the callback is purely
-            # synchronous. Overruns can't occur because of the lock.
-            # msg = bytes(msg)
-            if self.mqttv5:
-                self._cb(topic, msg, bool(retained), decoded_props)
-            else:
-                self._cb(topic, msg, bool(retained))
+        retained = op & 0x01
+        args = [topic, msg, bool(retained)]
+        if mqttv5:
+            args.append(decoded_props)
+        self._cb(*args)
 
         if op & 6 == 2:  # qos 1
             pkt = bytearray(b"\x40\x02\0\0")  # Send PUBACK
