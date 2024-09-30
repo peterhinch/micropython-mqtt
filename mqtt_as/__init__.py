@@ -760,8 +760,12 @@ class MQTTClient(MQTT_base):
                 if ESP32:
                     # Status values >= STAT_IDLE can occur during connect:
                     # STAT_IDLE 1000, STAT_CONNECTING 1001, STAT_GOT_IP 1010
-                    if s.status() < network.STAT_IDLE:  # Error statuses
-                        break  # are in range 200..204
+                    # Error statuses are in range 200..204
+                    if s.status() < network.STAT_IDLE:
+                        # pause as workaround to avoid persistent reconnect failures
+                        # see https://github.com/peterhinch/micropython-mqtt/issues/132 for details
+                        await asyncio.sleep(1)
+                        break
                 elif PYBOARD:  # No symbolic constants in network
                     if not 1 <= s.status() <= 2:
                         break
