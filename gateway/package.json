@@ -1,6 +1,6 @@
 {
   "urls": [
-    ["gateway/gateway.py", "github:peterhinch/micropython-mqtt/gateway/gateway.py"],
+    ["gateway/__init__.py", "github:peterhinch/micropython-mqtt/gateway/__init__.py"],
     ["gateway/gwconfig.py", "github:peterhinch/micropython-mqtt/gateway/gwconfig.py"],
     ["mqtt_as/__init__.py", "github:peterhinch/micropython-mqtt/mqtt_as/__init__.py"],
     ["gateway/mqtt_local.py", "github:peterhinch/micropython-mqtt/gateway/mqtt_local.py"],
