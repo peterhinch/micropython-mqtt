@@ -74,6 +74,7 @@ occur.
   4.4 [Application Design](./README.md#44-application-design)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.2 [Behaviour on power up](./README.md#442-behaviour-on-power-up)  
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.3 [Optimisations](./README.md#443-optimisations) RAM use, large incoming messages.  
  5. [Non standard applications](./README.md#5-non-standard-applications) Usage in specialist and micropower applications.  
   5.1 [deepsleep](./README.md#51-deepsleep)  
   5.2 [lightsleep and disconnect](./README.md#52-lightsleep-and-disconnect)  
@@ -171,6 +172,7 @@ contributors, some mentioned below.
 
 Note that in firmware prior to 1.21 `asyncio` was named `uasyncio`.
 
+24 Oct 2024 V0.8.2 Socket reads use pre-allocated buffer for performance.
 18 Aug 2024 V0.8.1 Reconfigured as a Python package. Bugfix in V5 support.  
 9 Aug 2024 V0.8.0 Partial MQTTv5 support contributed by Bob Veringa.  
 15 Feb 2024 V0.7.2 Make compliant with firmware V1.22.0 and later.  
@@ -1063,7 +1065,10 @@ subscribed messages and should therefore be designed for a fast return.
 A contributor (Kevin Köck) was concerned that, in the case of a connectivity
 outage, a publication might be delayed to the point where it was excessively
 outdated. He wanted to implement a timeout to cancel the publication if an
-outage caused high latency.
+outage caused high latency. This is arguably a limitation of MQTT3.1.1 - please
+see [MQTTv5 Support](./README.md#36-mqttv5-support).
+
+The following notes are a discussion of workrounds for V3.1.1.
 
 Simple cancellation of a publication task is not recommended because it can
 disrupt the MQTT protocol. There are several ways to address this:  
@@ -1116,6 +1121,58 @@ during connectivity (and hence power) outages. This implies a loss of messages
 published during connectivity outages(MQTT spec 3.1.2.4 Clean Session).
 
 Also discussed [here](https://github.com/peterhinch/micropython-mqtt/issues/40).
+
+###### [Contents](./README.md#1-contents)
+
+### 4.4.3 Optimisations
+
+Version 0.8.2 introduced an optimisation whereby incoming messages are read into
+a pre-allocated buffer. This avoids allocation and improves performance. The
+change was done in a way that avoids breaking existing code. Allocation may be
+further reduced by setting two module variables. These are (with defaults):
+
+`IBUFSIZE` = 50
+`MSG_BYTES` = True
+
+Any changes should be made before instantiating the client, e.g.:
+```py
+import mqtt_as
+
+mqtt_as.IBUFSIZE = 5_000
+client = MQTTClient(config)
+```
+##### IBUFSIZE
+
+Socket reads are into a pre-allocated buffer. If a message arrives which is too
+large, the buffer is extended to accept it. This implies allocation. Consider a
+case where a long message arrives after a long period where only short messages
+are received. By this time the RAM may have become fragmented, making the large
+allocation fail. If it is known that large messages may arrive, setting a large
+buffer size at the outset - prior to fragmentation - will avoid this problem.
+
+##### MSG_BYTES
+
+By default, incoming messages are copied before being made available to the
+application. This implies allocation. It is done to ensure message integrity
+under all conditions. If the event interface is used, copying occurs regardless
+of `MSG_BYTES`.
+
+In the case of the callback interface where `MSG_BYTES` is `False`, a
+`memoryview` of the buffer is passed to the callback, avoiding allocation.
+The following code is safe where a `memoryview` is returned:
+```py
+# Subscription callback
+def sub_cb(topic, msg, retained):
+    # Synchronous code handles the message
+```
+However this presents a hazard if a `memoryview` is returned:
+```py
+# Subscription callback
+def sub_cb(topic, msg, retained):
+    asyncio.create_task(process_message(topic, msg))
+```
+A fault arises if another message arrives before `process_message` is complete.
+The buffer contents will change, causing corruption.
 
 ###### [Contents](./README.md#1-contents)
 
@@ -1198,7 +1255,7 @@ each time it wakes, saving power. The gateway can be shared between multiple
 clients.
 
 Drawbacks are the need for an always-on gateway, and the fact that only a
-subset of MQTT capabilities is supported.
+subset of MQTT V3.1.1 capabilities is supported.
 
 ###### [Contents](./README.md#1-contents)
 
