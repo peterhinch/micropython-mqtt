@@ -214,6 +214,8 @@ decode_property_lookup = {
 
 
 def decode_properties(props, properties_length):
+    if isinstance(props, memoryview):
+        props = bytes(props)  # If a memoryview is passed, make a copy
     offset = 0
     properties = {}
 
