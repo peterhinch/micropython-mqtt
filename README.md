@@ -75,6 +75,7 @@ occur.
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.1 [Publication Timeouts](./README.md#441-publication-timeouts)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.2 [Behaviour on power up](./README.md#442-behaviour-on-power-up)  
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.4.3 [Optimisations](./README.md#443-optimisations) RAM use, large incoming messages.  
+  4.5 [Alternative design approach](./README.md#45-alternative-design-approach) Continue the MQTT paradigm into the application.  
  5. [Non standard applications](./README.md#5-non-standard-applications) Usage in specialist and micropower applications.  
   5.1 [deepsleep](./README.md#51-deepsleep)  
   5.2 [lightsleep and disconnect](./README.md#52-lightsleep-and-disconnect)  
@@ -1102,9 +1103,12 @@ by network outages are handled transparently to the application.
 The behaviour of "clean session" should be considered in this context. If the
 `clean` flag is `False` and a long power outage occurs there may be a large
 backlog of messages. This can cause problems on resource constrained clients,
-notably if the client has been taken out of service for a few days. This module
-addresses this by enabling behaviour which differs between the power up case
-and the case of a network outage.
+notably if the client has been taken out of service for a few days. MQTTv5
+handles this elegantly - please see
+[MQTTv5 Support](./README.md#36-mqttv5-support).
+
+For those using MQTTv3 this module addresses this by enabling behaviour which
+differs between the power up case and the case of a network outage.
 
 The `clean_init` flag determines behaviour on power up, while `clean` defines
 behaviour after a connectivity outage. If `clean_init` is `True` and `clean` is
@@ -1121,6 +1125,51 @@ during connectivity (and hence power) outages. This implies a loss of messages
 published during connectivity outages(MQTT spec 3.1.2.4 Clean Session).
 
 Also discussed [here](https://github.com/peterhinch/micropython-mqtt/issues/40).
+
+## 4.5 Alternative design approach
+
+The following approach extends the MQTT publish-subscribe model into the asyncio
+application. This offers an alternative way to design an application where
+message passing is the principal control mechanism. A
+[message broker](https://github.com/peterhinch/micropython-async/blob/master/v3/docs/DRIVERS.md#9-message-broker)
+is instantiated. Incoming MQTT messages are forwarded to the message broker.
+Tasks can subscribe to the `Broker` instance such that a message triggers an
+action. See `async_message.py` for an example. To run the code it is necessary
+to install the asyncio primitives:
+```bash
+$ mpremote mip install "github:peterhinch/micropython-async/v3/primitives"
+```
+In this demo MQTT messages are published to topics "red_topic" and "blue_topic".
+Messages are "on" or "off". The receiving `messages` task forwards all incoming
+messages to the `Broker` instance. The application can subscribe to the topics
+in a variety of ways. In this demo it subscribes a function `led_handler` to the
+two topics; this controls the passed LED in response to the message text.
+
+The following illustrates the way `async_message.py` does this:
+```py
+from mqtt_as import MQTTClient
+from mqtt_local import wifi_led, blue_led, config
+import asyncio
+from primitives import Broker
+
+# Incoming "red_topic" and "blue_topic" messages are directed to led_handler
+def led_handler(topic, message, led):
+    led(message == "on")
+
+broker = Broker()
+# Subscribe led_handler function to the two topics
+broker.subscribe("blue_topic", led_handler, blue_led)
+broker.subscribe("red_topic", led_handler, wifi_led)
+
+# All incoming MQTT messages are forwarded to the Broker
+async def messages(client):
+    async for topic, msg, retained in client.queue:
+        broker.publish(topic.decode(), msg.decode())
+
+config["queue_len"] = 1  # Must use event interface
+```
+It is possible to subscribe objects other than functions, including coroutines,
+methods, queues, Event instances and user defined class instances.
 
 ###### [Contents](./README.md#1-contents)
 
