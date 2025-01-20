@@ -6,17 +6,17 @@
 # Various improvements contributed by Kevin Köck.
 
 import gc
-import usocket as socket
-import ustruct as struct
-import utime as time
+import socket
+import struct
+import time
 
 gc.collect()
-from ubinascii import hexlify
-import uasyncio as asyncio
+from binascii import hexlify
+import asyncio
 
 gc.collect()
-from utime import ticks_ms, ticks_diff
-from uerrno import EINPROGRESS, ETIMEDOUT
+from time import ticks_ms, ticks_diff
+from errno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
 from micropython import const
@@ -26,7 +26,7 @@ import network
 gc.collect()
 from sys import platform
 
-VERSION = (0, 8, 2)
+VERSION = (0, 8, 3)
 # Default initial size for input messge buffer. Increase this if large messages
 # are expected, but rarely, to avoid big runtime allocations
 IBUFSIZE = 50
@@ -124,6 +124,15 @@ def pid_gen():
 def qos_check(qos):
     if not (qos == 0 or qos == 1):
         raise ValueError("Only qos 0 and 1 are supported.")
+
+
+# Populate a byte array with a variable byte integer. Args: buf the bytearray,
+# offs: start offset. x the value. Returns the end offset.
+def vbi(buf: bytearray, offs: int, x: int):
+    buf[offs] = x & 0x7F
+    if x := x >> 7:
+        buf[offs] |= 0x80
+    return vbi(buf, offs + 1, x) if x else (offs + 1)
 
 
 encode_properties = None
@@ -308,10 +317,7 @@ class MQTT_base:
             self._sock = ssl.wrap_socket(self._sock, **self._ssl_params)
         premsg = bytearray(b"\x10\0\0\0\0\0")
         msg = bytearray(b"\x04MQTT\x00\0\0\0")
-        if mqttv5:
-            msg[5] = 0x05
-        else:
-            msg[5] = 0x04
+        msg[5] = 0x05 if mqttv5 else 0x04
 
         sz = 10 + 2 + len(self._client_id)
         msg[6] = clean << 1
@@ -333,13 +339,8 @@ class MQTT_base:
             properties = encode_properties(self.mqttv5_con_props)
             sz += len(properties)
 
-        i = 1
-        while sz > 0x7F:
-            premsg[i] = (sz & 0x7F) | 0x80
-            sz >>= 7
-            i += 1
-        premsg[i] = sz
-        await self._as_write(premsg, i + 2)
+        i = vbi(premsg, 1, sz)  # sz -> Variable Byte Integer
+        await self._as_write(premsg, i + 1)
         await self._as_write(msg)
         if mqttv5:
             await self._as_write(properties)
@@ -508,13 +509,8 @@ class MQTT_base:
 
         if sz >= 2097152:
             raise MQTTException("Strings too long.")
-        i = 1
-        while sz > 0x7F:
-            pkt[i] = (sz & 0x7F) | 0x80
-            sz >>= 7
-            i += 1
-        pkt[i] = sz
-        await self._as_write(pkt, i + 1)
+
+        await self._as_write(pkt, vbi(pkt, 1, sz))  # Encode size as VBI
         await self._send_str(topic)
         if qos > 0:
             struct.pack_into("!H", pkt, 0, pid)
@@ -523,47 +519,39 @@ class MQTT_base:
             await self._as_write(properties)
         await self._as_write(msg)
 
-    # Can raise OSError if WiFi fails. Subclass traps.
     async def subscribe(self, topic, qos, properties=None):
-        pkt = bytearray(b"\x82\0\0\0")
-        pid = next(self.newpid)
-        self.rcv_pids.add(pid)
-        sz = 2 + 2 + len(topic) + 1
-        if self.mqttv5:
-            properties = encode_properties(properties)
-            sz += len(properties)
+        await self._usub(topic, qos, properties)
 
-        struct.pack_into("!BH", pkt, 1, sz, pid)
-        async with self.lock:
-            await self._as_write(pkt)
-            if self.mqttv5:
-                await self._as_write(properties)
-            await self._send_str(topic)
-            # Only QoS is supported other features such as:
-            # (NL) No Local, (RAP) Retain As Published and Retain Handling.
-            # Are not supported.
-            await self._as_write(qos.to_bytes(1, "little"))
-
-        if not await self._await_pid(pid):
-            raise OSError(-1)
-
-    # Can raise OSError if WiFi fails. Subclass traps.
     async def unsubscribe(self, topic, properties=None):
-        pkt = bytearray(b"\xa2\0\0\0")
+        await self._usub(topic, None, properties)
+
+    # Subscribe/unsubscribe
+    # Can raise OSError if WiFi fails. Subclass traps.
+    async def _usub(self, topic, qos, properties):
+        sub = qos is not None
+        pkt = bytearray(7)
+        pkt[0] = 0x82 if sub else 0xA2
         pid = next(self.newpid)
         self.rcv_pids.add(pid)
-        sz = 2 + 2 + len(topic)
+        # 2 bytes of PID + 2 bytes of topic length + len(topic)
+        sz = 2 + 2 + len(topic) + (1 if sub else 0)
         if self.mqttv5:
+            # Return length as VBI followed by properties or b'\0'
             properties = encode_properties(properties)
             sz += len(properties)
+        offs = vbi(pkt, 1, sz)  # Store size as variable byte integer
+        struct.pack_into("!H", pkt, offs, pid)
 
-        struct.pack_into("!BH", pkt, sz, pid)
         async with self.lock:
-            await self._as_write(pkt)
+            await self._as_write(pkt, offs + 2)
             if self.mqttv5:
                 await self._as_write(properties)
             await self._send_str(topic)
-
+            if sub:
+                # Only QoS is supported other features such as:
+                # (NL) No Local, (RAP) Retain As Published and Retain Handling.
+                # Are not supported.
+                await self._as_write(qos.to_bytes(1, "little"))
         if not await self._await_pid(pid):
             raise OSError(-1)
 
@@ -642,6 +630,16 @@ class MQTT_base:
                 self.rcv_pids.discard(pid)
             else:
                 raise OSError(-1, "Invalid pid in SUBACK packet")
+
+        if op == 0xB0:  # UNSUBACK  ** TODO ** Update for V5
+            await self._recv_len()  # V3.1.1 no payload, size is always 2
+            rcv_pid = await self._as_read(2)
+            pid = rcv_pid[0] << 8 | rcv_pid[1]
+
+            if pid in self.rcv_pids:
+                self.rcv_pids.discard(pid)
+            else:
+                raise OSError(-1, "Invalid pid in UNSUBACK packet")
 
         if op == 0xE0:  # DISCONNECT
             if mqttv5:
