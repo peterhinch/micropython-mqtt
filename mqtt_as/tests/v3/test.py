@@ -4,9 +4,8 @@
 # (C) Copyright Peter Hinch 2025.
 # Released under the MIT licence.
 
-# Uses the event interface.
-
-# Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
+# Run with
+# mpremote mount . exec "import mqtt_as.tests.v3.test"
 
 
 from mqtt_as import MQTTClient
@@ -39,7 +38,8 @@ async def messages():
         msg = msg.decode()
         # print(f'Topic: "{topic}" Message: "{msg}" Retained: {retained}')
         if topic == "response":  # msg is json encoded topic and message of received pub
-            topic, msg = json.loads(msg)
+            q = json.loads(msg)
+            topic, msg = q[:2]  # Ignore properties encoded by V5 target
 
         etopic, emsg = await expect.get()  # Expected topic and message
         match = topic == etopic and msg == emsg

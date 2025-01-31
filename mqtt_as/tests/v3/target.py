@@ -3,11 +3,8 @@
 # (C) Copyright Peter Hinch 2025.
 # Released under the MIT licence.
 
-# Uses the event interface.
-
-# Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
-
-# This demo is to provide for the possibility of automated testing
+## Run with
+# mpremote mount . exec "import mqtt_as.tests.v3.target"
 
 # Create subscription to foo_topic with:
 # mosquitto_pub -h 192.168.0.10 -t control -m '["subscribe","foo_topic", ""]' -q 1

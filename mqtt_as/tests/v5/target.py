@@ -3,11 +3,9 @@
 # (C) Copyright Peter Hinch 2025.
 # Released under the MIT licence.
 
-# Uses the event interface.
+# Run with
+# mpremote mount . exec "import mqtt_as.tests.v5.target"
 
-# Public brokers https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
-
-# This demo is to provide for the possibility of automated testing
 
 # Create subscription to foo_topic with:
 # mosquitto_pub -h 192.168.0.10 -t control -m '["subscribe","foo_topic", ""]' -q 1
@@ -49,7 +47,10 @@ async def messages():
         )
         asyncio.create_task(pulse())
         if topic == "control":
-            cmd, tpc, msg, props = json.loads(message)
+            q = json.loads(message)
+            cmd, tpc, msg = q[:3]
+            props = None if len(q) == 3 else q[3]
+
             if props is not None:  # Fix up the way JSON mangles ints. Only fixes keys!
                 props = {int(k): props[k] for k in props.keys()}
             if cmd == "subscribe":

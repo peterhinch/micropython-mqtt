@@ -1,6 +1,9 @@
 # tests/v3/test.py V3 protocol test. Challenges device running tests/v3/target.py
 # Should also pass when run against tests/v5/target.py
 
+# Run with
+# mpremote mount . exec "import mqtt_as.tests.v5.test"
+
 # (C) Copyright Peter Hinch 2025.
 # Released under the MIT licence.
 
@@ -37,14 +40,15 @@ async def messages():
         asyncio.create_task(pulse())
         topic = topic.decode()
         msg = msg.decode()
-        print(f'Topic: "{topic}" Message: "{msg}" Retained: {retained} Properties {properties}')
-        if topic == "response":  # msg is json encoded topic and message of received pub
+        # print(f'Topic: "{topic}" Message: "{msg}" Retained: {retained} Properties {properties}')
+        etopic, emsg, eproperties = await expect.get()  # Expected topic, message, properties
+        if topic == "response":  # msg is json encoded topic, message, props of received pub
             topic, msg, props = json.loads(msg)
             if props is not None:  # Fix up the way JSON mangles ints. Only fixes keys!
                 props = {int(k): props[k] for k in props.keys()}
-
-        etopic, emsg, eproperties = await expect.get()  # Expected topic and message
-        match = topic == etopic and msg == emsg and properties == eproperties
+            match = topic == etopic and msg == emsg and props == eproperties
+        else:  # Attributes are those of incoming message
+            match = topic == etopic and msg == emsg and properties == eproperties
         arrive.set()
 
 
@@ -128,7 +132,7 @@ async def run_tests():
     print("Remote subscription test.")
     topic = "target test topic"
     msg = "this is a message"
-    r = await request_sub(topic, msg)
+    r = await request_sub(topic, msg, {3: "property test"})
     print(f"Subscribe test {PASS if r else FAIL}\n")
 
     print("Remote unsubscribe test - please wait.")
