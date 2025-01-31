@@ -56,7 +56,7 @@ async def up(client):
 
 async def main(client):
     try:
-        await client.connect()
+        await client.connect(quick=True)
     except OSError:
         print("Connection failed.")
         return

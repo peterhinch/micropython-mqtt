@@ -1,4 +1,10 @@
-import ustruct as struct
+# mqtt_v5_properties.py Add MQTT V5 extensions to mqtt_as
+
+# (C) Copyright Bob Veringa 2024-2025.
+# Released under the MIT licence.
+
+
+import struct
 
 
 def encode_byte(value):
@@ -40,31 +46,31 @@ def encode_variable_byte_int(value):
         out[i] = b
         if value == 0:
             break
-    return out[:i + 1]
+    return out[: i + 1]
 
 
 # This table does not contain all properties (unlike the decode table)
 # as not all properties can be sent by the client.
 ENCODE_TABLE = {
-    0x01: encode_byte,                # Payload Format Indicator
-    0x02: encode_four_byte_int,       # Message Expiry Interval
-    0x03: encode_string,              # Content Type
-    0x08: encode_string,              # Response Topic
-    0x09: encode_binary,              # Correlation Data
-    0x0B: encode_variable_byte_int,   # Subscription Identifier
-    0x11: encode_four_byte_int,       # Session Expiry Interval
-    0x15: encode_string,              # Authentication Method
-    0x16: encode_binary,              # Authentication Data
-    0x17: encode_byte,                # Request Problem Information
-    0x18: encode_four_byte_int,       # Will Delay Interval
-    0x19: encode_byte,                # Request Response Information
-    0x1C: encode_string,              # Server Reference
-    0x1F: encode_string,              # Reason String
-    0x21: encode_two_byte_int,        # Receive Maximum
-    0x22: encode_two_byte_int,        # Topic Alias Maximum
-    0x23: encode_two_byte_int,        # Topic Alias
-    0x26: encode_string_pair,         # User Property
-    0x27: encode_four_byte_int,       # Maximum Packet Size
+    0x01: encode_byte,  # Payload Format Indicator
+    0x02: encode_four_byte_int,  # Message Expiry Interval
+    0x03: encode_string,  # Content Type
+    0x08: encode_string,  # Response Topic
+    0x09: encode_binary,  # Correlation Data
+    0x0B: encode_variable_byte_int,  # Subscription Identifier
+    0x11: encode_four_byte_int,  # Session Expiry Interval
+    0x15: encode_string,  # Authentication Method
+    0x16: encode_binary,  # Authentication Data
+    0x17: encode_byte,  # Request Problem Information
+    0x18: encode_four_byte_int,  # Will Delay Interval
+    0x19: encode_byte,  # Request Response Information
+    0x1C: encode_string,  # Server Reference
+    0x1F: encode_string,  # Reason String
+    0x21: encode_two_byte_int,  # Receive Maximum
+    0x22: encode_two_byte_int,  # Topic Alias Maximum
+    0x23: encode_two_byte_int,  # Topic Alias
+    0x26: encode_string_pair,  # User Property
+    0x27: encode_four_byte_int,  # Maximum Packet Size
 }
 
 
@@ -124,7 +130,7 @@ def encode_properties(properties: dict):
     for key, value in pre_encoded_properties.items():
         view[i] = key
         i += 1
-        view[i:i + len(value)] = value
+        view[i : i + len(value)] = value
         i += len(value)
 
     return properties_bytes
@@ -151,7 +157,7 @@ def decode_four_byte_int(props, offset):
 def decode_string(props, offset):
     str_length = struct.unpack_from("!H", props, offset)[0]
     offset += 2
-    value = props[offset:offset + str_length].decode("utf-8")
+    value = props[offset : offset + str_length].decode("utf-8")
     offset += str_length
     return value, offset
 
@@ -166,7 +172,7 @@ def decode_string_pair(props, offset):
 def decode_binary(props, offset):
     data_length = struct.unpack_from("!H", props, offset)[0]
     offset += 2
-    value = props[offset:offset + data_length]
+    value = props[offset : offset + data_length]
     offset += data_length
     return value, offset
 
@@ -183,33 +189,33 @@ def decode_variable_byte_int(props, offset):
 
 
 decode_property_lookup = {
-    0x01: decode_byte,                # Payload Format Indicator
-    0x02: decode_four_byte_int,       # Message Expiry Interval
-    0x03: decode_string,              # Content Type
-    0x08: decode_string,              # Response Topic
-    0x09: decode_binary,              # Correlation Data
-    0x0B: decode_variable_byte_int,   # Subscription Identifier
-    0x11: decode_four_byte_int,       # Session Expiry Interval
-    0x12: decode_string,              # Assigned Client Identifier
-    0x13: decode_two_byte_int,        # Server Keep Alive
-    0x15: decode_string,              # Authentication Method
-    0x16: decode_binary,              # Authentication Data
-    0x17: decode_byte,                # Request Problem Information
-    0x18: decode_four_byte_int,       # Will Delay Interval
-    0x19: decode_byte,                # Request Response Information
-    0x1A: decode_string,              # Response Information
-    0x1C: decode_string,              # Server Reference
-    0x1F: decode_string,              # Reason String
-    0x21: decode_two_byte_int,        # Receive Maximum
-    0x22: decode_two_byte_int,        # Topic Alias Maximum
-    0x23: decode_two_byte_int,        # Topic Alias
-    0x24: decode_byte,                # Maximum QoS
-    0x25: decode_byte,                # Retain Available
-    0x26: decode_string_pair,         # User Property
-    0x27: decode_four_byte_int,       # Maximum Packet Size
-    0x28: decode_byte,                # Wildcard Subscription Available
-    0x29: decode_byte,                # Subscription Identifiers Available
-    0x2A: decode_byte,                # Shared Subscription Available
+    0x01: decode_byte,  # Payload Format Indicator
+    0x02: decode_four_byte_int,  # Message Expiry Interval
+    0x03: decode_string,  # Content Type
+    0x08: decode_string,  # Response Topic
+    0x09: decode_binary,  # Correlation Data
+    0x0B: decode_variable_byte_int,  # Subscription Identifier
+    0x11: decode_four_byte_int,  # Session Expiry Interval
+    0x12: decode_string,  # Assigned Client Identifier
+    0x13: decode_two_byte_int,  # Server Keep Alive
+    0x15: decode_string,  # Authentication Method
+    0x16: decode_binary,  # Authentication Data
+    0x17: decode_byte,  # Request Problem Information
+    0x18: decode_four_byte_int,  # Will Delay Interval
+    0x19: decode_byte,  # Request Response Information
+    0x1A: decode_string,  # Response Information
+    0x1C: decode_string,  # Server Reference
+    0x1F: decode_string,  # Reason String
+    0x21: decode_two_byte_int,  # Receive Maximum
+    0x22: decode_two_byte_int,  # Topic Alias Maximum
+    0x23: decode_two_byte_int,  # Topic Alias
+    0x24: decode_byte,  # Maximum QoS
+    0x25: decode_byte,  # Retain Available
+    0x26: decode_string_pair,  # User Property
+    0x27: decode_four_byte_int,  # Maximum Packet Size
+    0x28: decode_byte,  # Wildcard Subscription Available
+    0x29: decode_byte,  # Subscription Identifiers Available
+    0x2A: decode_byte,  # Shared Subscription Available
 }
 
 

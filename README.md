@@ -290,6 +290,8 @@ The first two of these demonstrate the event interface. Others use callbacks.
  subscribe.
  7. `tls8266.py` SSL/TLS connection for ESP8266. Shows how to use keys and
  certificates. For obvious reasons it requires editing to run.
+ 8. `sub_unsub.py` Messages with topic `sub_topic` control subscriptions to
+ another topic.
 
  Test scripts for MQTTv5:  
  1. `basic.py` Demo of user properties under MQTTv5.
