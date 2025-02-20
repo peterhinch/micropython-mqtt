@@ -839,7 +839,9 @@ class MQTTClient(MQTT_base):
             while self.isconnected():
                 async with self.lock:
                     await self.wait_msg()  # Immediate return if no message
-                await asyncio.sleep_ms(0)  # Let other tasks get lock
+                # https://github.com/peterhinch/micropython-mqtt/issues/166
+                # A delay > 0 is necessary for webrepl compatibility.
+                await asyncio.sleep_ms(5)  # Let other tasks get lock
 
         except OSError:
             pass
