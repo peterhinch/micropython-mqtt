@@ -225,6 +225,10 @@ class MQTT_base:
         self._lw_qos = qos
         self._lw_retain = retain
 
+    def dprint(self, msg, *args):
+        if self.DEBUG:
+            print(msg % args)
+
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
 
@@ -285,21 +289,7 @@ class MQTT_base:
         await self._as_write(struct.pack("!H", len(s)))
         await self._as_write(s)
 
-    # async def _recv_len(self):
-    #     n = 0
-    #     sh = 0
-    #     i = 0
-    #     while 1:
-    #         res = await self._as_read(1)
-    #         i += 1
-    #         b = res[0]
-    #         n |= (b & 0x7F) << sh
-    #         if not b & 0x80:
-    #             return n, i
-    #         sh += 7
-
     # Receive a Variable Byte Integer and decode.
-
     async def _recv_len(self, d=0, i=0):
         s = (await self._as_read(1))[0]
         d |= (s & 0x7F) << (i * 7)
@@ -315,7 +305,7 @@ class MQTT_base:
             if e.args[0] not in BUSY_ERRORS:
                 raise
         await asyncio.sleep_ms(0)
-        self.DEBUG and print("Connecting to broker.")
+        self.dprint("Connecting to broker.")
         if self._ssl:
             try:
                 import ssl
@@ -397,7 +387,7 @@ class MQTT_base:
         if connack_props_length > 0:
             connack_props = await self._as_read(connack_props_length)
             decoded_props = decode_properties(connack_props, connack_props_length)
-            self.DEBUG and print(f"CONNACK properties: {decoded_props}")
+            self.dprint("CONNACK properties: %s", decoded_props)
             self.topic_alias_maximum = decoded_props.get(0x22, 0)
 
     async def _ping(self):
@@ -467,7 +457,7 @@ class MQTT_base:
         try:
             self._sta_if.disconnect()  # Disconnect Wi-Fi to avoid errors
         except OSError:
-            self.DEBUG and print("Wi-Fi not started, cannot disconnect.")
+            self.dprint("Wi-Fi not started, unable to disconnect interface")
         self._sta_if.active(False)
 
     async def _await_pid(self, pid):
@@ -609,7 +599,7 @@ class MQTT_base:
                 if puback_props_sz > 0:
                     puback_props = await self._as_read(puback_props_sz)
                     decoded_props = decode_properties(puback_props, puback_props_sz)
-                    self.DEBUG and print(f"PUBACK properties {decoded_props}")
+                    self.dprint("PUBACK properties %s", decoded_props)
             # No exception thrown: PUBACK successfuly received. Remove pending PID
             self.kill_pid(pid, "PUBACK")
 
@@ -628,7 +618,7 @@ class MQTT_base:
                 if suback_props_sz > 0:
                     suback_props = await self._as_read(suback_props_sz)
                     decoded_props = decode_properties(suback_props, suback_props_sz)
-                    self.DEBUG and print(f"{un}SUBACK properties {decoded_props}")
+                    self.dprint("[UN] SUBACK properties %s", decoded_props)
 
             assert sz <= 1, "Got too many bytes"
             if suback or mqttv5:
@@ -650,7 +640,7 @@ class MQTT_base:
                     sz -= dis_len
                     disconnect_props = await self._as_read(dis_props_sz)
                     decoded_props = decode_properties(disconnect_props, dis_props_sz)
-                    self.DEBUG and print(f"DISCONNECT properties {decoded_props}")
+                    self.dprint("DISCONNECT properties %s", decoded_props)
 
                 if reason_code >= 0x80:
                     raise OSError(-1, "DISCONNECT reason code 0x%x" % reason_code)
@@ -776,12 +766,12 @@ class MQTTClient(MQTT_base):
             raise OSError("Wi-Fi connect timed out")
         if not quick:  # Skip on first connection only if power saving
             # Ensure connection stays up for a few secs.
-            self.DEBUG and print("Checking WiFi integrity.")
+            self.dprint("Checking WiFi integrity.")
             for _ in range(5):
                 if not s.isconnected():
                     raise OSError("Connection Unstable")  # in 1st 5 secs
                 await asyncio.sleep(1)
-            self.DEBUG and print("Got reliable connection")
+            self.dprint("Got reliable connection")
 
     async def connect(self, *, quick=False):  # Quick initial connect option for battery apps
         if not self._has_connected:
@@ -804,9 +794,9 @@ class MQTTClient(MQTT_base):
                             self._sock.write(b"\xe0\0")  # Force disconnect but keep socket open
                     except OSError:
                         pass
-                    self.DEBUG and print("Waiting for disconnect")
+                    self.dprint("Waiting for disconnect")
                     await asyncio.sleep(2)  # Wait for broker to disconnect
-                    self.DEBUG and print("About to reconnect with unclean session.")
+                    self.dprint("About to reconnect with unclean session.")
             await self._connect(is_clean)
         except Exception:
             self._close()
@@ -853,7 +843,7 @@ class MQTTClient(MQTT_base):
         while self.isconnected():
             pings_due = ticks_diff(ticks_ms(), self.last_rx) // self._ping_interval
             if pings_due >= 4:
-                self.DEBUG and print("Reconnect: broker fail.")
+                self.dprint("Reconnect: broker fail.")
                 break
             await asyncio.sleep_ms(self._ping_interval)
             try:
@@ -875,7 +865,7 @@ class MQTTClient(MQTT_base):
         while True:
             await asyncio.sleep(20)
             gc.collect()
-            self.DEBUG and print(f"RAM free: {gc.mem_free()} alloc: {gc.mem_alloc()}")
+            self.dprint("RAM free %d alloc %d", gc.mem_free(), gc.mem_alloc())
 
     def isconnected(self):
         if self._in_connect:  # Disable low-level check during .connect()
@@ -910,26 +900,26 @@ class MQTTClient(MQTT_base):
                 try:
                     self._sta_if.disconnect()
                 except OSError:
-                    self.DEBUG and print("Wi-Fi not started, cannot disconnect")
+                    self.dprint("Wi-Fi not started, unable to disconnect interface")
                 await asyncio.sleep(1)
                 try:
                     await self.wifi_connect()
                 except OSError:
                     continue
                 if not self._has_connected:  # User has issued the terminal .disconnect()
-                    self.DEBUG and print("Disconnected, exiting _keep_connected")
+                    self.dprint("Disconnected, exiting _keep_connected")
                     break
                 try:
                     await self.connect()
                     # Now has set ._isconnected and scheduled _connect_handler().
-                    self.DEBUG and print("Reconnect OK!")
+                    self.dprint("Reconnect OK!")
                 except OSError as e:
-                    self.DEBUG and print(f"Error in reconnect. {e}")
+                    self.dprint("Error in reconnect. %s", e)
                     # Can get ECONNABORTED or -1. The latter signifies no or bad CONNACK received.
                     self._close()  # Disconnect and try again.
                     self._in_connect = False
                     self._isconnected = False
-        self.DEBUG and print("Disconnected, exited _keep_connected")
+        self.dprint("Disconnected, exited _keep_connected")
 
     async def subscribe(self, topic, qos=0, properties=None):
         qos_check(qos)

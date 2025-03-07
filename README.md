@@ -173,7 +173,8 @@ contributors, some mentioned below.
 
 Note that in firmware prior to 1.21 `asyncio` was named `uasyncio`.
 
-24 Oct 2024 V0.8.2 Socket reads use pre-allocated buffer for performance.
+7 Mar 2025 V0.8.3 Fix unsubscribe bug. Fix decode of large variable byte integers.
+24 Oct 2024 V0.8.2 Socket reads use pre-allocated buffer for performance.  
 18 Aug 2024 V0.8.1 Reconfigured as a Python package. Bugfix in V5 support.  
 9 Aug 2024 V0.8.0 Partial MQTTv5 support contributed by Bob Veringa.  
 15 Feb 2024 V0.7.2 Make compliant with firmware V1.22.0 and later.  
