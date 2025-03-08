@@ -304,11 +304,14 @@ The first two of these demonstrate the event interface. Others use callbacks.
 ### Quick install
 
 ESP8266: please read [Installation](./README.md#22-installation). On other
-platforms the main module, demos 1 to 3 and the sample `mqtt_local.py` may be
-installed from a connected PC with :
+platforms the main module, demos 1 to 3 and the sample `mqtt_local_example.py`
+may be installed from a connected PC with :
 ```bash
 $ mpremote mip install github:peterhinch/micropython-mqtt
 ```
+The file `mqtt_local_example.py` should be edited for local WiFi authentication
+and renamed `mqtt_local.py`.
+
 For MQTTv5, demos may be added with
 ```bash
 $ mpremote mip install github:peterhinch/micropython-mqtt/mqtt_as/v5
