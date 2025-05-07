@@ -576,7 +576,8 @@ Populating the `ssl_params` dictionary is something of a black art. Some sites
 require certificates: see [this post](https://forum.micropython.org/viewtopic.php?f=18&t=11906#p65746)
 for details on how to specify these. See [Hive MQ](./README.md#8-hive-mq) for
 details of connecting to a secure, free broker service. This may provide hints
-for connecting to other TLS brokers.
+for connecting to other TLS brokers. See
+[The ssl_params dictionary](./README.md#9-the-ssl_params-dictionary) below.
 
 ###### [Contents](./README.md#1-contents)
 
@@ -1381,7 +1382,7 @@ The following are the allowable keys:
  * 'cert'
  * 'server_side'
  * 'server_hostname'
- * 'do_handshake'
+ * 'do_handshake' see discussion in https://github.com/peterhinch/micropython-mqtt/issues/171.
  * 'cert_reqs' mbedtls only
  * 'cadata' mbedtls only
 
@@ -1396,7 +1397,7 @@ the following platforms use mbedtls:
 See [this post](https://github.com/orgs/micropython/discussions/10801#discussioncomment-5071764)
 for details of how to use client certificates with a `mosquitto` broker.
 
-Note also that TLS with client certificates requires the cliet's clock to be
+Note also that TLS with client certificates requires the client's clock to be
 approximately correct. This can be achieved with an NTP query. If `mosquitto`
 is run on a local server it also runs the NTP daemon. A high availability
 option is to run the NTP query against the local server. See
@@ -1405,3 +1406,6 @@ also [the official ntptime module](https://github.com/micropython/micropython-li
 
 See [this link](https://github.com/JustinS-B/Mosquitto_CA_and_Certs) for
 information on creating client certificates and a Bash script for doing so.
+
+See [this site](https://github.com/shariltumin/ssl-tls-examples-micropython/tree/main)
+which is very informative about SSL.
