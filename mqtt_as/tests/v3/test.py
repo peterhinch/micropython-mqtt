@@ -149,6 +149,23 @@ async def run_tests():
     r = await request_unsub(topic, msg)
     print(f"Unsubscribe test {FAIL if r else PASS}\n")
 
+    print("Remote publication test - non-ASCII topic and message.")
+    # Multi-byte UTF-8 chars: code-point count != byte count. Regression test
+    # for len() being applied to str rather than encoded bytes.
+    topic = "tëst/tòpïc/日本語"
+    msg = "Emoji test: 😀🚀 café naïve"
+    r = await request_pub(topic, msg)
+    print(f"Publish test {PASS if r else FAIL}\n")
+
+    print("Remote subscription test - non-ASCII topic and message.")
+    r = await request_sub(topic, msg)
+    print(f"Subscribe test {PASS if r else FAIL}\n")
+
+    print("Remote unsubscribe test - non-ASCII topic and message.")
+    # Request unsubscription. Should fail to respond to challenge publication
+    r = await request_unsub(topic, msg)
+    print(f"Unsubscribe test {FAIL if r else PASS}\n")
+
     print("Remote unsubscribe test - target not subscribed to topic.")
     # Request unsubscription. Should fail to respond to challenge publication
     r = await request_unsub("rats", "nonsense")
