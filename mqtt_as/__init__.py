@@ -285,6 +285,9 @@ class MQTT_base:
             await asyncio.sleep_ms(0)
 
     async def _send_str(self, s):
+        # encode string to bytes to get correct length
+        if isinstance(s, str):
+            s = s.encode("utf-8")
         await self._as_write(struct.pack("!H", len(s)))
         await self._as_write(s)
 
@@ -494,6 +497,11 @@ class MQTT_base:
             self.REPUB_COUNT += 1
 
     async def _publish(self, topic, msg, retain, qos, dup, pid, properties=None):
+        # encode string to bytes to get correct length
+        if isinstance(topic, str):
+            topic = topic.encode("utf-8")
+        if isinstance(msg, str):
+            msg = msg.encode("utf-8")
         pkt = bytearray(b"\x30\0\0\0")
         pkt[0] |= qos << 1 | retain | dup << 3
         sz = 2 + len(topic) + len(msg)
@@ -522,6 +530,9 @@ class MQTT_base:
     # Subscribe/unsubscribe
     # Can raise OSError if WiFi fails. Subclass traps.
     async def _usub(self, topic, qos, properties):
+        # encode string to bytes to get correct length
+        if isinstance(topic, str):
+            topic = topic.encode("utf-8")
         sub = qos is not None
         pkt = bytearray(7)
         pkt[0] = 0x82 if sub else 0xA2
