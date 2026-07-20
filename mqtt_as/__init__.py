@@ -834,8 +834,8 @@ class MQTTClient(MQTT_base):
                 # A delay > 0 is necessary for webrepl compatibility.
                 await asyncio.sleep_ms(5)  # Let other tasks get lock
 
-        except OSError:
-            pass
+        except OSError as e:
+            self.dprint("_handle_msg OSError: %s", e)
         self._reconnect()  # Broker or WiFi fail.
 
     # Keep broker alive MQTT spec 3.1.2.10 Keep Alive.
@@ -873,11 +873,13 @@ class MQTTClient(MQTT_base):
             return True
 
         if self._isconnected and not self._sta_if.isconnected():  # It's going down.
+            self.dprint("isconnected(): WiFi link itself is down")
             self._reconnect()
         return self._isconnected
 
     def _reconnect(self):  # Schedule a reconnection if not underway.
         if self._isconnected:
+            self.dprint("_reconnect() triggered")
             self._isconnected = False
             asyncio.create_task(self._kill_tasks(True))  # Shut down tasks and socket
             if self._events:  # Signal an outage
@@ -928,8 +930,8 @@ class MQTTClient(MQTT_base):
             await self._connection()
             try:
                 return await super().subscribe(topic, qos, properties)
-            except OSError:
-                pass
+            except OSError as e:
+                self.dprint("subscribe(%s) OSError: %s", topic, e)
             self._reconnect()  # Broker or WiFi fail.
 
     async def unsubscribe(self, topic, properties=None):
@@ -937,8 +939,8 @@ class MQTTClient(MQTT_base):
             await self._connection()
             try:
                 return await super().unsubscribe(topic, properties)
-            except OSError:
-                pass
+            except OSError as e:
+                self.dprint("unsubscribe(%s) OSError: %s", topic, e)
             self._reconnect()  # Broker or WiFi fail.
 
     async def publish(self, topic, msg, retain=False, qos=0, properties=None):
@@ -947,6 +949,6 @@ class MQTTClient(MQTT_base):
             await self._connection()
             try:
                 return await super().publish(topic, msg, retain, qos, properties)
-            except OSError:
-                pass
+            except OSError as e:
+                self.dprint("publish(%s) OSError: %s", topic, e)
             self._reconnect()  # Broker or WiFi fail.
