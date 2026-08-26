@@ -41,7 +41,7 @@ async def pulse():  # This demo pulses blue LED each time a subscribed msg arriv
 async def get_rssi():
     global rssi
     s = network.WLAN()
-    ssid = config["ssid"].encode("UTF8")
+    ssid = config["ssid"].encode("utf8")
     while True:
         try:
             rssi = [x[3] for x in s.scan() if x[0] == ssid][0]
