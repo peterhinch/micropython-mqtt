@@ -353,6 +353,7 @@ config['wifi_pw'] = 'my_password'
 
 # Optional static IP configuration for WLAN.ifconfig((ip, subnet, gateway, dns))
 config['ifconfig'] = ('192.168.0.4', '255.255.255.0', '192.168.0.1', '8.8.8.8')
+```
 
 ###### [Contents](./README.md#1-contents)
 
