@@ -718,6 +718,9 @@ class MQTTClient(MQTT_base):
                 return
             s.active(True)
             s.connect()  # ESP8266 remembers connection.
+            if 'ifconfig' in config:
+                s.ifconfig(config['ifconfig'])
+
             for _ in range(60):
                 # Break out on fail or success. Check once per sec.
                 if s.status() != network.STAT_CONNECTING:
@@ -729,6 +732,9 @@ class MQTTClient(MQTT_base):
                 await asyncio.sleep(1)
             if not s.isconnected() and self._ssid is not None and self._wifi_pw is not None:
                 s.connect(self._ssid, self._wifi_pw)
+                if 'ifconfig' in config:
+                    s.ifconfig(config['ifconfig'])
+
                 # Break out on fail or success. Check once per sec.
                 while s.status() == network.STAT_CONNECTING:
                     await asyncio.sleep(1)
@@ -739,6 +745,8 @@ class MQTTClient(MQTT_base):
                 # para 3.6.3
                 s.config(pm=0xA11140)
             s.connect(self._ssid, self._wifi_pw)
+            if 'ifconfig' in config:
+                s.ifconfig(config['ifconfig'])
             for _ in range(60):  # Break out on fail or success. Check once per sec.
                 await asyncio.sleep(1)
                 # Loop while connecting or no IP
