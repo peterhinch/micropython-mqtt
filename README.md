@@ -350,6 +350,9 @@ config['server'] = '192.168.0.10'  # Change to suit e.g. 'iot.eclipse.org'
 # Required on Pyboard D and ESP32. On ESP8266 these may be omitted (see above).
 config['ssid'] = 'my_WiFi_SSID'
 config['wifi_pw'] = 'my_password'
+
+# Optional static IP configuration for WLAN.ifconfig((ip, subnet, gateway, dns))
+config['ifconfig'] = ('192.168.0.4', '255.255.255.0', '192.168.0.1', '8.8.8.8')
 ```
 
 ###### [Contents](./README.md#1-contents)
@@ -490,6 +493,7 @@ attempt to connect to the specified LAN.
 
 '**ssid**' [`None`]  
 '**wifi_pw**' [`None`]  
+'**ifconfig**' [`None`] Optional static IP configuration for WLAN.ifconfig((ip, subnet, gateway, dns))
 
 ### MQTT parameters
 
