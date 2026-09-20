@@ -22,8 +22,49 @@ from errno import EINPROGRESS, ETIMEDOUT
 
 gc.collect()
 from micropython import const
-from machine import unique_id
-import network
+try:
+    from machine import unique_id
+except ImportError as e:
+    # this is for micropython on linux
+    def unique_id():
+        import platform
+        return platform.platform().encode()
+
+try:
+    import network
+except ImportError as e:
+    # this is for micropython on linux
+    class FakeNetwork:
+        STA_IF = "fake_network_interface"
+
+        def __init__(self):
+            self.verbose = False
+
+        def WLAN(self, network_interface):
+            if self.verbose:
+                print(f"WLAN({network_interface})")
+            return self
+
+        def active(self, a_bool):
+            if self.verbose:
+                print(f"wifi.active({a_bool})")
+
+        def connect(self, wifi_ssid, wifi_pass):
+            if self.verbose:
+                print(f"wifi.connect({wifi_ssid}, {wifi_pass})")
+
+        def isconnected(self):
+            return True
+
+        def ifconfig(self):
+            return "unix_network"
+
+        def disconnect(self):
+            if self.verbose:
+                print("wifi.disconnect()")
+
+    network = FakeNetwork()
+
 
 gc.collect()
 from sys import platform, implementation
