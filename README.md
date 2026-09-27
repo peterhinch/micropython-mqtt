@@ -21,8 +21,6 @@ but duplication can occur. Level 2 avoids duplication; it is not supported by
 the official driver or by this module. Duplicates can readily be handled at the
 application level.
 
-###### [Main README](../README.md)
-
 ### Warning: firmware >= V1.22.0
 
 V1.22.0 included a changed IDF version 5.0.4. If upgrading firmware on ESPx the
@@ -84,6 +82,8 @@ outage may not occur.
  7. [Connect Error Codes](./README.md#7-connect-error-codes)  
  8. [Hive MQ](./README.md#8-hive-mq) A secure, free, broker.  
  9. [The ssl_params dictionary](./README.md#9-the-ssl_params-dictionary) Plus user notes on SSL/TLS.  
+ 10. [Non-wifi platforms](./README.md#10-non-wifi-platforms) Install and run on Unix build or wired Ethernet hardware.  
+ 11. [Running a mosquitto broker](./README.md#11-running-a-mosquitto-broker Changes since Mosquitto V2.  
 
 ## 1.1 Rationale
 
@@ -121,6 +121,8 @@ It has been tested on the following platforms.
  3. Pyboard D
  4. Arduino Nano Connect
  5. Raspberry Pi Pico W
+ 6. W5500-EVB-Pico (wired Ethernet).
+ 7. The Unix build of MicroPython running under Linux.
 
 The principal features of this driver are:  
  1. Non-blocking operation for applications using uasyncio.
@@ -163,7 +165,8 @@ Hardware support: Pyboard D, ESP8266, ESP32, ESP32-S3, ESP32-S2, Pico W and
 Arduino Nano RP2040 Connect.  
 Firmware support: Official MicroPython firmware V1.19 or later.  
 Broker support: Mosquitto is preferred for its excellent MQTT compliance.  
-Protocol: The module supports a subset of MQTT revision 3.1.1.
+Protocol: The module supports a subset of MQTT revision 3.1.1. and optionally a
+subset of MQTTv5.
 
 ## 1.3 Project Status
 
@@ -173,6 +176,7 @@ contributors, some mentioned below.
 
 Note that in firmware prior to 1.21 `asyncio` was named `uasyncio`.
 
+1 Oct 2026 Add support for non-wifi hardware.
 7 Mar 2025 V0.8.3 Fix unsubscribe bug. Fix decode of large variable byte integers.  
 24 Oct 2024 V0.8.2 Socket reads use pre-allocated buffer for performance.  
 18 Aug 2024 V0.8.1 Reconfigured as a Python package. Bugfix in V5 support.  
@@ -489,7 +493,8 @@ These are required for platforms other than ESP8266 where they are optional. If
 the ESP8266 has previously connected to the required LAN the chip can reconnect
 automatically. If credentials are provided, an ESP8266 which has no stored
 values or which has stored values which don't match any available network will
-attempt to connect to the specified LAN.
+attempt to connect to the specified LAN. These args will be ignored on wired
+platforms.
 
 '**ssid**' [`None`]  
 '**wifi_pw**' [`None`]  
@@ -539,6 +544,10 @@ state changes. The coro receives a single `bool` arg being the network state.
 connection to the broker has been established. This is typically used to
 register and renew subscriptions. The coro receives a single argument, the
 client instance.
+
+Wired connections cannot distinguish between network failure and broker failure.
+On an outage `wifi_coro(False)` will run. On reconnect, `wifi_coro(True)` and
+`connect_coro(client_instance)` will run.
 
 ### MQTT V5 extensions
 
@@ -764,8 +773,8 @@ value of 1 provides a minimal queue. The queue comes into play when bursts of
 messages arrive too quickly for the application to process them. This can occur
 if multiple clients independently publish to the same topic: the broker may
 forward them to subscribers at a high rate. Another case is when the `clean`
-flag is `False` and a long wifi outage occurs: when the outage ends there may
-be a large backlog of messages. Such cases may warrant a larger queue.
+flag is `False` and a long outage occurs: when the outage ends there may be a
+large backlog of messages. Such cases may warrant a larger queue.
 
 In the event of the queue overflowing, the oldest messages will be discarded.
 This policy prioritises resilience over the `qos==1` guarantee. The bound
@@ -1414,3 +1423,100 @@ information on creating client certificates and a Bash script for doing so.
 
 See [this site](https://github.com/shariltumin/ssl-tls-examples-micropython/tree/main)
 which is very informative about SSL.
+
+# 10. Non-wifi platforms
+
+These include a computer running the Unix build or platforms with a wired
+Ethernet interface. Potentially any device providing a `socket` interface may be
+employed. The API is identical to the WiFi library (irrelevant configuration
+args such as WiFi credentials will be ignored.)
+
+The library is resilient in the face of broker outages. Resilience to LAN
+outages depends on hardware. On a PC if the network cable is unplugged then
+reattached the OS automatically restores connectivity. The same applies where
+MicroPython is connected via a Wiznet W5500. In these cases (Unix build on
+computer, W5500 hardware) the library behaves as follows:
+1. If connectivity is absent on power up, connection fails.
+2. If connectivity is lost subsequently the application is notified (see above).
+The outage is handled automatically. Publications and subscribed messages will
+inevitably be delayed, but `qos==1` messages will not be lost.
+
+The library does not attempt to distinguish between broker outages and more
+general network outages.
+
+Because of observation 1. above, on Wiznet platforms the application should
+wait for connectivity before setting up a client, e.g.:
+```py
+nic = network.WIZNET5K()
+nic.active(False)  # Iss 17242
+nic.active(True)
+print("Waiting for LAN...")
+while not nic.isconnected():
+    time.sleep(1)
+print("LAN OK:", nic.ifconfig())
+```
+In the absence of line 2 an alarming error message is output. While it may be
+ignored (!) this prevents it. Ref
+[issue 17242](https://github.com/micropython/micropython/issues/17242).
+
+### Untested platforms
+
+As explained above, supported platforms handle interruptions to network
+connectivity transparently. If attempting to use a platform that requires
+programmatic intervention to re-establish lost connectivity, it is the
+responsibility of the application to supply it. The library provides
+notification of outages (see above) but does not distinguish between broker
+outages and more general network outages.
+
+### Installation
+
+To install on networked hardware issue:
+```bash
+$ mpremote mip install github:peterhinch/micropython-mqtt/mqtt_as_eth
+```
+To install on a computer run the Unix build of MicroPython and issue
+```Python
+>>> import mip
+>>> mip.install("github:peterhinch/micropython-mqtt/mqtt_as_eth")
+```
+On a Linux machine the library will be installed to `~/.micropython/lib`.
+
+### Test scripts
+
+The scripts do not use an `mqtt_local` file: the scripts provide configuration
+and specify a local broker on `192.168.0.10`.
+
+On Wiznet W5500 hardware issue:
+```py
+>>> import mqtt_as_eth.eth_test
+```
+on Unix build:
+```py
+>>> import mqtt_as_eth.unix_test
+```
+Both tests publish periodically to topic `shed` and subscribe to topic
+`foo_topic`. A Bash script `pubtest` is provided to send periodic publications
+to `foo_topic`. The scripts' publications may be viewed with
+```bash
+mosquitto_sub -h 192.168.0.10 -t shed
+```
+
+# 11. Running a mosquitto broker
+
+By default Mosquitto V2 refuses anonymous connections. Its behaviour is
+controlled by a file `/etc/mosquitto/mosquitto.conf`. For development it can be
+simplest to allow anonymous connections: the following file enables this. Note
+that if using TLS encryption the port is 8883 (rather than 1883).
+```
+persistence true
+persistence_location /var/lib/mosquitto/
+
+log_dest file /var/log/mosquitto/mosquitto.log
+allow_anonymous true
+listener 1883 0.0.0.0
+include_dir /etc/mosquitto/conf.d
+```
+Before running Python code the broker should be tested using `mosquitto_pub` and
+`mosquitto_sub`. These can be run on the same machine or elsewhere on the LAN. A
+useful guide to debugging Mosquitto may be found
+[here](https://linuxvox.com/blog/mosquitto-client-obtain-refused-connection/).
