@@ -83,7 +83,7 @@ outage may not occur.
  8. [Hive MQ](./README.md#8-hive-mq) A secure, free, broker.  
  9. [The ssl_params dictionary](./README.md#9-the-ssl_params-dictionary) Plus user notes on SSL/TLS.  
  10. [Non-wifi platforms](./README.md#10-non-wifi-platforms) Install and run on Unix build or wired Ethernet hardware.  
- 11. [Running a mosquitto broker](./README.md#11-running-a-mosquitto-broker Changes since Mosquitto V2.  
+ 11. [Running a mosquitto broker](./README.md#11-running-a-mosquitto-broker) Changes since Mosquitto V2.  
 
 ## 1.1 Rationale
 
@@ -1424,6 +1424,8 @@ information on creating client certificates and a Bash script for doing so.
 See [this site](https://github.com/shariltumin/ssl-tls-examples-micropython/tree/main)
 which is very informative about SSL.
 
+###### [Contents](./README.md#1-contents)
+
 # 10. Non-wifi platforms
 
 These include a computer running the Unix build or platforms with a wired
@@ -1500,6 +1502,7 @@ to `foo_topic`. The scripts' publications may be viewed with
 ```bash
 mosquitto_sub -h 192.168.0.10 -t shed
 ```
+###### [Contents](./README.md#1-contents)
 
 # 11. Running a mosquitto broker
 
@@ -1520,3 +1523,5 @@ Before running Python code the broker should be tested using `mosquitto_pub` and
 `mosquitto_sub`. These can be run on the same machine or elsewhere on the LAN. A
 useful guide to debugging Mosquitto may be found
 [here](https://linuxvox.com/blog/mosquitto-client-obtain-refused-connection/).
+
+###### [Contents](./README.md#1-contents)
