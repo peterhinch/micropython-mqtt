@@ -625,7 +625,9 @@ reconnections after outages are handled automatically.
 Asynchronous.
 
 If connectivity is OK the coro will complete immediately, else it will pause
-until the WiFi/broker are accessible.
+until the WiFi/broker are accessible when the message will be published. If late
+publication is undesirable, status may be tested with `.isconnected()`
+immediately prior to issuing `.publish()`.
 [Section 4.2](./README.md#42-client-publications-with-qos-1) describes qos == 1
 operation.
 
