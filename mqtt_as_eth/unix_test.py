@@ -9,7 +9,7 @@
 from mqtt_as_eth import MQTTClient, config
 import asyncio
 
-TOPIC = "shed"  # For demo publication and last will use same topic
+TOPIC = b"shed"  # For demo publication and last will use same topic
 
 outages = 0
 
@@ -33,7 +33,7 @@ async def up(client):
         await client.up.wait()
         client.up.clear()
         print("We are connected to broker.")
-        await client.subscribe("foo_topic", 1)
+        await client.subscribe(b"foo_topic", 1)
 
 
 async def main(client):
@@ -49,13 +49,14 @@ async def main(client):
         await asyncio.sleep(5)
         print("publish", n)
         # If LAN is down the following will pause for the duration.
-        await client.publish(TOPIC, f"{n} repubs: {client.REPUB_COUNT} outages: {outages}", qos=1)
+        msg = f"{n} repubs: {client.REPUB_COUNT} outages: {outages}".encode("utf8")
+        await client.publish(TOPIC, msg, qos=1)
         n += 1
 
 
 # Define configuration
 config["server"] = "192.168.0.10"
-config["will"] = (TOPIC, "Goodbye cruel world!", False, 0)
+config["will"] = (TOPIC, b"Goodbye cruel world!", False, 0)
 config["keepalive"] = 120
 config["queue_len"] = 1  # Use event interface with default queue
 

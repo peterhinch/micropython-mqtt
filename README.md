@@ -600,7 +600,8 @@ for connecting to other TLS brokers. See
 Note re data types. Messages and topics may be strings provided that all
 characters have ordinal values <= 127 (Unicode single byte characters).
 Otherwise the string `encode` method should be used to convert them to `bytes`
-objects.
+objects. This does not apply when running under CPython: all passed data must be
+`bytes` or `bytearray`s.
 
 ### 3.2.1 connect
 

@@ -1,4 +1,7 @@
-# mqtt_as_eth.py Asynchronous version of umqtt.robust for Ethernet hardware
+# mqtt_as_eth.py Asynchronous version of umqtt.robust for Ethernet hardware.
+# Also for the Unix build of MicroPython and CPython, however TLS not yet tested on
+# these platforms.
+
 # (C) Copyright Peter Hinch 2017-2026.
 # Released under the MIT licence.
 
@@ -13,12 +16,13 @@ import asyncio
 from binascii import hexlify
 from errno import EINPROGRESS, ETIMEDOUT
 
-# NOTE: This does not work under CPython. The following gestures towards achieving this
-# may be reverted in the absence of a fix.
-
+CPython = False
 try:
     from time import ticks_ms, ticks_diff
+    from asyncio import sleep_ms
+
 except ImportError:
+    CPython = True
     from time import monotonic
 
     def ticks_ms():
@@ -26,11 +30,6 @@ except ImportError:
 
     def ticks_diff(t1, t2):
         return t1 - t2
-
-
-try:
-    from asyncio import sleep_ms
-except ImportError:
 
     async def sleep_ms(t):
         await asyncio.sleep(t / 1000)
@@ -175,7 +174,8 @@ class MQTT_base:
         self._keepalive = config["keepalive"]
         if self._keepalive >= 65536:
             raise ValueError("invalid keepalive time")
-        self._response_time = config["response_time"] * 1000  # Repub if no PUBACK received (ms).
+        self._rt = config["response_time"]  # Response time in secs
+        self._response_time = self._rt * 1000  # Repub if no PUBACK received (ms).
         self._max_repubs = config["max_repubs"]
         self._clean_init = config["clean_init"]  # clean_session state on first connection
         self._clean = config["clean"]  # clean_session state on reconnect
@@ -197,6 +197,14 @@ class MQTT_base:
             self._cb = config["subs_cb"]
             self._wifi_handler = config["wifi_coro"]
             self._connect_handler = config["connect_coro"]
+
+        if CPython:
+            self._as_read = self._as_read_cp
+            self._as_write = self._as_write_cp
+        else:
+            self._as_read = self._as_read_up
+            self._as_write = self._as_write_up
+
         # Network
         self.port = config["port"]
         if self.port == 0:
@@ -236,7 +244,8 @@ class MQTT_base:
     def _timeout(self, t):
         return ticks_diff(ticks_ms(), t) > self._response_time
 
-    async def _as_read(self, n, sock=None):  # OSError caught by superclass
+    # MicroPython asynchronous read. OSError caught by superclass
+    async def _as_read_up(self, n: int, sock: socket = None) -> bytes:
         if sock is None:
             sock = self._sock
         # Ensure input buffer is big enough to hold data. It keeps the new size
@@ -253,7 +262,6 @@ class MQTT_base:
                 raise OSError(-1, "Timeout on socket read")
             try:
                 msg_size = sock.readinto(buffer[size:], n - size)  # MP only
-                # msg_size = sock.recv_into(buffer[size:], n - size)  # CPython only
             except OSError as e:
                 msg_size = None
                 if e.args[0] not in BUSY_ERRORS:
@@ -267,7 +275,28 @@ class MQTT_base:
             await asyncio.sleep(0)
         return buffer[:n]
 
-    async def _as_write(self, bytes_wr, length=0, sock=None):
+    # CPython asynchronous read
+    async def _as_read_cp(self, nbytes: int, sock: socket = None) -> bytes:
+        chunks = []
+        if sock is None:
+            sock = self._sock
+        loop = asyncio.get_running_loop()
+        while nbytes:
+            try:
+                chunk = await asyncio.wait_for(loop.sock_recv(sock, nbytes), self._rt)
+            except asyncio.TimeoutError:
+                raise OSError(-1, "Timeout on socket read")
+            if not chunk:
+                raise EOFError("socket closed before all data was received")
+
+            chunks.append(chunk)
+            nbytes -= len(chunk)
+
+        self.last_rx = ticks_ms()
+        return b"".join(chunks)
+
+    # MicroPython asynchronous write
+    async def _as_write_up(self, bytes_wr: int, length: int = 0, sock: socket = None) -> None:
         if sock is None:
             sock = self._sock
 
@@ -280,7 +309,6 @@ class MQTT_base:
             if self._timeout(t) or not self.isconnected():
                 raise OSError(-1, "Timeout on socket write")
             try:
-                # n = sock.send(bytes_wr)  # TODO does not work
                 n = sock.write(bytes_wr)
             except OSError as e:
                 n = 0
@@ -290,6 +318,20 @@ class MQTT_base:
                 t = ticks_ms()
                 bytes_wr = bytes_wr[n:]
             await asyncio.sleep(0)
+
+    # CPython asynchronous write.
+    async def _as_write_cp(self, bytes_wr: bytes, length: int = 0, sock: socket = None) -> None:
+        if sock is None:
+            sock = self._sock
+        loop = asyncio.get_running_loop()
+        # Wrap bytes in memoryview to avoid copying during slicing
+        bytes_wr = memoryview(bytes_wr)
+        if length:
+            bytes_wr = bytes_wr[:length]
+        try:
+            await asyncio.wait_for(loop.sock_sendall(sock, bytes_wr), self._rt)
+        except asyncio.TimeoutError:
+            raise OSError(-1, "Timeout on socket write")
 
     async def _send_str(self, s):
         await self._as_write(struct.pack("!H", len(s)))
@@ -545,8 +587,23 @@ class MQTT_base:
     # Immediate return if no data available. Called from ._handle_msg().
     async def wait_msg(self):
         mqttv5 = self.mqttv5  # Cache local
-        # try-except removed - presumed not needed with wirder LAN TODO
-        res = self._sock.read(1)  # Throws OSError on LAN fail
+        if CPython:
+            # try:
+            #    res = self._sock.recv(1)
+            # except Exception as e:
+            #    return
+            # if e.args[0] == 11:
+            #    res = None
+            # else:
+            #    print("got", e)
+            #    raise
+            loop = asyncio.get_running_loop()
+            try:
+                res = await asyncio.wait_for(loop.sock_recv(self._sock, 1), 0.1)
+            except:
+                return  # No data
+        else:
+            res = self._sock.read(1)
 
         if res is None:
             return
@@ -726,7 +783,7 @@ class MQTTClient(MQTT_base):
 
         asyncio.create_task(self._handle_msg())  # Task quits on connection fail.
         self._tasks.append(asyncio.create_task(self._keep_alive()))
-        if self.DEBUG:
+        if self.DEBUG and not CPython:
             self._tasks.append(asyncio.create_task(self._memory()))
         if self._events:
             self.up.set()  # Connectivity is up
@@ -755,6 +812,7 @@ class MQTTClient(MQTT_base):
             pings_due = ticks_diff(ticks_ms(), self.last_rx) // self._ping_interval
             if pings_due >= 4:
                 self.dprint("Reconnect: broker fail.")
+                # print("pings_due", pings_due, ticks_ms() - self.last_rx)  # pings_due 4 120201
                 break
             await sleep_ms(self._ping_interval)
             try:
