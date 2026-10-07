@@ -1436,6 +1436,9 @@ Ethernet interface. Potentially any device providing a `socket` interface may be
 employed. The API is identical to the WiFi library (irrelevant configuration
 args such as WiFi credentials will be ignored.)
 
+The library will work under CPython with the exception that TLS is currently
+unsupported.
+
 The library is resilient in the face of broker outages. Resilience to LAN
 outages depends on hardware. On a PC if the network cable is unplugged then
 reattached the OS automatically restores connectivity. The same applies where
@@ -1495,9 +1498,9 @@ On Wiznet W5500 hardware issue:
 ```py
 >>> import mqtt_as_eth.eth_test
 ```
-on Unix build:
+on Unix build or CPython:
 ```py
->>> import mqtt_as_eth.unix_test
+>>> import mqtt_as_eth.pc_test
 ```
 Both tests publish periodically to topic `shed` and subscribe to topic
 `foo_topic`. A Bash script `pubtest` is provided to send periodic publications
@@ -1505,6 +1508,13 @@ to `foo_topic`. The scripts' publications may be viewed with
 ```bash
 mosquitto_sub -h 192.168.0.10 -t shed
 ```
+TLS may be verified (on Unix build) with
+```py
+>>> import mqtt_as_eth.pc_tls
+```
+This connects to a public broker. It subscribes to its own publications, testing
+encrypted communication in both directions.
+
 ###### [Contents](./README.md#1-contents)
 
 # 11. Running a mosquitto broker

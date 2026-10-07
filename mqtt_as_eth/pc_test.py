@@ -1,4 +1,7 @@
-# unix_test.py Test mqtt_as_eth running on MicroPython on PC.
+# pc_test.py Test mqtt_as_eth running on MicroPython or CPython on PC.
+
+# (C) Copyright Peter Hinch 2017-2026.
+# Released under the MIT licence.
 
 # Demo does not use mqtt_local.py
 # Publishes to topic "shed", subscribes to "foo_topic"
@@ -6,6 +9,9 @@
 # ./pubtest
 # mosquitto_pub -h 192.168.0.10 -t foo_topic -m "gordon bennett" -q 1
 # mosquitto_sub -h 192.168.0.10 -t shed
+
+# Note use of bytes objects throughout: CPython requirement (see README).
+
 from mqtt_as_eth import MQTTClient, config
 import asyncio
 

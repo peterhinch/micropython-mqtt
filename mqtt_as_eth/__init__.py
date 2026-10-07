@@ -15,6 +15,10 @@ import struct
 import asyncio
 from binascii import hexlify
 from errno import EINPROGRESS, ETIMEDOUT
+from sys import platform
+
+# Suppress RAM messages on PC
+on_pc = platform.lower() in ("linux", "windows", "freebsd", "cygwin", "unix", "android")
 
 CPython = False
 try:
@@ -199,6 +203,8 @@ class MQTT_base:
             self._connect_handler = config["connect_coro"]
 
         if CPython:
+            if self._ssl:
+                raise ValueError("SSL/TLS requires MicroPython.")
             self._as_read = self._as_read_cp
             self._as_write = self._as_write_cp
         else:
@@ -588,15 +594,6 @@ class MQTT_base:
     async def wait_msg(self):
         mqttv5 = self.mqttv5  # Cache local
         if CPython:
-            # try:
-            #    res = self._sock.recv(1)
-            # except Exception as e:
-            #    return
-            # if e.args[0] == 11:
-            #    res = None
-            # else:
-            #    print("got", e)
-            #    raise
             loop = asyncio.get_running_loop()
             try:
                 res = await asyncio.wait_for(loop.sock_recv(self._sock, 1), 0.1)
@@ -783,7 +780,7 @@ class MQTTClient(MQTT_base):
 
         asyncio.create_task(self._handle_msg())  # Task quits on connection fail.
         self._tasks.append(asyncio.create_task(self._keep_alive()))
-        if self.DEBUG and not CPython:
+        if self.DEBUG and not on_pc:
             self._tasks.append(asyncio.create_task(self._memory()))
         if self._events:
             self.up.set()  # Connectivity is up
@@ -861,6 +858,8 @@ class MQTTClient(MQTT_base):
                     self.dprint("Disconnected, exiting _keep_connected")
                     break
                 try:
+                    # On PC in outage avoid spewing debug messages at a high rate.
+                    await asyncio.sleep(1)
                     await self.connect()  # Create new socket, reconnect to broker
                     # Now has set ._isconnected and scheduled _connect_handler().
                     self.dprint("Reconnect OK!")
