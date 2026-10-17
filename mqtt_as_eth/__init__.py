@@ -331,6 +331,8 @@ class MQTT_base:
             sock = self._sock
         loop = asyncio.get_running_loop()
         # Wrap bytes in memoryview to avoid copying during slicing
+        if isinstance(bytes_wr, str):
+            bytes_wr = bytes_wr.encode()
         bytes_wr = memoryview(bytes_wr)
         if length:
             bytes_wr = bytes_wr[:length]
