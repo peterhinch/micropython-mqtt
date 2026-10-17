@@ -368,8 +368,12 @@ class MQTT_base:
         connack_resp = await self._as_read(2)
 
         # Connect ack flags
-        if connack_resp[0] != 0:
-            raise OSError(-1, "CONNACK flags not 0")
+        flags = connack_resp[0]
+        if clean and flags != 0:
+            raise OSError(-1, "Invalid CONNACK flags")
+        if not clean and flags != 0 and flags != 1:
+            raise OSError(-1, "Invalid CONNACK flags")
+
         # Reason code
         if connack_resp[1] != 0:
             # On MQTTv5 Reason codes below 128 may need to be handled
