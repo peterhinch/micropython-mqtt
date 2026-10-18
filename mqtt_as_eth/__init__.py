@@ -422,8 +422,8 @@ class MQTT_base:
         # Only read the first 2 bytes, as properties have their own length
         connack_resp = await self._as_read(2)
 
-        # Connect ack flags
-        if connack_resp[0] != 0:
+        # Connect ack flags (ignore Session Present bit)
+        if connack_resp[0] & 0xFE:
             raise OSError(-1, "CONNACK flags not 0")
         # Reason code
         if connack_resp[1] != 0:

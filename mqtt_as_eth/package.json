@@ -3,7 +3,9 @@
     ["mqtt_as_eth/__init__.py", "github:peterhinch/micropython-mqtt/mqtt_as_eth/__init__.py"],
     ["mqtt_as_eth/mqtt_v5_properties.py", "github:peterhinch/micropython-mqtt/mqtt_as/mqtt_v5_properties.py"],
     ["mqtt_as_eth/eth_test.py", "github:peterhinch/micropython-mqtt/mqtt_as_eth/eth_test.py"],
-    ["mqtt_as_eth/unix_test.py", "github:peterhinch/micropython-mqtt/mqtt_as_eth/unix_test.py"],
+    ["mqtt_as_eth/pc_test.py", "github:peterhinch/micropython-mqtt/mqtt_as_eth/pc_test.py"],
+    ["mqtt_as_eth/pc_tls.py", "github:peterhinch/micropython-mqtt/mqtt_as_eth/pc_tls.py"],
+    ["mqtt_as_eth/v5_test.py", "github:peterhinch/micropython-mqtt/mqtt_as_eth/v5_test.py"]
   ],
   "version": "0.1"
 }
